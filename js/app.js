@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.5.4';
+const VERSION = '0.6.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -226,6 +226,7 @@ function viewHome() {
     <div class="list">${weekend.length ? weekend.map(eventRow).join('') : empty('Rien ce week-end dans ton coin. Regarde les prochaines dates ci-dessous.')}</div>
     <h2 class="section-title">Prochainement</h2>
     <div class="list">${later.map(eventRow).join('')}</div>
+    <a class="card propose-cta" href="#/proposer"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Propose-la gratuitement à la communauté.</div></div>${I.chevron}</a>
   </section>`;
 }
 
@@ -338,6 +339,7 @@ function viewEvent(id) {
         <button class="line-btn" data-act="ics">${I.calendar}<span>Ajouter à mon calendrier</span>${I.chevron}</button>
         <a class="line-btn" href="${bookingUrl(e)}" target="_blank" rel="noopener">${I.bed}<span>Trouver un hébergement à proximité</span>${I.chevron}</a>
         <button class="line-btn" data-act="report">${I.flag}<span>Signaler une erreur sur cette soirée</span>${I.chevron}</button>
+        ${isAdmin() ? `<button class="line-btn danger" data-act="adm-withdraw">${I.trash}<span>Retirer cette soirée (admin)</span>${I.chevron}</button>` : ''}
       </div>
     </div>
     <div class="event-bar">
@@ -430,6 +432,11 @@ function viewProfile() {
         <svg viewBox="0 0 120 120" aria-hidden="true"><g class="b-studs">${studs()}</g><circle cx="60" cy="60" r="34" class="b-disc"/><g transform="translate(40 40) scale(1.6667)"><path d="${b.icon}" class="b-icon"/></g></svg>
         <span class="b-name">${esc(b.name)}</span><span class="b-bar"><span style="width:${Math.round((100 * b.progress) / b.goal)}%"></span></span></button>`).join('')}</div>
     <div class="card badge-detail"><strong>${esc(sel.name)}</strong> <span class="accent">${sel.earned ? '· obtenu' : `· ${sel.progress} / ${sel.goal}`}</span><p class="muted">${esc(sel.description)}</p></div>
+    ${loggedIn() ? `<div class="practical flat">
+      <a class="line-btn" href="#/proposer">${I.calendar}<span>Proposer une soirée</span>${I.chevron}</a>
+      <a class="line-btn" href="#/mes-propositions">${I.doc}<span>Mes propositions</span>${I.chevron}</a>
+      ${isAdmin() ? `<a class="line-btn" href="#/admin">${I.lock}<span>Espace admin</span>${adminCount() ? `<span class="count-pill">${adminCount()}</span>` : ''}${I.chevron}</a>` : ''}
+    </div>` : ''}
     <a class="line-btn rounded" href="#/parametres">${I.gear}<span>Paramètres, confidentialité et informations</span>${I.chevron}</a>
   </section>`;
 }
@@ -572,6 +579,276 @@ function viewAccount(mode) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Proposer une soirée, mes propositions, espace admin
+// ---------------------------------------------------------------------------
+const DRAFT_KEY = 'ek.draft.v1';
+let draft = (() => { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null') || {}; } catch (e) { return {}; } })();
+const saveDraft = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) { /* stockage plein */ } };
+let addrResults = [];
+let mySubs = null;          // mes propositions (null = à charger)
+let adminData = null;       // { pending, reports } (null = à charger)
+let adminTab = 'pending';
+let loadingSubs = false, loadingAdmin = false, submitting = false;
+const isAdmin = () => loggedIn() && profile.role === 'admin';
+const dv = (k) => esc(draft[k] ?? '');
+const selectField = (name, pairs, cur) => `<select name="${name}">${pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur ?? '') ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+const adminCount = () => (adminData ? adminData.pending.length + adminData.reports.length : 0);
+const loadingScreen = (title, back) => `<section class="screen">${accountTopRaw(title, back)}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
+const ADDR_FIELDS = ['address', 'postal_code', 'city', 'latitude', 'longitude', 'addrLabel'];
+
+function viewSubmit() {
+  const types = draft.types || [];
+  const chosen = draft.latitude != null;
+  return `<section class="screen">${accountTopRaw('Proposer une soirée', '#/profil')}
+    <p class="muted">Ta soirée est vérifiée par l’équipe EuroKink avant d’être publiée. Les champs marqués * sont obligatoires.</p>
+    <form id="submitForm" class="settings-groups" novalidate>
+      <h2 class="group-title">La soirée</h2>
+      <div class="card settings">
+        <label class="field">Nom de la soirée *<input name="title" maxlength="120" value="${dv('title')}" placeholder="Ex. Black Rubber Night" autocomplete="off"></label>
+        <div class="field">Types * <span class="hint">1 à 4 types</span>
+          <div class="chips wrap">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${types.includes(t.slug) ? 'on' : ''}" data-act="ptype" data-slug="${t.slug}" aria-pressed="${types.includes(t.slug)}">${esc(t.name)}</button>`).join('')}</div></div>
+        <label class="field">Début *<input name="starts_at" type="datetime-local" value="${dv('starts_at')}"></label>
+        <label class="field">Fin *<input name="ends_at" type="datetime-local" value="${dv('ends_at')}"></label>
+        <label class="field">Fréquence${selectField('frequency', Object.entries(FREQ), draft.frequency || 'once')}</label>
+        <label class="field">Description<textarea name="description" rows="5" maxlength="4000" placeholder="Ambiance, programme, infos utiles…">${dv('description')}</textarea></label>
+      </div>
+      <h2 class="group-title">Le lieu</h2>
+      <div class="card settings">
+        <label class="field">Nom du lieu *<input name="venue_name" maxlength="120" value="${dv('venue_name')}" placeholder="Ex. Le Dépôt" autocomplete="off"></label>
+        <label class="checkline"><input type="checkbox" name="secret" ${draft.secret ? 'checked' : ''}><span>L’adresse n’est donnée qu’aux inscrits : seule la ville apparaîtra sur la carte</span></label>
+        ${chosen ? `<div class="addr-chosen">${I.pin}<span>${esc(draft.addrLabel)}</span><button type="button" class="link" data-act="addr-clear">Modifier</button></div>`
+          : `<label class="field">${draft.secret ? 'Ville *' : 'Adresse *'}<input id="addrInput" name="addr_q" autocomplete="off" value="${dv('addr_q')}" placeholder="${draft.secret ? 'Ex. Nantes' : 'Ex. 12 rue de la Paix, Nantes'}"><span class="hint">Tape au moins 3 lettres puis choisis dans la liste.</span></label><div id="addrList" class="addr-list"></div>`}
+      </div>
+      <h2 class="group-title">L’organisateur</h2>
+      <div class="card settings">
+        <label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" placeholder="Ex. Rubber Ouest" autocomplete="off"></label>
+        <label class="field">C’est…${selectField('organizer_kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), draft.organizer_kind || 'association')}</label>
+        <label class="field">Site internet<input name="organizer_website" type="url" inputmode="url" value="${dv('organizer_website')}" placeholder="https://" autocomplete="off"></label>
+      </div>
+      <h2 class="group-title">Entrée et dress code</h2>
+      <div class="card settings">
+        <label class="field">Prix d’entrée (€) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
+        <label class="field">Prix en prévente (€)<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>
+        <label class="field">Réservation${selectField('booking', Object.entries({ door_only: 'Sur place, sans réservation', recommended: 'Conseillée', required: 'Obligatoire' }), draft.booking || 'door_only')}</label>
+        <label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
+        <label class="field">Ouverture de la billetterie<input name="sales_open_at" type="datetime-local" value="${dv('sales_open_at')}"><span class="hint">Si les places ne sont pas encore en vente : les membres seront alertés.</span></label>
+        <label class="field">Dress code${selectField('dress_code', Object.entries(DRESS), draft.dress_code || 'recommended')}</label>
+        <label class="field">Précisions sur le dress code<input name="dress_code_details" maxlength="200" value="${dv('dress_code_details')}" placeholder="Ex. Cuir ou rubber, pas de jean" autocomplete="off"></label>
+        <label class="field">Vestiaire${selectField('cloak', [['', 'Je ne sais pas'], ['no', 'Non'], ['free', 'Oui, gratuit'], ['paid', 'Oui, payant']], draft.cloak || '')}</label>
+      </div>
+      <div class="card settings">
+        <label class="checkline"><input type="checkbox" name="certify" ${draft.certify ? 'checked' : ''}><span>Je certifie que cette soirée existe, qu’elle est réservée aux adultes et qu’elle respecte la <a href="#/infos/charte">charte</a>.</span></label>
+        <p class="form-error" id="formError" role="alert" hidden></p>
+        <button class="btn btn-red btn-block" type="submit">Envoyer ma proposition</button>
+      </div>
+    </form></section>`;
+}
+
+let geoTimer, geoSeq = 0;
+function geocode(q) {
+  clearTimeout(geoTimer);
+  const list = $('#addrList');
+  if (!list) return;
+  if (q.trim().length < 3) { list.innerHTML = ''; addrResults = []; return; }
+  geoTimer = setTimeout(async () => {
+    const seq = ++geoSeq;
+    let feats = [], failed = false;
+    try {
+      const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=5&autocomplete=1${draft.secret ? '&type=municipality' : ''}`);
+      if (!r.ok) throw new Error(String(r.status));
+      feats = (await r.json()).features || [];
+    } catch (e) { failed = true; }
+    const box = $('#addrList');
+    if (seq !== geoSeq || !box) return;
+    addrResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
+      const p = f.properties || {};
+      const [lon, lat] = f.geometry.coordinates;
+      const town = p.type === 'municipality';
+      return { label: p.label || p.name, address: town ? '' : (p.name || ''), postal_code: p.postcode || '', city: p.city || p.name || '', lat, lon };
+    });
+    if (!addrResults.length) {
+      // Secours : centre d'une grande ville connue
+      const ql = q.trim().toLowerCase();
+      addrResults = CITIES.filter((c) => ql.includes(c.name.toLowerCase()) || c.name.toLowerCase().startsWith(ql))
+        .slice(0, 3).map((c) => ({ label: `${c.name} (centre-ville)`, address: '', postal_code: '', city: c.name, lat: c.lat, lon: c.lon }));
+    }
+    box.innerHTML = addrResults.length
+      ? addrResults.map((a, i) => `<button type="button" class="addr-opt" data-act="addr-pick" data-i="${i}">${esc(a.label)}</button>`).join('')
+      : `<p class="hint">${failed ? 'Recherche d’adresse indisponible : tape le nom d’une grande ville.' : 'Aucune adresse trouvée : vérifie l’orthographe.'}</p>`;
+  }, 350);
+}
+
+const numOrNull = (v) => { const s = String(v ?? '').trim().replace(',', '.'); return s === '' ? null : Number(s); };
+const isoOrNull = (v) => (v ? new Date(v).toISOString() : null);
+
+async function submitEvent(form) {
+  if (submitting) return;
+  const fail = (m) => { formError(form, m); const el = $('#formError'); if (el) el.scrollIntoView({ block: 'center' }); };
+  const d = draft;
+  const title = String(d.title || '').trim();
+  if (title.length < 3) return fail('Indique le nom de la soirée (3 caractères minimum).');
+  if (!(d.types || []).length) return fail('Choisis au moins un type de soirée.');
+  if (!d.starts_at || !d.ends_at) return fail('Indique la date et l’heure de début et de fin.');
+  if (new Date(d.starts_at) < new Date()) return fail('La soirée doit être à venir.');
+  if (new Date(d.ends_at) <= new Date(d.starts_at)) return fail('La fin doit être après le début.');
+  if (String(d.venue_name || '').trim().length < 2) return fail('Indique le nom du lieu.');
+  if (d.latitude == null) return fail(d.secret ? 'Choisis la ville dans la liste proposée.' : 'Choisis l’adresse dans la liste proposée.');
+  if (String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
+  const price = numOrNull(d.price), presale = numOrNull(d.presale_price);
+  if (price === null || Number.isNaN(price) || price < 0) return fail('Indique le prix d’entrée (0 si gratuit).');
+  if (presale !== null && (Number.isNaN(presale) || presale < 0)) return fail('Prix en prévente invalide.');
+  for (const [k, label] of [['ticket_url', 'Le lien de la billetterie'], ['organizer_website', 'Le site de l’organisateur']]) {
+    if (d[k] && !/^https?:\/\/\S+$/i.test(String(d[k]).trim())) return fail(`${label} doit commencer par https://`);
+  }
+  if (!d.certify) return fail('Coche la case de confirmation en bas du formulaire.');
+  const p = {
+    title, types: d.types, starts_at: isoOrNull(d.starts_at), ends_at: isoOrNull(d.ends_at), frequency: d.frequency || 'once',
+    description: d.description || '', venue_name: String(d.venue_name).trim(), address: d.secret ? '' : (d.address || ''),
+    postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude,
+    organizer_name: String(d.organizer_name).trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
+    price, presale_price: presale, booking: d.booking || 'door_only', ticket_url: (d.ticket_url || '').trim(), sales_open_at: isoOrNull(d.sales_open_at),
+    dress_code: d.dress_code || 'recommended', dress_code_details: d.dress_code_details || '',
+    has_cloakroom: d.cloak ? d.cloak !== 'no' : null, cloakroom_paid: d.cloak === 'paid' ? true : d.cloak === 'free' ? false : null
+  };
+  const btn = form.querySelector('button[type=submit]');
+  submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
+  try {
+    const r = await sb.rpc('submit_event', { p });
+    draft = {}; saveDraft(); mySubs = null; adminData = null;
+    toast(r && r.status === 'published' ? 'Soirée publiée !' : 'Merci ! Ta soirée sera vérifiée avant publication.');
+    if (r && r.status === 'published') refreshEvents();
+    navigate('#/mes-propositions');
+  } catch (err) {
+    fail(err.message);
+  } finally {
+    submitting = false;
+    if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = 'Envoyer ma proposition'; }
+  }
+}
+
+const SUB_STATUS = { pending: ['pill-grey', 'En attente'], published: ['pill-red', 'Publiée'], rejected: ['pill-grey', 'Refusée'], cancelled: ['pill-grey', 'Annulée'] };
+
+async function loadMySubs() {
+  if (loadingSubs) return;
+  loadingSubs = true;
+  try { mySubs = await sb.rpc('my_submissions'); } catch (err) { mySubs = []; toast(err.message); }
+  loadingSubs = false;
+  if (location.hash.startsWith('#/mes-propositions')) render();
+}
+
+function viewMySubmissions() {
+  if (mySubs === null) { loadMySubs(); return loadingScreen('Mes propositions', '#/profil'); }
+  const cards = mySubs.map((s) => {
+    const [cls, label] = SUB_STATUS[s.status] || ['pill-grey', s.status];
+    return `<div class="card sub-card"><div class="sub-head"><strong>${esc(s.title)}</strong><span class="${cls}">${label}</span></div>
+      <div class="muted tiny">${dayLabel(s.starts_at)} · ${timeLabel(s.starts_at)} · ${esc(s.city)}</div>
+      ${s.status === 'pending' ? '<p class="tiny muted">L’équipe EuroKink la vérifie avant publication.</p>' : ''}
+      ${s.status === 'rejected' && s.rejection_reason ? `<p class="tiny">Motif : ${esc(s.rejection_reason)}</p>` : ''}
+      ${s.status === 'published' && eventById(s.id) ? `<a class="link" href="#/soiree/${s.id}">Voir la fiche</a>` : ''}</div>`;
+  }).join('');
+  return `<section class="screen">${accountTopRaw('Mes propositions', '#/profil')}
+    <a class="btn btn-red btn-block" href="#/proposer">Proposer une soirée</a>
+    ${cards || empty('Tu n’as encore proposé aucune soirée.')}</section>`;
+}
+
+async function loadAdmin() {
+  if (loadingAdmin || !isAdmin()) return;
+  loadingAdmin = true;
+  try { adminData = await sb.rpc('admin_dashboard'); } catch (err) { adminData = { pending: [], reports: [] }; toast(err.message); }
+  loadingAdmin = false;
+  if (/^#\/(admin|profil)/.test(location.hash)) render();
+}
+
+function adminPendingCard(p) {
+  const o = p.organizer, v = p.venue;
+  const multi = new Date(p.ends_at).toDateString() !== new Date(p.starts_at).toDateString();
+  const when = `${dayLabel(p.starts_at)} · ${timeLabel(p.starts_at)} – ${multi ? `${fDate.format(new Date(p.ends_at))} ` : ''}${timeLabel(p.ends_at)}`;
+  const osm = `https://www.openstreetmap.org/?mlat=${v.latitude}&mlon=${v.longitude}#map=16/${v.latitude}/${v.longitude}`;
+  const cloak = p.has_cloakroom == null ? 'Vestiaire ?' : p.has_cloakroom ? `Vestiaire ${p.cloakroom_paid ? 'payant' : 'gratuit'}` : 'Sans vestiaire';
+  return `<article class="card adm-card">
+    <div class="sub-head"><strong>${esc(p.title)}</strong><span class="pill-grey">${p.source === 'import' ? 'Import' : 'Proposée'}</span></div>
+    <div class="muted tiny">par ${esc(p.submitter || 'le robot d’import')} · reçue le ${fDate.format(new Date(p.created_at))}</div>
+    <div class="pills">${(p.types || []).map((t) => `<span class="pill-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}</div>
+    <div class="adm-facts">
+      <div>${I.calendar}<span>${when}${p.frequency !== 'once' ? ` · ${FREQ[p.frequency]}` : ''}</span></div>
+      <div>${I.pin}<span>${esc(v.name)}<span class="muted block">${esc([v.address, v.postal_code, v.city].filter(Boolean).join(' '))}</span></span><a class="link" href="${osm}" target="_blank" rel="noopener">Carte</a></div>
+      <div>${I.users}<span>${esc(o.name)} · ${ORG_KIND[o.kind] || ''} ${o.is_verified ? I.verified : '<span class="muted">(non vérifié)</span>'}</span>${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site</a>` : ''}</div>
+      <div>${I.ticket}<span>${priceLabel(Number(p.price))}${p.presale_price != null ? ` (${priceLabel(Number(p.presale_price))} en prévente)` : ''} · Réservation ${BOOKING[p.booking].toLowerCase()}${p.sales_open_at ? ` · billets le ${fDate.format(new Date(p.sales_open_at))}` : ''}</span>${p.ticket_url ? `<a class="link" href="${esc(p.ticket_url)}" target="_blank" rel="noopener">Billets</a>` : ''}</div>
+      <div>${I.check}<span>Dress code ${DRESS[p.dress_code].toLowerCase()}${p.dress_code_details ? ` : ${esc(p.dress_code_details)}` : ''} · ${cloak}</span></div>
+    </div>
+    ${p.description ? `<p class="adm-desc">${esc(p.description)}</p>` : ''}
+    <div class="adm-actions"><button class="btn btn-red" data-act="adm-publish" data-id="${p.id}">Publier</button><button class="btn btn-ghost" data-act="adm-reject" data-id="${p.id}">Refuser</button></div>
+    ${o.is_verified ? '' : `<button class="link" data-act="adm-trust" data-id="${p.id}" data-org="${o.id}">Publier et faire confiance à « ${esc(o.name)} »</button>`}
+  </article>`;
+}
+
+function adminReportCard(r) {
+  return `<article class="card adm-card">
+    <div class="sub-head"><strong>${esc(r.reason)}</strong><span class="pill-grey">${r.target_type === 'event' ? 'Soirée' : r.target_type === 'profile' ? 'Profil' : 'Organisateur'}</span></div>
+    <div class="muted tiny">par ${esc(r.reporter || 'membre supprimé')} · le ${fDate.format(new Date(r.created_at))}</div>
+    ${r.details && r.details !== r.reason ? `<p class="adm-desc">${esc(r.details)}</p>` : ''}
+    ${r.event_title ? `<div class="adm-facts"><div>${I.calendar}<span>${esc(r.event_title)}</span>${eventById(r.target_id) ? `<a class="link" href="#/soiree/${r.target_id}">Voir</a>` : ''}</div></div>` : ''}
+    <div class="adm-actions"><button class="btn btn-red" data-act="adm-report" data-id="${r.id}">Traité</button><button class="btn btn-ghost" data-act="adm-report" data-id="${r.id}" data-dismiss="1">Ignorer</button></div>
+  </article>`;
+}
+
+function viewAdmin() {
+  if (!isAdmin()) return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}${empty('Réservé à l’administrateur.')}</section>`;
+  if (adminData === null) { loadAdmin(); return loadingScreen('Espace admin', '#/profil'); }
+  const { pending, reports } = adminData;
+  const tab = (k, label, n) => `<button class="${adminTab === k ? 'on' : ''}" data-act="adm-tab" data-tab="${k}" aria-pressed="${adminTab === k}">${label}${n ? ` <span class="count-pill">${n}</span>` : ''}</button>`;
+  const body = adminTab === 'pending'
+    ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
+    : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
+  return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
+    <div class="seg seg-btn">${tab('pending', 'À valider', pending.length)}${tab('reports', 'Signalements', reports.length)}</div>
+    ${body}</section>`;
+}
+
+async function adminRun(btn, fn, msg) {
+  const card = btn.closest('.adm-card');
+  card && card.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+  try { await fn(); toast(msg); adminData = null; mySubs = null; render(); refreshEvents(); } catch (err) {
+    toast(err.message);
+    card && card.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+  }
+}
+
+function adminAct(act) {
+  const id = act.dataset.id;
+  switch (act.dataset.act) {
+    case 'adm-tab': adminTab = act.dataset.tab; render(); break;
+    case 'adm-publish': adminRun(act, () => sb.rpc('moderate_event', { p_event: id, p_publish: true }), 'Soirée publiée'); break;
+    case 'adm-trust':
+      adminRun(act, async () => {
+        await sb.update('organizers', `id=eq.${act.dataset.org}`, { is_verified: true });
+        await sb.rpc('moderate_event', { p_event: id, p_publish: true });
+      }, 'Soirée publiée, organisateur vérifié');
+      break;
+    case 'adm-reject': {
+      const reason = prompt('Motif du refus (visible par la personne qui l’a proposée) :', 'Informations incomplètes ou invérifiables');
+      if (reason === null) return;
+      adminRun(act, () => sb.rpc('moderate_event', { p_event: id, p_publish: false, p_reason: reason.trim().slice(0, 300) || null }), 'Soirée refusée');
+      break;
+    }
+    case 'adm-report': adminRun(act, () => sb.rpc('handle_report', { p_report: id, p_dismiss: !!act.dataset.dismiss }), act.dataset.dismiss ? 'Signalement ignoré' : 'Signalement traité'); break;
+    default: break;
+  }
+}
+
+async function adminWithdraw(e) {
+  if (!e || !isAdmin()) return;
+  const reason = prompt(`Retirer « ${e.title} » de l’appli ? Indique le motif :`, 'Soirée annulée ou informations erronées');
+  if (reason === null) return;
+  try {
+    await sb.rpc('moderate_event', { p_event: e.id, p_publish: false, p_reason: reason.trim().slice(0, 300) || null });
+    toast('Soirée retirée'); adminData = null;
+    await refreshEvents();
+    navigate('#/');
+  } catch (err) { toast(err.message); }
+}
+
 const segmented = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
   <a href="#/explorer" role="tab" aria-selected="${mode === 'list'}" class="${mode === 'list' ? 'on' : ''}">${I.list}<span>Liste</span></a>
   <a href="#/carte" role="tab" aria-selected="${mode === 'map'}" class="${mode === 'map' ? 'on' : ''}">${I.map}<span>Carte</span></a></div>`;
@@ -648,6 +925,9 @@ function render() {
     case 'profil': html = viewProfile(); active = '#/profil'; break;
     case 'parametres': html = viewSettings(); active = '#/profil'; break;
     case 'infos': html = viewInfo(param); active = '#/profil'; break;
+    case 'proposer': html = viewSubmit(); active = '#/profil'; break;
+    case 'mes-propositions': html = viewMySubmissions(); active = '#/profil'; break;
+    case 'admin': html = viewAdmin(); active = '#/profil'; break;
     default: html = viewHome();
   }
   if (mapCleanup) { mapCleanup(); mapCleanup = null; }
@@ -698,6 +978,9 @@ document.addEventListener('submit', (ev) => {
     navigate('#/explorer');
   } else if (form.id === 'settingsForm') {
     ev.preventDefault();
+  } else if (form.id === 'submitForm') {
+    ev.preventDefault();
+    submitEvent(form);
   } else if (['signupForm', 'loginForm', 'forgotForm', 'newPasswordForm', 'completeForm'].includes(form.id)) {
     ev.preventDefault();
     submitAccountForm(form);
@@ -752,6 +1035,25 @@ document.addEventListener('click', (ev) => {
     case 'ics': downloadIcs(e); break;
     case 'export': exportData(); break;
     case 'report': reportEvent(e); break;
+    case 'adm-withdraw': adminWithdraw(e); break;
+    case 'adm-tab': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report': adminAct(act); break;
+    case 'ptype': {
+      const t = act.dataset.slug;
+      const list = draft.types || [];
+      if (!list.includes(t) && list.length >= 4) { toast('4 types au maximum'); break; }
+      draft.types = list.includes(t) ? list.filter((x) => x !== t) : [...list, t];
+      saveDraft();
+      act.classList.toggle('on'); act.setAttribute('aria-pressed', draft.types.includes(t));
+      break;
+    }
+    case 'addr-pick': {
+      const a = addrResults[Number(act.dataset.i)];
+      if (!a) break;
+      Object.assign(draft, { address: a.address, postal_code: a.postal_code, city: a.city, latitude: a.lat, longitude: a.lon, addrLabel: a.label });
+      saveDraft(); render();
+      break;
+    }
+    case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
       if (confirm(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
         sb.forgetSession();
@@ -770,6 +1072,10 @@ document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'fBudget') { filters.budget = Number(t.value); $('#budgetLabel').textContent = budgetLabel(); renderResults(); }
   if (t.id === 'fQ') { filters.q = t.value; renderResults(); }
+  if (t.form && t.form.id === 'submitForm' && t.name && t.name !== 'secret') {
+    draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
+    if (t.id === 'addrInput') geocode(t.value);
+  }
 });
 
 document.addEventListener('change', (ev) => {
@@ -779,6 +1085,11 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'fPeriod') { filters.period = t.value; renderResults(); }
   if (t.id === 'fNoBooking') { filters.noBooking = t.checked; renderResults(); }
   if (t.id === 'fCloak') { filters.cloakroom = t.checked; renderResults(); }
+  if (t.form && t.form.id === 'submitForm' && t.name) {
+    if (t.name === 'secret') { draft.secret = t.checked; ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); return; }
+    draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
+    return;
+  }
   if (t.form && t.form.id === 'settingsForm') {
     const f = t.form;
     const before = { pseudo: profile && profile.pseudo, city: state.city, visibility: state.visibility, invisible: state.invisible };
@@ -1006,6 +1317,7 @@ async function loadUser() {
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
   save();
+  if (profile.role === 'admin') loadAdmin();
   return 'ok';
 }
 
@@ -1047,6 +1359,7 @@ async function reportEvent(e) {
 async function logout() {
   await sb.signOut();
   profile = null; serverPassport = null; checkinInfo = [];
+  mySubs = null; adminData = null; draft = {}; saveDraft();
   Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
   save();
   clearEvents();
