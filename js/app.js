@@ -3,7 +3,7 @@ import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const STORE_KEY = 'ek.state.v1';
 const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
@@ -127,6 +127,7 @@ const I = {
   map: ic('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><path d="M8 2v16M16 6v16"/>'),
   close: ic('<path d="M18 6 6 18M6 6l12 12"/>'),
   list: ic('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
+  route: ic('<path d="M3 11l19-9-9 19-2-8-8-2z"/>'),
   locate: ic('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>'),
   verified: '<svg class="verified" viewBox="0 0 24 24" role="img" aria-label="Organisateur vérifié"><circle cx="12" cy="12" r="11" fill="#D0142C"/><path d="M7 12.5l3.2 3L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -304,7 +305,8 @@ function viewEvent(id) {
       <div class="org-line">par <strong>${esc(e.organizer.name)}</strong>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
       <div class="facts">
         <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}</div></div></div>
-        <a class="fact" href="${mapsUrl(e)}" target="_blank" rel="noopener"><span class="fact-ic">${I.pin}</span><div><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)} · Itinéraire</div></div></a>
+        <div class="fact"><span class="fact-ic">${I.pin}</span><div class="fact-main"><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)}</div></div>
+          <a class="route-btn" href="${mapsUrl(e)}" target="_blank" rel="noopener">${I.route}<span>Itinéraire</span></a></div>
       </div>
       ${showCheckin ? `<div class="checkin card"><div><strong>Tu es à la soirée ?</strong><div class="muted">Valide ta présence pour ton passeport.${state.testMode ? ' (mode test : sans GPS)' : ''}</div></div><button class="btn btn-red" data-act="checkin">${I.locate} Je suis sur place</button></div>` : ''}
       ${checked ? `<div class="checkin card done">${I.check}<div><strong>Présence validée</strong><div class="muted">Elle compte dans ton passeport.</div></div></div>` : ''}
@@ -321,6 +323,7 @@ function viewEvent(id) {
       <p class="about">${esc(e.description)}</p>
       <h2 class="section-title">Pratique</h2>
       <div class="practical">
+        <a class="line-btn" href="${mapsUrl(e)}" target="_blank" rel="noopener">${I.route}<span>Itinéraire jusqu’au lieu</span>${I.chevron}</a>
         <button class="line-btn" data-act="ics">${I.calendar}<span>Ajouter à mon calendrier</span>${I.chevron}</button>
         <a class="line-btn" href="${bookingUrl(e)}" target="_blank" rel="noopener">${I.bed}<span>Trouver un hébergement à proximité</span>${I.chevron}</a>
         <button class="line-btn" data-act="report">${I.flag}<span>Signaler une erreur sur cette soirée</span>${I.chevron}</button>

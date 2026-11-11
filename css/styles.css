@@ -112,6 +112,9 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .facts { display: flex; flex-direction: column; gap: 12px; }
 .fact { display: flex; gap: 12px; align-items: center; }
 .fact .muted { font-size: 13px; }
+.fact-main { flex: 1; min-width: 0; }
+.route-btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; min-height: 40px; border-radius: 12px; background: var(--red-tint); border: 1px solid var(--red); color: var(--red-text); font-size: 13px; font-weight: 700; flex: none; }
+.route-btn .ic { width: 16px; height: 16px; }
 .fact-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--red-text); flex: none; }
 .info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .info { padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; }
