@@ -1,8 +1,9 @@
 // EuroKink — application (étape 1 : soirées de démonstration, données stockées sur l'appareil)
 import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
+import { mountMap } from './map.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const STORE_KEY = 'ek.state.v1';
 const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
@@ -123,6 +124,9 @@ const I = {
   mail: ic('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/>'),
   download: ic('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'),
   trash: ic('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
+  map: ic('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><path d="M8 2v16M16 6v16"/>'),
+  close: ic('<path d="M18 6 6 18M6 6l12 12"/>'),
+  list: ic('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
   locate: ic('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>'),
   verified: '<svg class="verified" viewBox="0 0 24 24" role="img" aria-label="Organisateur vérifié"><circle cx="12" cy="12" r="11" fill="#D0142C"/><path d="M7 12.5l3.2 3L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -136,6 +140,7 @@ function studs(r = 50, dotR = 5.5) {
   return s;
 }
 const LOGO_MARK = `<svg class="mark" viewBox="0 0 120 120" aria-hidden="true"><g fill="#BDBDBD">${studs()}</g><g fill="#D0142C"><rect x="38" y="32" width="15" height="56"/><polygon points="53,54 72,32 89,32 62,65"/><polygon points="58,60 68,50 90,88 73,88"/></g></svg>`;
+const MAP_MARKER = `<svg class="mm" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="58" fill="#0E0E0E" stroke="#D0142C" stroke-width="5"/><g fill="#BDBDBD">${studs(42, 5.5)}</g><g fill="#D0142C" transform="translate(12 12) scale(0.8)"><rect x="38" y="32" width="15" height="56"/><polygon points="53,54 72,32 89,32 62,65"/><polygon points="58,60 68,50 90,88 73,88"/></g></svg>`;
 const WORDMARK = '<span class="wordmark"><span class="wm-euro">EURO</span>KINK</span>';
 
 // ---------------------------------------------------------------------------
@@ -196,7 +201,7 @@ function viewHome() {
   const chips = [['weekend', 'Ce week-end'], ['free', 'Gratuit'], ...EVENT_TYPES.slice(0, 6).map((t) => [`type:${t.slug}`, t.name])];
   return `<section class="screen">
     <header class="topbar"><div class="brand">${LOGO_MARK}${WORDMARK}</div>
-      <a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></header>
+      <div class="top-actions"><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}</p></div>
     <form class="search-row" id="homeSearch">
@@ -216,7 +221,7 @@ function viewHome() {
 const freshFilters = () => ({ q: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
 const filters = freshFilters();
 
-function filtered() {
+function filtered({ ignoreRadius = false } = {}) {
   const now = new Date();
   const { start, end } = weekendWindow();
   const horizon = { week: 7, month: 31 }[filters.period];
@@ -225,7 +230,7 @@ function filtered() {
     const s = new Date(e.startsAt);
     if (filters.period === 'weekend' && !(s < end && new Date(e.endsAt) > start)) return false;
     if (horizon && s - now > horizon * 86400000) return false;
-    if (filters.radius && kmFromMe(e) > filters.radius) return false;
+    if (!ignoreRadius && filters.radius && kmFromMe(e) > filters.radius) return false;
     if (filters.types.length && !e.types.some((t) => filters.types.includes(t))) return false;
     if (filters.budget < 100 && e.price > filters.budget) return false;
     if (filters.noBooking && e.booking !== 'door_only') return false;
@@ -241,7 +246,7 @@ function viewExplorer() {
   const radii = [[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']];
   const periods = [['weekend', 'Ce week-end'], ['week', '7 jours'], ['month', '30 jours'], ['all', 'Toutes les dates']];
   return `<section class="screen">
-    <h1 class="page-title">Explorer</h1>
+    <div class="explore-top"><h1 class="page-title">Explorer</h1>${segmented('list')}</div>
     <label class="search"><span>${I.search}</span><input id="fQ" type="search" placeholder="Ville, soirée, organisateur…" value="${esc(filters.q)}" aria-label="Rechercher"></label>
     <div class="grid2">
       <label class="select-card"><span class="sc-label">${I.pin} Autour de</span><select id="fCity">${cityOpts}</select></label>
@@ -455,6 +460,46 @@ function viewInfo(slug) {
     <article class="legal card">${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
 }
 
+const segmented = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
+  <a href="#/explorer" role="tab" aria-selected="${mode === 'list'}" class="${mode === 'list' ? 'on' : ''}">${I.list}<span>Liste</span></a>
+  <a href="#/carte" role="tab" aria-selected="${mode === 'map'}" class="${mode === 'map' ? 'on' : ''}">${I.map}<span>Carte</span></a></div>`;
+
+function viewMap() {
+  const n = filtered({ ignoreRadius: true }).length;
+  const active = filters.types.length + (filters.budget < 100 ? 1 : 0) + (filters.period !== 'all' ? 1 : 0) + (filters.noBooking ? 1 : 0) + (filters.cloakroom ? 1 : 0) + (filters.q ? 1 : 0);
+  return `<section class="screen screen-map">
+    <div class="explore-top"><h1 class="page-title">Explorer</h1>${segmented('map')}</div>
+    <a class="map-summary" href="#/explorer">${I.sliders}<span>${n} soirée${n > 1 ? 's' : ''} sur la carte${active ? ` · ${active} filtre${active > 1 ? 's' : ''} actif${active > 1 ? 's' : ''}` : ''}</span><span class="accent">Filtres</span></a>
+    <div class="map-wrap"><div id="map" class="map"></div>
+      <div id="mapSheet" class="map-sheet" hidden></div></div>
+  </section>`;
+}
+
+let mapCleanup = null;
+function initMap() {
+  const groups = new Map();
+  filtered({ ignoreRadius: true }).forEach((e) => {
+    const g = groups.get(e.venue.city) || { id: e.venue.city, events: [], lat: 0, lon: 0 };
+    g.events.push(e); g.lat += e.venue.lat; g.lon += e.venue.lon;
+    groups.set(e.venue.city, g);
+  });
+  const markers = [...groups.values()].map((g) => ({
+    id: g.id, lat: g.lat / g.events.length, lon: g.lon / g.events.length, count: g.events.length,
+    label: `${g.id} : ${g.events.length} soirée${g.events.length > 1 ? 's' : ''}`
+  }));
+  const c = cityObj();
+  const sheet = $('#mapSheet');
+  const open = (cities) => {
+    const evs = cities.flatMap((city) => groups.get(city).events).sort((x, y) => new Date(x.startsAt) - new Date(y.startsAt));
+    sheet.innerHTML = `<div class="sheet-head"><div><strong>${esc(cities.join(', '))}</strong> <span class="muted">· ${evs.length} soirée${evs.length > 1 ? 's' : ''}</span></div>
+      <button class="icon-btn small" data-close-sheet aria-label="Fermer">${I.close}</button></div>
+      <div class="list">${evs.map(eventRow).join('')}</div>`;
+    sheet.hidden = false;
+  };
+  sheet.addEventListener('click', (ev) => { if (ev.target.closest('[data-close-sheet]')) sheet.hidden = true; });
+  mapCleanup = mountMap($('#map'), { markers, home: { lat: c.lat, lon: c.lon }, onSelect: open, markerSvg: MAP_MARKER });
+}
+
 // ---------------------------------------------------------------------------
 // Routeur
 // ---------------------------------------------------------------------------
@@ -474,6 +519,7 @@ function render() {
   let active = '#/';
   switch (route) {
     case 'explorer': html = viewExplorer(); active = '#/explorer'; break;
+    case 'carte': html = viewMap(); active = '#/explorer'; break;
     case 'soiree': html = viewEvent(decodeURIComponent(param || '')); active = null; break;
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(); active = '#/communaute'; break;
@@ -482,10 +528,12 @@ function render() {
     case 'infos': html = viewInfo(param); active = '#/profil'; break;
     default: html = viewHome();
   }
+  if (mapCleanup) { mapCleanup(); mapCleanup = null; }
   view.innerHTML = html;
   nav.hidden = active === null;
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
   if (route === 'explorer') renderResults();
+  if (route === 'carte') initMap();
 }
 
 function navigate(hash) {
