@@ -32,23 +32,23 @@ export const PAGES = {
   confidentialite: {
     title: 'Confidentialité',
     html: () => `${draft}
-      <h2>Aujourd’hui (version de démonstration)</h2>
+      <h2>Sans compte</h2>
       <ul>
-        <li>Aucun compte, aucun serveur : ton pseudo, ta ville, tes favoris, rappels, alertes et présences sont enregistrés <strong>uniquement sur ce téléphone</strong>.</li>
+        <li>Ta ville de référence, tes favoris, rappels et sorties sont enregistrés <strong>uniquement sur ce téléphone</strong>.</li>
         <li>Aucun outil de statistiques, de publicité ou de suivi, et aucune police ou ressource chargée depuis un service tiers.</li>
-        <li>La localisation sert seulement à vérifier ta présence à une soirée : elle n’est <strong>ni enregistrée, ni envoyée</strong>.</li>
-        <li>Tu peux exporter ou effacer ces données à tout moment dans Paramètres.</li>
       </ul>
-      <h2>Avec les comptes (prochaine version)</h2>
-      <p>Utiliser EuroKink peut révéler l’orientation sexuelle de ses membres, une donnée sensible au sens de l’article 9 du RGPD. EuroKink s’engage à :</p>
+      <h2>Avec un compte</h2>
+      <p>Utiliser EuroKink peut révéler l’orientation sexuelle de ses membres, une donnée sensible au sens de l’article 9 du RGPD. C’est pourquoi :</p>
       <ul>
-        <li>demander ton <strong>consentement explicite</strong> avant toute création de compte ;</li>
-        <li>héberger les données dans l’<strong>Union européenne</strong> ;</li>
-        <li>collecter le minimum : adresse e-mail, pseudo, ville, préférences, favoris et sorties ; aucun nom réel obligatoire ;</li>
-        <li>ne jamais vendre ni partager tes données à des fins publicitaires ;</li>
-        <li>te laisser choisir qui voit tes sorties (tout le monde, les membres que tu suis, ou personne) ;</li>
-        <li>supprimer définitivement ton compte et tes données sur simple demande depuis l’application.</li>
+        <li>ton <strong>consentement explicite</strong> est demandé à l’inscription ;</li>
+        <li>les données sont hébergées par Supabase à <strong>Paris</strong> (Union européenne) ;</li>
+        <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta ville, tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
+        <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
+        <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
+        <li>tu peux exporter tes données et <strong>supprimer définitivement ton compte</strong> à tout moment depuis Paramètres.</li>
       </ul>
+      <h2>Localisation</h2>
+      <p>La position GPS sert uniquement à vérifier ta présence à une soirée (« Je suis sur place »). Elle est utilisée pour ce calcul puis oubliée : elle n’est <strong>jamais enregistrée</strong>.</p>
       <h2>Tes droits</h2>
       <p>Tu disposes d’un droit d’accès, de rectification, d’effacement, de portabilité et de retrait de ton consentement. Pour les exercer : ${contactLine()}. Tu peux aussi adresser une réclamation à la CNIL (cnil.fr).</p>`
   },

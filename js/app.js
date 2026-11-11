@@ -1,9 +1,10 @@
-// EuroKink — application (étape 1 : soirées de démonstration, données stockées sur l'appareil)
-import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
+// EuroKink — application (étape 2 : soirées et comptes dans Supabase)
+import { EVENT_TYPES, CITIES, BADGES } from './data.js';
+import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.3.2';
+const VERSION = '0.4.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -11,8 +12,17 @@ const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
 
 // ---------------------------------------------------------------------------
-// État local (sera remplacé par Supabase à l'étape 2)
+// État : réglages sur l'appareil + données du compte (synchronisées avec Supabase)
 // ---------------------------------------------------------------------------
+let EVENTS = [];            // soirées publiées à venir, chargées depuis Supabase
+let eventsReady = false;
+let eventsError = '';
+let profile = null;         // profil du membre connecté
+let serverPassport = null;  // progression des badges calculée par le serveur
+let checkinInfo = [];       // présences validées : { id, city, country }
+const EVENTS_CACHE = 'ek.events.v1';
+const isUuid = (x) => /^[0-9a-f-]{36}$/i.test(String(x));
+const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
   adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
   remindersOn: true, reminderTiming: 'eve18', ticketAlertsOn: true, defaultRadius: 100,
@@ -21,11 +31,12 @@ const defaults = {
 let state = load();
 
 function load() {
-  try {
-    return { ...defaults, ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') };
-  } catch (e) {
-    return { ...defaults };
-  }
+  let st;
+  try { st = { ...defaults, ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') }; } catch (e) { st = { ...defaults }; }
+  // Les identifiants des anciennes soirées de démonstration (v0.1 à v0.3) ne sont plus valables
+  ['favorites', 'reminders', 'alerts', 'attending'].forEach((k) => { st[k] = (st[k] || []).filter(isUuid); });
+  st.checkins = (st.checkins || []).filter((c) => isUuid(c.id));
+  return st;
 }
 function save() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* stockage indisponible */ }
@@ -167,10 +178,12 @@ function featuredCard(e) {
       <div class="feature-title">${esc(e.title)}</div></div>
     <div class="feature-body">
       <div class="feature-line"><span>${dayLabel(e.startsAt)} · ${timeLabel(e.startsAt)}</span><span>${esc(e.venue.city)}</span></div>
-      <div class="feature-line muted"><span>${priceLabel(e.price)} · Réservation ${BOOKING[e.booking].toLowerCase()}</span><span class="accent">${e.attendees + (state.attending.includes(e.id) ? 1 : 0)} participants</span></div>
+      <div class="feature-line muted"><span>${priceLabel(e.price)} · Réservation ${BOOKING[e.booking].toLowerCase()}</span><span class="accent">${attendeesLabel(attendeesOf(e))}</span></div>
     </div></a>`;
 }
 
+const attendeesOf = (e) => e.attendees + (!loggedIn() && state.attending.includes(e.id) ? 1 : 0);
+const attendeesLabel = (n) => (n === 0 ? 'Sois le premier à y aller' : `${n} participant${n > 1 ? 's' : ''}`);
 const empty = (msg) => `<div class="empty">${msg}</div>`;
 
 // ---------------------------------------------------------------------------
@@ -184,13 +197,12 @@ function viewGate() {
     <form id="gateForm" class="card gate-card">
       <h1>Réservé aux adultes</h1>
       <p class="muted">EuroKink référence des soirées fetish destinées à un public majeur.</p>
-      <p class="demo-note">Version de démonstration : pas encore de compte à créer. Ton pseudo et ta ville servent juste à personnaliser l’accueil et restent sur ce téléphone.</p>
-      <label class="field">Ton pseudo (facultatif)<input name="pseudo" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider" value="${esc(state.pseudo)}"></label>
+      <p class="demo-note">Tu peux découvrir les soirées sans compte. Pour retrouver tes sorties sur tous tes appareils et gagner des badges, crée ton compte depuis le Profil.</p>
       <label class="field">Ta ville de référence<select name="city">${options}</select></label>
       <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
-      <label class="checkline"><input type="checkbox" name="consent" required> J’accepte qu’EuroKink conserve mes favoris et réglages sur cet appareil.</label>
+      <label class="checkline"><input type="checkbox" name="consent" required> J’accepte qu’EuroKink conserve mes réglages sur cet appareil.</label>
       <button class="btn btn-red btn-block" type="submit">Entrer</button>
-      <p class="tiny muted">Les soirées affichées sont fictives. La création de compte arrivera prochainement.</p>
+      <p class="tiny muted">Phase de test : les soirées affichées sont fictives.</p>
     </form>
   </section>`;
 }
@@ -295,7 +307,7 @@ function viewEvent(id) {
   else if (salesLater) cta = `<button class="btn btn-red btn-grow" data-act="alert">${al ? 'Alerte activée' : `Billets le ${fDate.format(new Date(e.salesOpenAt))}`}</button>`;
   else if (e.booking === 'door_only' || !e.ticketUrl) cta = '<span class="btn btn-ghost btn-grow static">Entrée sur place</span>';
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
-  const showCheckin = !checked && (isLive(e) || state.testMode);
+  const showCheckin = !checked && (isLive(e) || (state.testMode && !loggedIn()));
   return `<section class="screen screen-event">
     <div class="event-hero"><svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
@@ -310,7 +322,7 @@ function viewEvent(id) {
         <div class="fact"><span class="fact-ic">${I.pin}</span><div class="fact-main"><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)}</div></div>
           <a class="route-btn" href="${mapsUrl(e)}" target="_blank" rel="noopener">${I.route}<span>Itinéraire</span></a></div>
       </div>
-      ${showCheckin ? `<div class="checkin card"><div><strong>Tu es à la soirée ?</strong><div class="muted">Valide ta présence pour ton passeport.${state.testMode ? ' (mode test : sans GPS)' : ''}</div></div><button class="btn btn-red" data-act="checkin">${I.locate} Je suis sur place</button></div>` : ''}
+      ${showCheckin ? `<div class="checkin card"><div><strong>Tu es à la soirée ?</strong><div class="muted">Valide ta présence pour ton passeport.${state.testMode && !loggedIn() ? ' (mode test : sans GPS)' : ''}</div></div><button class="btn btn-red" data-act="checkin">${I.locate} Je suis sur place</button></div>` : ''}
       ${checked ? `<div class="checkin card done">${I.check}<div><strong>Présence validée</strong><div class="muted">Elle compte dans ton passeport.</div></div></div>` : ''}
       <div class="info-grid">${infos.map(([l, v]) => `<div class="info"><span>${l}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
       ${e.dressCodeDetails ? `<p class="dress muted">Dress code : ${esc(e.dressCodeDetails)}</p>` : ''}
@@ -320,7 +332,7 @@ function viewEvent(id) {
         ${actionBtn('alert', al, I.ticket, 'Alerte billets')}
         ${actionBtn('attend', att, I.check, 'J’y vais')}
       </div>
-      <div class="card who"><div><strong>Qui y va ?</strong> <span class="muted">${e.attendees + (att ? 1 : 0)} membres</span></div><span class="muted tiny">Liste visible avec la communauté (V2)</span></div>
+      <div class="card who"><div><strong>Qui y va ?</strong> <span class="muted">${attendeesLabel(attendeesOf(e))}</span></div><span class="muted tiny">Liste visible avec la communauté (V2)</span></div>
       <h2 class="section-title">À propos</h2>
       <p class="about">${esc(e.description)}</p>
       <h2 class="section-title">Pratique</h2>
@@ -377,16 +389,22 @@ function viewCommunity() {
 
 // Passeport : progression calculée à partir des présences validées
 function passport() {
+  if (loggedIn() && serverPassport) {
+    return BADGES.map((b) => {
+      const sp = serverPassport.find((x) => x.code === b.code) || { progress: 0 };
+      return { ...b, progress: Math.min(b.goal, sp.progress || 0), earned: !!sp.earned_at };
+    });
+  }
   const evs = state.checkins.map((c) => eventById(c.id)).filter(Boolean);
   const perOrg = {};
-  evs.forEach((e) => { perOrg[e.org] = (perOrg[e.org] || 0) + 1; });
+  evs.forEach((e) => { perOrg[e.organizer.id] = (perOrg[e.organizer.id] || 0) + 1; });
   const progress = {
     first_steps: evs.length,
     tour_de_france: new Set(evs.filter((e) => e.country === 'FR').map((e) => e.venue.city)).size,
     globetrotter: new Set(evs.map((e) => e.country)).size,
     loyal: Math.max(0, ...Object.values(perOrg)),
     explorer: new Set(evs.flatMap((e) => e.types)).size,
-    pioneer: 1
+    pioneer: 0
   };
   return BADGES.map((b) => ({ ...b, progress: Math.min(b.goal, progress[b.code] || 0), earned: (progress[b.code] || 0) >= b.goal }));
 }
@@ -394,13 +412,21 @@ let selectedBadge = 'first_steps';
 
 function viewProfile() {
   const pass = passport();
-  const evs = state.checkins.map((c) => eventById(c.id)).filter(Boolean);
-  const stats = [[evs.length, 'soirées'], [new Set(evs.map((e) => e.venue.city)).size, 'villes'], [new Set(evs.map((e) => e.country)).size, 'pays']];
+  const places = loggedIn() ? checkinInfo : state.checkins.map((c) => eventById(c.id)).filter(Boolean).map((e) => ({ city: e.venue.city, country: e.country }));
+  const stats = [[places.length, 'soirées'], [new Set(places.map((x) => x.city)).size, 'villes'], [new Set(places.map((x) => x.country)).size, 'pays']];
   const sel = pass.find((b) => b.code === selectedBadge) || pass[0];
-  return `<section class="screen"><div class="profile-top"><h1 class="page-title">Profil</h1><a class="icon-btn" href="#/parametres" aria-label="Paramètres">${I.gear}</a></div><div class="profile-head">
-      <div class="avatar">${esc((state.pseudo || 'E').charAt(0).toUpperCase())}</div>
-      <div><div class="pseudo">${esc(state.pseudo || 'Membre EuroKink')}</div><div class="muted">${esc(state.city)}</div>
-      <span class="pill-red">PIONNIER</span></div></div>
+  const name = loggedIn() ? profile.pseudo : 'Invité';
+  const pills = loggedIn() ? [profile.role === 'admin' ? '<span class="pill-red">ADMIN</span>' : '',
+    pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
+    `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
+  const account = loggedIn() ? '' : `<div class="card account-cta"><h2>Crée ton compte EuroKink</h2>
+      <p class="muted">Retrouve tes favoris, rappels et sorties sur tous tes appareils, et fais valider tes badges.</p>
+      <div class="cta-row"><a class="btn btn-red" href="#/compte/inscription">Créer un compte</a><a class="btn btn-ghost" href="#/compte/connexion">Me connecter</a></div></div>`;
+  return `<section class="screen"><div class="profile-top"><h1 class="page-title">Profil</h1><a class="icon-btn" href="#/parametres" aria-label="Paramètres">${I.gear}</a></div>
+    ${account}<div class="profile-head">
+      <div class="avatar">${esc(name.charAt(0).toUpperCase())}</div>
+      <div><div class="pseudo">${esc(name)}</div><div class="muted">${esc(state.city)}</div>
+      <div class="pills">${pills}</div></div></div>
     <div class="stats">${stats.map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
     <div class="section-head"><h2>Mon passeport</h2><span class="muted">${pass.filter((b) => b.earned).length} / ${pass.length} badges</span></div>
     <div class="badges">${pass.map((b) => `<button class="badge ${b.earned ? 'earned' : ''} ${b.code === sel.code ? 'sel' : ''}" data-badge="${b.code}" aria-pressed="${b.code === sel.code}">
@@ -417,10 +443,16 @@ function viewSettings() {
   const sw = (name, on, label, help) => `<label class="toggle-line"><span>${label}${help ? `<span class="muted tiny block">${help}</span>` : ''}</span><input type="checkbox" class="switch" name="${name}" ${on ? 'checked' : ''}></label>`;
   const info = (slug, label) => `<a class="line-btn" href="#/infos/${slug}">${I.doc}<span>${label}</span>${I.chevron}</a>`;
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour au profil">${I.back}</a><h1 class="page-title">Paramètres</h1></div>
+    ${loggedIn() ? `<h2 class="group-title">Mon compte</h2>
+    <div class="practical">
+      <div class="line-btn static">${I.mail}<span>${esc(sb.currentUser()?.email || '')}<span class="muted tiny block">Adresse de connexion</span></span></div>
+      <button class="line-btn" data-act="logout">${I.user}<span>Me déconnecter</span>${I.chevron}</button>
+      <button class="line-btn danger" data-act="delete-account">${I.trash}<span>Supprimer mon compte</span>${I.chevron}</button>
+    </div>` : `<a class="line-btn rounded" href="#/compte/connexion">${I.user}<span>Me connecter ou créer un compte</span>${I.chevron}</a>`}
     <form id="settingsForm" class="settings-groups">
       <h2 class="group-title">Mon profil</h2>
       <div class="card settings">
-        <label class="field">Pseudo<input name="pseudo" maxlength="30" value="${esc(state.pseudo)}" autocomplete="off"></label>
+        ${loggedIn() ? `<label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>` : ''}
         <label class="field">Ville de référence<select name="city">${cityOpts}</select></label>
         <label class="field">Rayon de recherche par défaut<select name="defaultRadius">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']], state.defaultRadius)}</select></label>
       </div>
@@ -436,10 +468,10 @@ function viewSettings() {
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Texte neutre, sans le mot « fetish »')}
-        <p class="tiny muted">L’envoi des notifications arrivera avec les comptes : tes choix sont déjà enregistrés.</p>
+        <p class="tiny muted">L’envoi des notifications arrive à la prochaine étape : tes choix sont déjà enregistrés.</p>
       </div>
       <h2 class="group-title">Passeport</h2>
-      <div class="card settings">${sw('testMode', state.testMode, 'Mode test', 'Valider une présence sans GPS, pour essayer les badges')}</div>
+      <div class="card settings">${loggedIn() ? '<p class="tiny muted">Connecté, ta présence est vérifiée par le serveur avec ta position : le mode test n’est disponible que sans compte.</p>' : sw('testMode', state.testMode, 'Mode test', 'Valider une présence sans GPS, pour essayer les badges')}</div>
     </form>
     <h2 class="group-title">Informations</h2>
     <div class="practical">
@@ -454,7 +486,7 @@ function viewSettings() {
       <button class="line-btn" data-act="export">${I.download}<span>Exporter mes données</span>${I.chevron}</button>
       <button class="line-btn danger" data-act="reset">${I.trash}<span>Effacer mes données sur cet appareil</span>${I.chevron}</button>
     </div>
-    <div class="about-foot tiny muted center"><p>${BRAND} · version ${VERSION}</p><p>© ${COPYRIGHT_YEAR} ${BRAND} · Tous droits réservés</p><p>Version de démonstration · soirées fictives</p></div>
+    <div class="about-foot tiny muted center"><p>${BRAND} · version ${VERSION}</p><p>© ${COPYRIGHT_YEAR} ${BRAND} · Tous droits réservés</p><p>Phase de test · soirées fictives</p></div>
   </section>`;
 }
 
@@ -463,6 +495,83 @@ function viewInfo(slug) {
   if (!page) return `<section class="screen">${empty('Page introuvable.')}</section>`;
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/parametres" aria-label="Retour aux paramètres">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
     <article class="legal card">${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
+}
+
+function viewLoading() {
+  if (eventsError) {
+    return `<section class="screen"><div class="card center-card"><h2>Impossible de charger les soirées</h2>
+      <p class="muted">${esc(eventsError)}</p><button class="btn btn-red" data-act="retry">Réessayer</button></div></section>`;
+  }
+  return `<section class="screen"><div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des soirées…</p></div></section>`;
+}
+
+const cityOptions = () => CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="8" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
+const accountTop = (title, back = '#/profil') => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
+let lastSignupEmail = '';
+
+function viewAccount(mode) {
+  if (loggedIn() && ['connexion', 'inscription'].includes(mode)) return viewProfile();
+  switch (mode) {
+    case 'inscription':
+      return `<section class="screen">${accountTop('Créer mon compte')}
+        <form id="signupForm" class="card settings" novalidate>
+          <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
+          <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
+          ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
+          <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
+          <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
+          <label class="checkline"><input type="checkbox" name="sensitive" required> J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</label>
+          <label class="checkline"><input type="checkbox" name="terms" required> J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</label>
+          <p class="form-error" id="formError" role="alert" hidden></p>
+          <button class="btn btn-red btn-block" type="submit">Créer mon compte</button>
+          <p class="tiny muted center">Déjà un compte ? <a class="accent" href="#/compte/connexion">Me connecter</a></p>
+        </form></section>`;
+    case 'verifier':
+      return `<section class="screen">${accountTop('Vérifie tes e-mails')}
+        <div class="card center-card">${I.mail}<h2>Plus qu’une étape !</h2>
+          <p>Nous avons envoyé un lien de confirmation à <strong>${esc(lastSignupEmail || 'ton adresse')}</strong>. Clique dessus pour activer ton compte, puis reviens ici te connecter.</p>
+          <p class="muted tiny">L’e-mail peut mettre quelques minutes à arriver et provient de « Supabase Auth ». Pense à regarder dans les indésirables.</p>
+          <a class="btn btn-red" href="#/compte/connexion">Me connecter</a></div></section>`;
+    case 'confirme':
+      return `<section class="screen">${accountTop('Compte confirmé', '#/')}
+        <div class="card center-card">${I.check}<h2>Ton adresse est confirmée</h2>
+          <p>Bienvenue sur EuroKink ! Si tu utilises l’appli installée sur ton écran d’accueil, ouvre-la et connecte-toi avec ton e-mail et ton mot de passe.</p>
+          <a class="btn btn-red" href="#/profil">Voir mon profil</a></div></section>`;
+    case 'oubli':
+      return `<section class="screen">${accountTop('Mot de passe oublié', '#/compte/connexion')}
+        <form id="forgotForm" class="card settings">
+          <p class="muted">Indique ton adresse e-mail : tu recevras un lien pour choisir un nouveau mot de passe.</p>
+          <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"></label>
+          <p class="form-error" id="formError" role="alert" hidden></p>
+          <button class="btn btn-red btn-block" type="submit">Recevoir le lien</button></form></section>`;
+    case 'nouveau-mdp':
+      return `<section class="screen">${accountTop('Nouveau mot de passe', '#/')}
+        <form id="newPasswordForm" class="card settings">
+          ${pwField('password', 'Nouveau mot de passe (8 caractères minimum)', 'new-password')}
+          <p class="form-error" id="formError" role="alert" hidden></p>
+          <button class="btn btn-red btn-block" type="submit">Enregistrer</button></form></section>`;
+    case 'profil':
+      return `<section class="screen">${accountTop('Finaliser mon profil')}
+        <form id="completeForm" class="card settings">
+          <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
+          <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
+          <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
+          <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
+          <label class="checkline"><input type="checkbox" name="sensitive" required> J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</label>
+          <p class="form-error" id="formError" role="alert" hidden></p>
+          <button class="btn btn-red btn-block" type="submit">Terminer</button></form></section>`;
+    default:
+      return `<section class="screen">${accountTop('Connexion')}
+        <form id="loginForm" class="card settings">
+          <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"></label>
+          ${pwField('password', 'Mot de passe', 'current-password')}
+          <p class="form-error" id="formError" role="alert" hidden></p>
+          <button class="btn btn-red btn-block" type="submit">Me connecter</button>
+          <a class="link center" href="#/compte/oubli">Mot de passe oublié ?</a>
+          <p class="tiny muted center">Pas encore de compte ? <a class="accent" href="#/compte/inscription">Créer un compte</a></p>
+        </form></section>`;
+  }
 }
 
 const segmented = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
@@ -522,7 +631,16 @@ function render() {
   const [, route, param] = hash.split('/');
   let html;
   let active = '#/';
+  const needsEvents = ['', undefined, 'explorer', 'carte', 'soiree', 'favoris'].includes(route);
+  if (needsEvents && !eventsReady) {
+    if (mapCleanup) { mapCleanup(); mapCleanup = null; }
+    $('#view').innerHTML = viewLoading();
+    nav.hidden = false;
+    nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}">${icon}<span>${label}</span></a>`).join('');
+    return;
+  }
   switch (route) {
+    case 'compte': html = viewAccount(param); active = '#/profil'; break;
     case 'explorer': html = viewExplorer(); active = '#/explorer'; break;
     case 'carte': html = viewMap(); active = '#/explorer'; break;
     case 'soiree': html = viewEvent(decodeURIComponent(param || '')); active = null; break;
@@ -546,7 +664,11 @@ function navigate(hash) {
 }
 
 let navDepth = 0;   // nombre de navigations dans l'appli (pour le bouton Retour)
-window.addEventListener('hashchange', () => { navDepth += 1; render(); window.scrollTo(0, 0); });
+window.addEventListener('hashchange', () => {
+  // Lien reçu par e-mail ouvert alors que l'appli est déjà affichée : on relance pour le traiter
+  if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; }
+  navDepth += 1; render(); window.scrollTo(0, 0);
+});
 
 // ---------------------------------------------------------------------------
 // Interactions (délégation d'événements)
@@ -557,7 +679,6 @@ document.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const data = new FormData(form);
     state.adult = true;
-    state.pseudo = String(data.get('pseudo') || '').trim().slice(0, 30);
     state.city = data.get('city');
     save();
     navigate('#/');
@@ -568,6 +689,9 @@ document.addEventListener('submit', (ev) => {
     navigate('#/explorer');
   } else if (form.id === 'settingsForm') {
     ev.preventDefault();
+  } else if (['signupForm', 'loginForm', 'forgotForm', 'newPasswordForm', 'completeForm'].includes(form.id)) {
+    ev.preventDefault();
+    submitAccountForm(form);
   }
 });
 
@@ -607,16 +731,22 @@ document.addEventListener('click', (ev) => {
       if (navDepth > 0) history.back(); else navigate('#/');
       break;
     case 'share': shareEvent(e); break;
-    case 'fav': toast(toggleIn('favorites', id) ? 'Ajoutée à tes favoris' : 'Retirée de tes favoris'); render(); break;
-    case 'reminder': toast(toggleIn('reminders', id) ? `Rappel programmé ${reminderLabel()}` : 'Rappel supprimé'); render(); break;
-    case 'alert': toast(toggleIn('alerts', id) ? 'Alerte activée : tu seras prévenu à l’ouverture des places' : 'Alerte désactivée'); render(); break;
-    case 'attend': toast(toggleIn('attending', id) ? 'Bonne soirée ! Elle est dans « Mes soirées »' : 'Participation retirée'); render(); break;
+    case 'fav': toggleAction('favorites', id, 'Ajoutée à tes favoris', 'Retirée de tes favoris'); break;
+    case 'reminder': toggleAction('reminders', id, `Rappel programmé ${reminderLabel()}`, 'Rappel supprimé'); break;
+    case 'alert': toggleAction('alerts', id, 'Alerte activée : tu seras prévenu à l’ouverture des places', 'Alerte désactivée'); break;
+    case 'attend': toggleAction('attending', id, 'Bonne soirée ! Elle est dans « Mes soirées »', 'Participation retirée'); break;
+    case 'logout': logout(); break;
+    case 'delete-account': deleteAccount(); break;
+    case 'retry': eventsError = ''; render(); refreshEvents(); break;
+    case 'pw': { const input = act.parentElement.querySelector('input'); const show = input.type === 'password'; input.type = show ? 'text' : 'password'; act.textContent = show ? 'Masquer' : 'Afficher'; break; }
     case 'checkin': checkIn(e); break;
     case 'ics': downloadIcs(e); break;
     case 'export': exportData(); break;
-    case 'report': toast('Merci ! Le signalement sera transmis à l’équipe (actif à l’étape 2).'); break;
+    case 'report': reportEvent(e); break;
     case 'reset':
-      if (confirm('Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
+      if (confirm(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
+        sb.forgetSession();
+        profile = null; serverPassport = null; checkinInfo = [];
         localStorage.removeItem(STORE_KEY);
         state = load();
         navigate('#/');
@@ -641,7 +771,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'fCloak') { filters.cloakroom = t.checked; renderResults(); }
   if (t.form && t.form.id === 'settingsForm') {
     const f = t.form;
-    state.pseudo = f.pseudo.value.trim().slice(0, 30);
+    const before = { pseudo: profile && profile.pseudo, city: state.city, visibility: state.visibility, invisible: state.invisible };
     state.city = f.city.value;
     state.defaultRadius = Number(f.defaultRadius.value);
     filters.radius = state.defaultRadius;
@@ -651,8 +781,22 @@ document.addEventListener('change', (ev) => {
     state.reminderTiming = f.reminderTiming.value;
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
-    state.testMode = f.testMode.checked;
+    if (f.testMode) state.testMode = f.testMode.checked;
     save();
+    if (loggedIn()) {
+      const patch = {};
+      const pseudo = f.pseudo ? f.pseudo.value.trim().slice(0, 30) : profile.pseudo;
+      if (pseudo !== before.pseudo) patch.pseudo = pseudo;
+      if (state.city !== before.city) patch.city = state.city;
+      if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
+      if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
+      if (Object.keys(patch).length) {
+        sb.update('profiles', `id=eq.${profile.id}`, patch)
+          .then((rows) => { if (rows && rows[0]) { profile = rows[0]; state.pseudo = profile.pseudo; save(); } toast('Réglages enregistrés'); })
+          .catch((err) => { toast(err.message); if (f.pseudo) f.pseudo.value = profile.pseudo; });
+        return;
+      }
+    }
     toast('Réglages enregistrés');
   }
 });
@@ -671,14 +815,15 @@ function validatePresence(e) {
 }
 
 function checkIn(e) {
-  if (state.testMode) { validatePresence(e); return; }
+  if (state.testMode && !loggedIn()) { validatePresence(e); return; }
   if (!('geolocation' in navigator)) { toast('La localisation n’est pas disponible sur cet appareil.'); return; }
   toast('Vérification de ta position…');
   navigator.geolocation.getCurrentPosition((pos) => {
     // La position sert uniquement à ce calcul : elle n'est ni enregistrée ni envoyée.
+    if (loggedIn()) { serverCheckIn(e, pos.coords.latitude, pos.coords.longitude); return; }
     const d = distanceKm(pos.coords.latitude, pos.coords.longitude, e.venue.lat, e.venue.lon) * 1000;
     if (d <= CHECKIN_RADIUS_M) validatePresence(e);
-    else toast(`Tu es à ${d < 10000 ? `${Math.round(d)} m` : `${Math.round(d / 1000)} km`} du lieu : rapproche-toi pour valider.`);
+    else toast(tooFar(d));
   }, () => toast('Position refusée ou introuvable. Autorise la localisation pour EuroKink dans les réglages.'),
   { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
 }
@@ -693,7 +838,8 @@ async function shareEvent(e) {
 }
 
 function exportData() {
-  const data = { application: 'EuroKink', version: VERSION, exportedAt: new Date().toISOString(), ...state };
+  const data = { application: 'EuroKink', version: VERSION, exportedAt: new Date().toISOString(), ...state,
+    compte: loggedIn() ? { email: sb.currentUser()?.email, profil: profile, presences: checkinInfo, passeport: serverPassport } : null };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -722,9 +868,270 @@ function downloadIcs(e) {
 }
 
 // ---------------------------------------------------------------------------
+// Données Supabase : soirées, compte, synchronisation
+// ---------------------------------------------------------------------------
+const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
+const EVENT_SELECT = ['id', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
+  'booking', 'ticket_url', 'sales_open_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
+  'organizer:organizers(id,name,kind,is_verified)', 'venue:venues(name,city,country,latitude,longitude)',
+  'types:event_event_types(type:event_types(slug))'].join(',');
+
+function mapEvent(r, counts) {
+  return {
+    id: r.id, title: r.title, description: r.description || '',
+    startsAt: r.starts_at, endsAt: r.ends_at,
+    organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified },
+    venue: { name: r.venue.name, city: r.venue.city, lat: r.venue.latitude, lon: r.venue.longitude },
+    country: r.venue.country,
+    types: (r.types || []).map((t) => t.type && t.type.slug).filter(Boolean),
+    dressCode: r.dress_code, dressCodeDetails: r.dress_code_details,
+    price: Number(r.price), presalePrice: r.presale_price == null ? null : Number(r.presale_price),
+    booking: r.booking, ticketUrl: r.ticket_url, salesOpenAt: r.sales_open_at, soldOut: r.is_sold_out,
+    hasCloakroom: r.has_cloakroom, cloakroomPaid: r.cloakroom_paid, frequency: r.frequency,
+    languages: r.languages || [], attendees: counts.get(r.id) || 0
+  };
+}
+
+function setEvents(list) {
+  EVENTS = list;
+  const top = [...list].sort((a, b) => b.attendees - a.attendees || new Date(a.startsAt) - new Date(b.startsAt))[0];
+  EVENTS.forEach((e) => { e.featured = e === top; });
+  eventsReady = true;
+}
+
+async function loadEvents() {
+  const now = encodeURIComponent(new Date().toISOString());
+  const [rows, counts] = await Promise.all([
+    sb.select('events', `select=${EVENT_SELECT}&status=eq.published&ends_at=gte.${now}&order=starts_at.asc`),
+    sb.rpc('event_attendee_counts').catch(() => [])
+  ]);
+  const map = new Map((counts || []).map((c) => [c.event_id, Number(c.attendees)]));
+  setEvents((rows || []).map((r) => mapEvent(r, map)));
+  try { localStorage.setItem(EVENTS_CACHE, JSON.stringify({ at: Date.now(), events: EVENTS })); } catch (e) { /* stockage plein */ }
+}
+
+async function refreshEvents() {
+  try { await loadEvents(); eventsError = ''; } catch (err) { if (!eventsReady) eventsError = err.message; }
+  render();
+}
+
+function readEventsCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(EVENTS_CACHE) || 'null');
+    if (c && Array.isArray(c.events)) setEvents(c.events.filter((e) => new Date(e.endsAt) > new Date()));
+  } catch (e) { /* cache illisible */ }
+}
+
+const TABLE_OF = { favorites: 'favorites', reminders: 'reminders', alerts: 'ticket_alerts', attending: 'attendances' };
+
+function reminderTime(e) {
+  const s = new Date(e.startsAt);
+  if (state.reminderTiming === 'h2') return new Date(s.getTime() - 2 * 3600000).toISOString();
+  const d = new Date(s); d.setHours(0, 0, 0, 0);
+  if (state.reminderTiming === 'day14') { d.setHours(14); return d.toISOString(); }
+  d.setDate(d.getDate() - 1); d.setHours(18);
+  return d.toISOString();
+}
+
+async function pushToggle(list, id, on) {
+  const uid = profile.id;
+  if (on) {
+    const row = { user_id: uid, event_id: id };
+    if (list === 'reminders') row.remind_at = reminderTime(eventById(id));
+    await sb.insert(TABLE_OF[list], row, { ignoreDuplicates: true, onConflict: 'user_id,event_id' });
+  } else {
+    await sb.remove(TABLE_OF[list], `user_id=eq.${uid}&event_id=eq.${id}`);
+  }
+}
+
+function toggleAction(list, id, onMsg, offMsg) {
+  const on = toggleIn(list, id);
+  const e = eventById(id);
+  if (loggedIn() && list === 'attending' && e) e.attendees = Math.max(0, e.attendees + (on ? 1 : -1));
+  toast(on ? onMsg : offMsg);
+  render();
+  if (!loggedIn()) return;
+  pushToggle(list, id, on).catch((err) => {
+    toggleIn(list, id);
+    if (list === 'attending' && e) e.attendees = Math.max(0, e.attendees + (on ? -1 : 1));
+    render();
+    toast(`Non enregistré : ${err.message}`);
+  });
+}
+
+// Charge le profil et les données du membre connecté
+async function loadUser() {
+  const s = sb.getSession();
+  if (!s || !s.user) { profile = null; return; }
+  const uid = s.user.id;
+  let rows = await sb.select('profiles', `id=eq.${uid}&select=*`);
+  if (!rows.length) {
+    const md = s.user.user_metadata || {};
+    if (!md.pseudo) { profile = null; return 'incomplete'; }
+    rows = await sb.insert('profiles', {
+      id: uid, pseudo: md.pseudo, city: md.city || state.city,
+      adult_confirmed_at: md.adult_confirmed_at || new Date().toISOString(),
+      sensitive_consent_at: md.sensitive_consent_at || new Date().toISOString()
+    }, { returnRow: true });
+  }
+  profile = rows[0];
+  state.adult = true;
+  state.pseudo = profile.pseudo;
+  if (profile.city) state.city = profile.city;
+  state.visibility = profile.attendance_visibility;
+  state.invisible = profile.is_invisible;
+
+  // Ce que l'invité avait mis de côté sur ce téléphone rejoint son compte
+  const pending = Object.keys(TABLE_OF).flatMap((list) => state[list].map((id) => [list, id]));
+  await Promise.all(pending.map(([list, id]) => (eventById(id) ? pushToggle(list, id, true).catch(() => {}) : null)));
+
+  const ids = (table) => sb.select(table, `user_id=eq.${uid}&select=event_id`).then((r) => r.map((x) => x.event_id));
+  [state.favorites, state.reminders, state.alerts, state.attending] = await Promise.all(
+    [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
+  await loadPassport();
+  save();
+  return 'ok';
+}
+
+async function loadPassport() {
+  const ck = await sb.select('checkins', `user_id=eq.${profile.id}&select=event_id,validated_at,event:events(venue:venues(city,country))`);
+  checkinInfo = ck.map((c) => ({ id: c.event_id, city: c.event && c.event.venue && c.event.venue.city, country: c.event && c.event.venue && c.event.venue.country }));
+  state.checkins = ck.map((c) => ({ id: c.event_id, at: c.validated_at }));
+  serverPassport = await sb.rpc('passport', {});
+}
+
+const tooFar = (d) => `Tu es à ${d < 10000 ? `${Math.round(d)} m` : `${Math.round(d / 1000)} km`} du lieu : rapproche-toi pour valider.`;
+
+async function serverCheckIn(e, lat, lon) {
+  try {
+    const [r] = await sb.rpc('check_in', { p_event: e.id, p_lat: lat, p_lon: lon });
+    if (r.result === 'validated') {
+      await loadPassport();
+      if (!state.attending.includes(e.id)) state.attending.push(e.id);
+      save();
+      const names = (r.new_badges || []).map((c) => (BADGES.find((b) => b.code === c) || {}).name).filter(Boolean);
+      toast(names.length ? `Présence validée ! Nouveau badge : ${names.join(', ')}` : 'Présence validée !');
+      render();
+    } else if (r.result === 'too_far') toast(tooFar(r.distance_m));
+    else if (r.result === 'outside_time_window') toast('La validation ouvre une heure avant le début de la soirée.');
+    else if (r.result === 'already_validated') { toast('Ta présence est déjà validée.'); await loadPassport(); render(); }
+  } catch (err) { toast(err.message); }
+}
+
+async function reportEvent(e) {
+  if (!loggedIn()) { toast('Connecte-toi pour signaler une soirée.'); return; }
+  const reason = prompt('Que faut-il corriger sur cette soirée ? (date, prix, lieu, contenu inapproprié…)');
+  if (!reason || reason.trim().length < 3) return;
+  try {
+    await sb.insert('reports', { reporter_id: profile.id, target_type: 'event', target_id: e.id, reason: reason.trim().slice(0, 100), details: reason.trim().slice(0, 1000) });
+    toast('Merci ! Ton signalement a été transmis.');
+  } catch (err) { toast(err.message); }
+}
+
+async function logout() {
+  await sb.signOut();
+  profile = null; serverPassport = null; checkinInfo = [];
+  Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
+  save();
+  toast('Tu es déconnecté.');
+  navigate('#/profil');
+}
+
+async function deleteAccount() {
+  if (!confirm('Supprimer définitivement ton compte EuroKink ? Ton profil, tes favoris, tes sorties et tes badges seront effacés.')) return;
+  if (!confirm('Dernière confirmation : cette action est irréversible.')) return;
+  try {
+    await sb.rpc('delete_my_account', {});
+    sb.forgetSession();
+    profile = null; serverPassport = null; checkinInfo = [];
+    Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
+    save();
+    toast('Ton compte a été supprimé.');
+    navigate('#/');
+    refreshEvents();
+  } catch (err) { toast(err.message); }
+}
+
+function formError(form, msg) {
+  const el = form.querySelector('#formError');
+  if (el) { el.textContent = msg; el.hidden = !msg; }
+}
+
+async function submitAccountForm(form) {
+  const f = new FormData(form);
+  const btn = form.querySelector('button[type=submit]');
+  const label = btn.textContent;
+  formError(form, '');
+  const busy = (on) => { btn.disabled = on; btn.textContent = on ? 'Patiente…' : label; };
+  try {
+    busy(true);
+    if (form.id === 'signupForm' || form.id === 'completeForm') {
+      const pseudo = String(f.get('pseudo') || '').trim();
+      if (pseudo.length < 3) throw new Error('Choisis un pseudo de 3 caractères minimum.');
+      if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
+      if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
+      const now = new Date().toISOString();
+      const meta = { pseudo, city: f.get('city'), adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
+      if (form.id === 'completeForm') {
+        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
+        profile = rows[0];
+        await loadUser();
+        navigate('#/profil');
+        return;
+      }
+      const email = String(f.get('email') || '').trim();
+      const password = String(f.get('password') || '');
+      if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Adresse e-mail invalide.');
+      if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+      state.city = meta.city; state.adult = true; save();
+      const res = await sb.signUp(email, password, meta);
+      lastSignupEmail = email;
+      if (res.confirmed) { await loadUser(); toast(`Bienvenue ${pseudo} !`); navigate('#/profil'); } else navigate('#/compte/verifier');
+    } else if (form.id === 'loginForm') {
+      await sb.signIn(String(f.get('email') || '').trim(), String(f.get('password') || ''));
+      const status = await loadUser();
+      if (status === 'incomplete') { navigate('#/compte/profil'); return; }
+      toast(`Content de te revoir, ${profile.pseudo} !`);
+      navigate('#/profil');
+    } else if (form.id === 'forgotForm') {
+      await sb.sendPasswordReset(String(f.get('email') || '').trim());
+      form.innerHTML = '<p>Si un compte existe avec cette adresse, tu vas recevoir un lien pour choisir un nouveau mot de passe. Pense à regarder dans les indésirables.</p>';
+    } else if (form.id === 'newPasswordForm') {
+      const password = String(f.get('password') || '');
+      if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+      await sb.updatePassword(password);
+      toast('Mot de passe modifié.');
+      navigate('#/profil');
+    }
+  } catch (err) {
+    formError(form, err.message);
+  } finally {
+    if (btn.isConnected) busy(false);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Démarrage
 // ---------------------------------------------------------------------------
-render();
+(async () => {
+  const redirect = await sb.handleAuthRedirect();
+  if (redirect && !redirect.error) { state.adult = true; save(); }
+  readEventsCache();
+  render();
+  await refreshEvents();
+  if (sb.getSession()) {
+    try {
+      const status = await loadUser();
+      if (status === 'incomplete' && !redirect) navigate('#/compte/profil');
+    } catch (err) { if (err.status === 401) sb.forgetSession(); }
+    render();
+  }
+  if (redirect) {
+    if (redirect.error) toast(redirect.error);
+    else if (redirect.type === 'recovery') navigate('#/compte/nouveau-mdp');
+    else navigate(profile ? '#/compte/confirme' : '#/compte/profil');
+  }
+})();
 if (sessionStorage.getItem('ek.updated')) {
   sessionStorage.removeItem('ek.updated');
   setTimeout(() => toast(`Nouvelle version installée (${VERSION})`), 400);

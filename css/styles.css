@@ -210,6 +210,32 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
 .icon-btn.small { width: 36px; height: 36px; border-radius: 10px; }
 
+/* Compte */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pills .pill-red { margin-top: 0; }
+.pill-grey { display: inline-block; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: #BDBDBD; font-size: 11px; font-weight: 600; }
+.account-cta { display: flex; flex-direction: column; gap: 10px; border-color: var(--red); background: linear-gradient(0deg, var(--surface), var(--surface)); }
+.account-cta h2 { font-size: 18px; }
+.account-cta p { margin: 0; font-size: 14px; }
+.cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.cta-row .btn { flex: 1; }
+.center-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 24px 18px; }
+.center-card > .ic { width: 36px; height: 36px; color: var(--red-text); }
+.center-card h2 { font-size: 20px; }
+.center-card p { margin: 0; line-height: 1.5; }
+.loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 80px 0; }
+.spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--red); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pw { position: relative; display: flex; }
+.pw input { flex: 1; padding-right: 92px; }
+.pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 36px; padding: 0 10px; border-radius: 10px; border: 0; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }
+.hint { font-size: 12px; color: var(--muted); }
+.form-error { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--red-tint); color: var(--red-text); font-size: 13px; font-weight: 600; }
+.form-error[hidden] { display: none; }
+.settings a { color: var(--red-text); }
+.link.center { display: block; text-align: center; }
+button:disabled { opacity: 0.6; }
+
 /* Paramètres et pages d'information */
 .profile-top, .sub-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sub-top { justify-content: flex-start; }
