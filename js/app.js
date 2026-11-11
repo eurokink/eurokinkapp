@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -662,6 +662,16 @@ function render() {
 function navigate(hash) {
   if (location.hash === hash) render(); else location.hash = hash;
 }
+
+// Bloque le zoom par pincement et double toucher (Safari iOS ignore l'interdiction du viewport)
+['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (ev) => ev.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', (ev) => { if (ev.touches.length > 1 && !ev.target.closest('#map')) ev.preventDefault(); }, { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (ev) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 300 && !ev.target.closest('#map, input, select, textarea')) ev.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
 
 let navDepth = 0;   // nombre de navigations dans l'appli (pour le bouton Retour)
 window.addEventListener('hashchange', () => {
