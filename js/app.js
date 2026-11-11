@@ -1,7 +1,7 @@
 // EuroKink — application (étape 1 : soirées de démonstration, données stockées sur l'appareil)
 import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 const STORE_KEY = 'ek.state.v1';
 const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
@@ -167,12 +167,13 @@ function viewGate() {
     <form id="gateForm" class="card gate-card">
       <h1>Réservé aux adultes</h1>
       <p class="muted">EuroKink référence des soirées fetish destinées à un public majeur.</p>
+      <p class="demo-note">Version de démonstration : pas encore de compte à créer. Ton pseudo et ta ville servent juste à personnaliser l’accueil et restent sur ce téléphone.</p>
       <label class="field">Ton pseudo (facultatif)<input name="pseudo" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider" value="${esc(state.pseudo)}"></label>
       <label class="field">Ta ville de référence<select name="city">${options}</select></label>
       <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
       <label class="checkline"><input type="checkbox" name="consent" required> J’accepte qu’EuroKink conserve mes favoris et réglages sur cet appareil.</label>
       <button class="btn btn-red btn-block" type="submit">Entrer</button>
-      <p class="tiny muted">Version de démonstration : les soirées affichées sont fictives.</p>
+      <p class="tiny muted">Les soirées affichées sont fictives. La création de compte arrivera prochainement.</p>
     </form>
   </section>`;
 }

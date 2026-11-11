@@ -197,6 +197,7 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .gate-card { width: 100%; display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 .gate-card h1 { font-size: 22px; }
 .gate-card p { margin: 0; }
+.demo-note { padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; color: #BDBDBD; }
 
 /* Barre de navigation */
 #nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; justify-content: space-around; padding: 8px 4px calc(8px + var(--safe-bottom)); background: rgba(18, 18, 18, 0.96); border-top: 1px solid #222; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
