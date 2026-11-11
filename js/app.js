@@ -1,7 +1,8 @@
 // EuroKink — application (étape 1 : soirées de démonstration, données stockées sur l'appareil)
 import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
+import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 
-const VERSION = '0.1.1';
+const VERSION = '0.2.0';
 const STORE_KEY = 'ek.state.v1';
 const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
@@ -10,7 +11,8 @@ const CHECKIN_EARLY_MIN = 60;
 // État local (sera remplacé par Supabase à l'étape 2)
 // ---------------------------------------------------------------------------
 const defaults = {
-  adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', neutralNotifs: true, testMode: false,
+  adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
+  remindersOn: true, reminderTiming: 'eve18', ticketAlertsOn: true, defaultRadius: 100,
   favorites: [], reminders: [], alerts: [], attending: [], checkins: []
 };
 let state = load();
@@ -61,6 +63,8 @@ const timeLabel = (iso) => fTime.format(new Date(iso));
 const priceLabel = (p) => (p === 0 ? 'Gratuit' : `${Number(p).toLocaleString('fr-FR')} €`);
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+const REMINDER_TIMINGS = { eve18: 'la veille à 18 h', day14: 'le jour même à 14 h', h2: '2 heures avant' };
+const reminderLabel = () => REMINDER_TIMINGS[state.reminderTiming] || REMINDER_TIMINGS.eve18;
 const DRESS = { required: 'Obligatoire', recommended: 'Conseillé', free: 'Libre' };
 const BOOKING = { required: 'Obligatoire', recommended: 'Conseillée', door_only: 'Sur place' };
 const FREQ = { once: 'Unique', weekly: 'Hebdomadaire', monthly: 'Mensuelle', yearly: 'Annuelle' };
@@ -114,6 +118,11 @@ const I = {
   share: ic('<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>'),
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
   lock: ic('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
+  gear: ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+  doc: ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'),
+  mail: ic('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/>'),
+  download: ic('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'),
+  trash: ic('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
   locate: ic('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/>'),
   verified: '<svg class="verified" viewBox="0 0 24 24" role="img" aria-label="Organisateur vérifié"><circle cx="12" cy="12" r="11" fill="#D0142C"/><path d="M7 12.5l3.2 3L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -204,7 +213,8 @@ function viewHome() {
 }
 
 // Filtres de l'écran Explorer (gardés en mémoire pendant la session)
-const filters = { q: '', radius: 100, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false };
+const freshFilters = () => ({ q: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
+const filters = freshFilters();
 
 function filtered() {
   const now = new Date();
@@ -341,7 +351,7 @@ function viewFavorites() {
     ${block('Où je vais', state.attending, 'Touche « J’y vais » sur une soirée pour la retrouver ici.')}
     ${block('Favoris', state.favorites, 'Touche le cœur d’une soirée pour la mettre de côté.')}
     ${block('Alertes billetterie', state.alerts, 'Active une alerte sur une soirée complète ou dont la billetterie n’est pas encore ouverte.')}
-    ${block('Rappels', state.reminders, 'Les rappels te préviennent la veille à 18 h.')}
+    ${block('Rappels', state.reminders, `Les rappels te préviennent ${reminderLabel()}.`)}
   </section>`;
 }
 
@@ -377,9 +387,7 @@ function viewProfile() {
   const evs = state.checkins.map((c) => eventById(c.id)).filter(Boolean);
   const stats = [[evs.length, 'soirées'], [new Set(evs.map((e) => e.venue.city)).size, 'villes'], [new Set(evs.map((e) => e.country)).size, 'pays']];
   const sel = pass.find((b) => b.code === selectedBadge) || pass[0];
-  const cityOpts = CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-  const vis = [['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']];
-  return `<section class="screen"><div class="profile-head">
+  return `<section class="screen"><div class="profile-top"><h1 class="page-title">Profil</h1><a class="icon-btn" href="#/parametres" aria-label="Paramètres">${I.gear}</a></div><div class="profile-head">
       <div class="avatar">${esc((state.pseudo || 'E').charAt(0).toUpperCase())}</div>
       <div><div class="pseudo">${esc(state.pseudo || 'Membre EuroKink')}</div><div class="muted">${esc(state.city)}</div>
       <span class="pill-red">PIONNIER</span></div></div>
@@ -389,17 +397,62 @@ function viewProfile() {
         <svg viewBox="0 0 120 120" aria-hidden="true"><g class="b-studs">${studs()}</g><circle cx="60" cy="60" r="34" class="b-disc"/><g transform="translate(40 40) scale(1.6667)"><path d="${b.icon}" class="b-icon"/></g></svg>
         <span class="b-name">${esc(b.name)}</span><span class="b-bar"><span style="width:${Math.round((100 * b.progress) / b.goal)}%"></span></span></button>`).join('')}</div>
     <div class="card badge-detail"><strong>${esc(sel.name)}</strong> <span class="accent">${sel.earned ? '· obtenu' : `· ${sel.progress} / ${sel.goal}`}</span><p class="muted">${esc(sel.description)}</p></div>
-    <h2 class="section-title">Réglages</h2>
-    <form class="card settings" id="settingsForm">
-      <label class="field">Pseudo<input name="pseudo" maxlength="30" value="${esc(state.pseudo)}" autocomplete="off"></label>
-      <label class="field">Ville de référence<select name="city">${cityOpts}</select></label>
-      <label class="field">Qui peut voir mes sorties<select name="visibility">${vis.map(([v, l]) => `<option value="${v}" ${v === state.visibility ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      <label class="toggle-line"><span>Notifications discrètes<span class="muted tiny block">Texte neutre, sans le mot « fetish »</span></span><input type="checkbox" class="switch" name="neutralNotifs" ${state.neutralNotifs ? 'checked' : ''}></label>
-      <label class="toggle-line"><span>Mode test<span class="muted tiny block">Valider une présence sans GPS, pour essayer le passeport</span></span><input type="checkbox" class="switch" name="testMode" ${state.testMode ? 'checked' : ''}></label>
+    <a class="line-btn rounded" href="#/parametres">${I.gear}<span>Paramètres, confidentialité et informations</span>${I.chevron}</a>
+  </section>`;
+}
+
+function viewSettings() {
+  const opt = (pairs, cur) => pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
+  const cityOpts = CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+  const sw = (name, on, label, help) => `<label class="toggle-line"><span>${label}${help ? `<span class="muted tiny block">${help}</span>` : ''}</span><input type="checkbox" class="switch" name="${name}" ${on ? 'checked' : ''}></label>`;
+  const info = (slug, label) => `<a class="line-btn" href="#/infos/${slug}">${I.doc}<span>${label}</span>${I.chevron}</a>`;
+  return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour au profil">${I.back}</a><h1 class="page-title">Paramètres</h1></div>
+    <form id="settingsForm" class="settings-groups">
+      <h2 class="group-title">Mon profil</h2>
+      <div class="card settings">
+        <label class="field">Pseudo<input name="pseudo" maxlength="30" value="${esc(state.pseudo)}" autocomplete="off"></label>
+        <label class="field">Ville de référence<select name="city">${cityOpts}</select></label>
+        <label class="field">Rayon de recherche par défaut<select name="defaultRadius">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']], state.defaultRadius)}</select></label>
+      </div>
+      <h2 class="group-title">Confidentialité</h2>
+      <div class="card settings">
+        <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
+        ${sw('invisible', state.invisible, 'Profil invisible', 'Personne ne te trouve dans la communauté')}
+        <p class="tiny muted">Ces choix s’appliqueront dès l’ouverture de la communauté.</p>
+      </div>
+      <h2 class="group-title">Notifications</h2>
+      <div class="card settings">
+        ${sw('remindersOn', state.remindersOn, 'Rappels de soirée')}
+        <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
+        ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
+        ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Texte neutre, sans le mot « fetish »')}
+        <p class="tiny muted">L’envoi des notifications arrivera avec les comptes : tes choix sont déjà enregistrés.</p>
+      </div>
+      <h2 class="group-title">Passeport</h2>
+      <div class="card settings">${sw('testMode', state.testMode, 'Mode test', 'Valider une présence sans GPS, pour essayer les badges')}</div>
     </form>
-    <button class="btn btn-ghost btn-block" data-act="reset">Effacer mes données sur cet appareil</button>
+    <h2 class="group-title">Informations</h2>
+    <div class="practical">
+      ${info('charte', 'Charte de la communauté')}
+      ${info('cgu', 'Conditions générales d’utilisation')}
+      ${info('confidentialite', 'Confidentialité')}
+      ${info('mentions', 'Mentions légales')}
+      ${CONTACT_EMAIL ? `<a class="line-btn" href="mailto:${CONTACT_EMAIL}">${I.mail}<span>Nous contacter</span>${I.chevron}</a>` : `<div class="line-btn static">${I.mail}<span>Nous contacter<span class="muted tiny block">Adresse bientôt disponible</span></span></div>`}
+    </div>
+    <h2 class="group-title">Mes données</h2>
+    <div class="practical">
+      <button class="line-btn" data-act="export">${I.download}<span>Exporter mes données</span>${I.chevron}</button>
+      <button class="line-btn danger" data-act="reset">${I.trash}<span>Effacer mes données sur cet appareil</span>${I.chevron}</button>
+    </div>
     <p class="tiny muted center">EuroKink ${VERSION} · version de démonstration · soirées fictives</p>
   </section>`;
+}
+
+function viewInfo(slug) {
+  const page = PAGES[slug];
+  if (!page) return `<section class="screen">${empty('Page introuvable.')}</section>`;
+  return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/parametres" aria-label="Retour aux paramètres">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
+    <article class="legal card">${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +478,8 @@ function render() {
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(); active = '#/communaute'; break;
     case 'profil': html = viewProfile(); active = '#/profil'; break;
+    case 'parametres': html = viewSettings(); active = '#/profil'; break;
+    case 'infos': html = viewInfo(param); active = '#/profil'; break;
     default: html = viewHome();
   }
   view.innerHTML = html;
@@ -467,7 +522,7 @@ document.addEventListener('click', (ev) => {
   const quick = ev.target.closest('[data-quick]');
   if (quick) {
     const k = quick.dataset.quick;
-    Object.assign(filters, { q: '', period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false, radius: 100 });
+    Object.assign(filters, freshFilters());
     if (k === 'weekend') filters.period = 'weekend';
     else if (k === 'free') filters.budget = 0;
     else if (k.startsWith('type:')) { filters.types = [k.slice(5)]; filters.radius = 0; }
@@ -486,7 +541,7 @@ document.addEventListener('click', (ev) => {
   const badge = ev.target.closest('[data-badge]');
   if (badge) { selectedBadge = badge.dataset.badge; render(); return; }
   if (ev.target.closest('#fReset')) {
-    Object.assign(filters, { q: '', radius: 100, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
+    Object.assign(filters, freshFilters());
     render();
     return;
   }
@@ -500,11 +555,12 @@ document.addEventListener('click', (ev) => {
       break;
     case 'share': shareEvent(e); break;
     case 'fav': toast(toggleIn('favorites', id) ? 'Ajoutée à tes favoris' : 'Retirée de tes favoris'); render(); break;
-    case 'reminder': toast(toggleIn('reminders', id) ? 'Rappel programmé la veille à 18 h' : 'Rappel supprimé'); render(); break;
+    case 'reminder': toast(toggleIn('reminders', id) ? `Rappel programmé ${reminderLabel()}` : 'Rappel supprimé'); render(); break;
     case 'alert': toast(toggleIn('alerts', id) ? 'Alerte activée : tu seras prévenu à l’ouverture des places' : 'Alerte désactivée'); render(); break;
     case 'attend': toast(toggleIn('attending', id) ? 'Bonne soirée ! Elle est dans « Mes soirées »' : 'Participation retirée'); render(); break;
     case 'checkin': checkIn(e); break;
     case 'ics': downloadIcs(e); break;
+    case 'export': exportData(); break;
     case 'report': toast('Merci ! Le signalement sera transmis à l’équipe (actif à l’étape 2).'); break;
     case 'reset':
       if (confirm('Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
@@ -534,12 +590,17 @@ document.addEventListener('change', (ev) => {
     const f = t.form;
     state.pseudo = f.pseudo.value.trim().slice(0, 30);
     state.city = f.city.value;
+    state.defaultRadius = Number(f.defaultRadius.value);
+    filters.radius = state.defaultRadius;
     state.visibility = f.visibility.value;
+    state.invisible = f.invisible.checked;
+    state.remindersOn = f.remindersOn.checked;
+    state.reminderTiming = f.reminderTiming.value;
+    state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
     state.testMode = f.testMode.checked;
     save();
     toast('Réglages enregistrés');
-    render();
   }
 });
 
@@ -576,6 +637,18 @@ async function shareEvent(e) {
     if (navigator.share) await navigator.share({ title: e.title, text, url });
     else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Lien copié'); }
   } catch (err) { /* partage annulé */ }
+}
+
+function exportData() {
+  const data = { application: 'EuroKink', version: VERSION, exportedAt: new Date().toISOString(), ...state };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'eurokink-mes-donnees.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast('Tes données ont été exportées');
 }
 
 function downloadIcs(e) {

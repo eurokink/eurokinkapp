@@ -176,6 +176,24 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .badge-detail p { margin: 4px 0 0; font-size: 13px; }
 .settings { display: flex; flex-direction: column; gap: 14px; }
 
+/* Paramètres et pages d'information */
+.profile-top, .sub-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sub-top { justify-content: flex-start; }
+.page-title.small { font-size: 22px; line-height: 1.15; }
+.settings-groups { display: flex; flex-direction: column; gap: 18px; }
+.group-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin: 4px 0 -8px; }
+.line-btn.rounded { border: 1px solid var(--border); border-radius: var(--radius); }
+.line-btn.static { cursor: default; }
+.line-btn.danger, .line-btn.danger .ic:first-child { color: var(--red-text); }
+.legal { line-height: 1.55; font-size: 14px; color: #CFCFCF; }
+.legal h2 { font-size: 16px; color: var(--text); margin: 18px 0 6px; }
+.legal p { margin: 0 0 10px; }
+.legal ul { margin: 0 0 10px; padding-left: 20px; }
+.legal li { margin-bottom: 6px; }
+.legal a { color: var(--red-text); text-decoration: underline; }
+.legal .lead { color: var(--text); font-weight: 600; }
+.draft { padding: 8px 12px; border-radius: 10px; background: var(--red-tint); color: var(--red-text); font-size: 12px; font-weight: 600; }
+
 /* Champs de formulaire */
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .field input, .field select { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; }
