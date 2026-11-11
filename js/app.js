@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -668,7 +668,7 @@ document.addEventListener('touchmove', (ev) => { if (ev.touches.length > 1 && !e
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (ev) => {
   const now = Date.now();
-  if (now - lastTouchEnd < 300 && !ev.target.closest('#map, input, select, textarea')) ev.preventDefault();
+  if (now - lastTouchEnd < 300 && !ev.target.closest('#map, input, select, textarea, button, a, label')) ev.preventDefault();
   lastTouchEnd = now;
 }, { passive: false });
 

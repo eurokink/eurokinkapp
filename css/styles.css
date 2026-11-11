@@ -228,7 +228,7 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--red); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .pw { position: relative; display: flex; }
-.pw input { flex: 1; padding-right: 92px; }
+.pw input { flex: 1; padding-right: 92px; color: var(--text); -webkit-text-fill-color: var(--text); }
 .pw-toggle { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); height: 36px; padding: 0 10px; border-radius: 10px; border: 0; background: var(--surface-2); color: var(--text); font-size: 12px; font-weight: 600; }
 .hint { font-size: 12px; color: var(--muted); }
 .form-error { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--red-tint); color: var(--red-text); font-size: 13px; font-weight: 600; }
@@ -263,7 +263,7 @@ button:disabled { opacity: 0.6; }
 .checkline input { width: 20px; height: 20px; accent-color: var(--red); margin-top: 1px; flex: none; }
 .checkline span { flex: 1; line-height: 1.45; }
 .checkline a { color: var(--red-text); text-decoration: underline; }
-input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+input:not([type=password]):-webkit-autofill, input:not([type=password]):-webkit-autofill:hover, input:not([type=password]):-webkit-autofill:focus {
   -webkit-text-fill-color: var(--text); -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; caret-color: var(--text); transition: background-color 9999s; }
 .toggles { padding: 4px 16px; }
 .toggle-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; font-size: 14px; }
