@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -518,9 +518,9 @@ function viewAccount(mode) {
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
           ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
           <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
-          <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
-          <label class="checkline"><input type="checkbox" name="sensitive" required> J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</label>
-          <label class="checkline"><input type="checkbox" name="terms" required> J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</label>
+          <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
+          <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
+          <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
           <button class="btn btn-red btn-block" type="submit">Créer mon compte</button>
           <p class="tiny muted center">Déjà un compte ? <a class="accent" href="#/compte/connexion">Me connecter</a></p>
@@ -555,8 +555,8 @@ function viewAccount(mode) {
           <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
           <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
-          <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
-          <label class="checkline"><input type="checkbox" name="sensitive" required> J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</label>
+          <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
+          <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
           <button class="btn btn-red btn-block" type="submit">Terminer</button></form></section>`;
     default:

@@ -261,6 +261,10 @@ button:disabled { opacity: 0.6; }
 .field input, .field select { height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; }
 .checkline { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; }
 .checkline input { width: 20px; height: 20px; accent-color: var(--red); margin-top: 1px; flex: none; }
+.checkline span { flex: 1; line-height: 1.45; }
+.checkline a { color: var(--red-text); text-decoration: underline; }
+input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text); -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; caret-color: var(--text); transition: background-color 9999s; }
 .toggles { padding: 4px 16px; }
 .toggle-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; font-size: 14px; }
 .switch { -webkit-appearance: none; appearance: none; width: 50px; height: 30px; border-radius: 999px; background: #3A3A3A; position: relative; flex: none; transition: background 0.2s; margin: 0; }
