@@ -77,6 +77,8 @@ export const PAGES = {
       <p>[À COMPLÉTER]</p>
       <h2>Hébergement</h2>
       <p>Application hébergée par GitHub Pages (GitHub, Inc., San Francisco, États-Unis). Lors de l’ouverture des comptes, les données des membres seront hébergées dans l’Union européenne.</p>
+      <h2>Propriété intellectuelle</h2>
+      <p>© 2026 EuroKink™ · Tous droits réservés. Le nom, le logo et l’interface d’EuroKink ne peuvent être reproduits sans autorisation.</p>
       <h2>Contact</h2>
       <p>${contactLine()}.</p>`
   }

@@ -226,6 +226,7 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .legal li { margin-bottom: 6px; }
 .legal a { color: var(--red-text); text-decoration: underline; }
 .legal .lead { color: var(--text); font-weight: 600; }
+.about-foot p { margin: 2px 0; }
 .draft { padding: 8px 12px; border-radius: 10px; background: var(--red-tint); color: var(--red-text); font-size: 12px; font-weight: 600; }
 
 /* Champs de formulaire */

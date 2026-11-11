@@ -3,7 +3,9 @@ import { EVENTS, EVENT_TYPES, CITIES, BADGES } from './data.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.2';
+const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
+const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
 const CHECKIN_RADIUS_M = 300;
 const CHECKIN_EARLY_MIN = 60;
@@ -452,7 +454,7 @@ function viewSettings() {
       <button class="line-btn" data-act="export">${I.download}<span>Exporter mes données</span>${I.chevron}</button>
       <button class="line-btn danger" data-act="reset">${I.trash}<span>Effacer mes données sur cet appareil</span>${I.chevron}</button>
     </div>
-    <p class="tiny muted center">EuroKink ${VERSION} · version de démonstration · soirées fictives</p>
+    <div class="about-foot tiny muted center"><p>${BRAND} · version ${VERSION}</p><p>© ${COPYRIGHT_YEAR} ${BRAND} · Tous droits réservés</p><p>Version de démonstration · soirées fictives</p></div>
   </section>`;
 }
 
@@ -723,6 +725,25 @@ function downloadIcs(e) {
 // Démarrage
 // ---------------------------------------------------------------------------
 render();
+if (sessionStorage.getItem('ek.updated')) {
+  sessionStorage.removeItem('ek.updated');
+  setTimeout(() => toast(`Nouvelle version installée (${VERSION})`), 400);
+}
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  // Mise à jour automatique : on vérifie à chaque ouverture et à chaque retour dans l'appli,
+  // puis on recharge une seule fois quand la nouvelle version a pris le relais.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    sessionStorage.setItem('ek.updated', '1');
+    location.reload();
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
+  });
 }
