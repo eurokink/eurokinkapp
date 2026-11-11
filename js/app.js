@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -18,6 +18,7 @@ let EVENTS = [];            // soirées publiées à venir, chargées depuis Sup
 let eventsReady = false;
 let eventsError = '';
 let profile = null;         // profil du membre connecté
+let userChecked = false;    // le profil a-t-il été chargé au démarrage ?
 let serverPassport = null;  // progression des badges calculée par le serveur
 let checkinInfo = [];       // présences validées : { id, city, country }
 const EVENTS_CACHE = 'ek.events.v1';
@@ -189,21 +190,17 @@ const empty = (msg) => `<div class="empty">${msg}</div>`;
 // ---------------------------------------------------------------------------
 // Écrans
 // ---------------------------------------------------------------------------
-function viewGate() {
-  const options = CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+function viewWelcome() {
   return `<section class="gate">
     <div class="gate-logo">${LOGO_MARK}${WORDMARK}</div>
     <p class="gate-tag">Toutes les soirées fetish, en France puis en Europe.</p>
-    <form id="gateForm" class="card gate-card">
+    <div class="card gate-card">
       <h1>Réservé aux adultes</h1>
-      <p class="muted">EuroKink référence des soirées fetish destinées à un public majeur.</p>
-      <p class="demo-note">Tu peux découvrir les soirées sans compte. Pour retrouver tes sorties sur tous tes appareils et gagner des badges, crée ton compte depuis le Profil.</p>
-      <label class="field">Ta ville de référence<select name="city">${options}</select></label>
-      <label class="checkline"><input type="checkbox" name="adult" required> J’ai 18 ans ou plus.</label>
-      <label class="checkline"><input type="checkbox" name="consent" required> J’accepte qu’EuroKink conserve mes réglages sur cet appareil.</label>
-      <button class="btn btn-red btn-block" type="submit">Entrer</button>
-      <p class="tiny muted">Phase de test : les soirées affichées sont fictives.</p>
-    </form>
+      <p class="muted">EuroKink est réservée aux membres majeurs. Crée ton compte ou connecte-toi pour découvrir les soirées.</p>
+      <a class="btn btn-red btn-block" href="#/compte/inscription">Créer un compte</a>
+      <a class="btn btn-ghost btn-block" href="#/compte/connexion">Me connecter</a>
+      <p class="tiny muted center"><a class="accent" href="#/infos/charte">Charte</a> · <a class="accent" href="#/infos/cgu">CGU</a> · <a class="accent" href="#/infos/confidentialite">Confidentialité</a></p>
+    </div>
   </section>`;
 }
 
@@ -493,7 +490,7 @@ function viewSettings() {
 function viewInfo(slug) {
   const page = PAGES[slug];
   if (!page) return `<section class="screen">${empty('Page introuvable.')}</section>`;
-  return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/parametres" aria-label="Retour aux paramètres">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
+  return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="${loggedIn() ? '#/parametres' : '#/'}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
     <article class="legal card">${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
 }
 
@@ -507,7 +504,8 @@ function viewLoading() {
 
 const cityOptions = () => CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
 const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="8" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
-const accountTop = (title, back = '#/profil') => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
+const accountTop = (title, back = '#/profil') => (!loggedIn() && back === '#/profil' ? accountTopRaw(title, '#/') : accountTopRaw(title, back));
+const accountTopRaw = (title, back) => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
 let lastSignupEmail = '';
 
 function viewAccount(mode) {
@@ -622,13 +620,14 @@ const NAV = [['#/', 'Accueil', I.home], ['#/explorer', 'Explorer', I.compass], [
 function render() {
   const view = $('#view');
   const nav = $('#nav');
-  if (!state.adult) {
-    view.innerHTML = viewGate();
+  const hash = location.hash || '#/';
+  const [, route, param] = hash.split('/');
+  if (!loggedIn() && route !== 'compte' && route !== 'infos') {
+    if (mapCleanup) { mapCleanup(); mapCleanup = null; }
+    view.innerHTML = sb.getSession() && !userChecked ? viewLoading() : viewWelcome();
     nav.hidden = true;
     return;
   }
-  const hash = location.hash || '#/';
-  const [, route, param] = hash.split('/');
   let html;
   let active = '#/';
   const needsEvents = ['', undefined, 'explorer', 'carte', 'soiree', 'favoris'].includes(route);
@@ -653,7 +652,7 @@ function render() {
   }
   if (mapCleanup) { mapCleanup(); mapCleanup = null; }
   view.innerHTML = html;
-  nav.hidden = active === null;
+  nav.hidden = active === null || !loggedIn();
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
@@ -757,6 +756,7 @@ document.addEventListener('click', (ev) => {
       if (confirm(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
         sb.forgetSession();
         profile = null; serverPassport = null; checkinInfo = [];
+        clearEvents();
         localStorage.removeItem(STORE_KEY);
         state = load();
         navigate('#/');
@@ -920,7 +920,13 @@ async function loadEvents() {
   try { localStorage.setItem(EVENTS_CACHE, JSON.stringify({ at: Date.now(), events: EVENTS })); } catch (e) { /* stockage plein */ }
 }
 
+function clearEvents() {
+  EVENTS = []; eventsReady = false; eventsError = '';
+  try { localStorage.removeItem(EVENTS_CACHE); } catch (e) { /* rien */ }
+}
+
 async function refreshEvents() {
+  if (!sb.getSession()) return;
   try { await loadEvents(); eventsError = ''; } catch (err) { if (!eventsReady) eventsError = err.message; }
   render();
 }
@@ -1043,8 +1049,9 @@ async function logout() {
   profile = null; serverPassport = null; checkinInfo = [];
   Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
   save();
+  clearEvents();
   toast('Tu es déconnecté.');
-  navigate('#/profil');
+  navigate('#/');
 }
 
 async function deleteAccount() {
@@ -1056,9 +1063,9 @@ async function deleteAccount() {
     profile = null; serverPassport = null; checkinInfo = [];
     Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
     save();
+    clearEvents();
     toast('Ton compte a été supprimé.');
     navigate('#/');
-    refreshEvents();
   } catch (err) { toast(err.message); }
 }
 
@@ -1086,7 +1093,8 @@ async function submitAccountForm(form) {
         const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
         profile = rows[0];
         await loadUser();
-        navigate('#/profil');
+        await refreshEvents();
+        navigate('#/');
         return;
       }
       const email = String(f.get('email') || '').trim();
@@ -1096,13 +1104,14 @@ async function submitAccountForm(form) {
       state.city = meta.city; state.adult = true; save();
       const res = await sb.signUp(email, password, meta);
       lastSignupEmail = email;
-      if (res.confirmed) { await loadUser(); toast(`Bienvenue ${pseudo} !`); navigate('#/profil'); } else navigate('#/compte/verifier');
+      if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate('#/'); } else navigate('#/compte/verifier');
     } else if (form.id === 'loginForm') {
       await sb.signIn(String(f.get('email') || '').trim(), String(f.get('password') || ''));
       const status = await loadUser();
       if (status === 'incomplete') { navigate('#/compte/profil'); return; }
+      await refreshEvents();
       toast(`Content de te revoir, ${profile.pseudo} !`);
-      navigate('#/profil');
+      navigate('#/');
     } else if (form.id === 'forgotForm') {
       await sb.sendPasswordReset(String(f.get('email') || '').trim());
       form.innerHTML = '<p>Si un compte existe avec cette adresse, tu vas recevoir un lien pour choisir un nouveau mot de passe. Pense à regarder dans les indésirables.</p>';
@@ -1125,17 +1134,22 @@ async function submitAccountForm(form) {
 // ---------------------------------------------------------------------------
 (async () => {
   const redirect = await sb.handleAuthRedirect();
-  if (redirect && !redirect.error) { state.adult = true; save(); }
-  readEventsCache();
+  if (sb.getSession()) readEventsCache();
   render();
-  await refreshEvents();
   if (sb.getSession()) {
     try {
       const status = await loadUser();
       if (status === 'incomplete' && !redirect) navigate('#/compte/profil');
-    } catch (err) { if (err.status === 401) sb.forgetSession(); }
+    } catch (err) {
+      if (err.status === 401) { sb.forgetSession(); clearEvents(); }
+      else if (err.network && state.pseudo) profile = profile || { id: sb.currentUser()?.id, pseudo: state.pseudo, city: state.city, member_number: 0 };
+    }
+    userChecked = true;
     render();
+    await refreshEvents();
   }
+  userChecked = true;
+  render();
   if (redirect) {
     if (redirect.error) toast(redirect.error);
     else if (redirect.type === 'recovery') navigate('#/compte/nouveau-mdp');

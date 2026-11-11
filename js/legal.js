@@ -32,12 +32,7 @@ export const PAGES = {
   confidentialite: {
     title: 'Confidentialité',
     html: () => `${draft}
-      <h2>Sans compte</h2>
-      <ul>
-        <li>Ta ville de référence, tes favoris, rappels et sorties sont enregistrés <strong>uniquement sur ce téléphone</strong>.</li>
-        <li>Aucun outil de statistiques, de publicité ou de suivi, et aucune police ou ressource chargée depuis un service tiers.</li>
-      </ul>
-      <h2>Avec un compte</h2>
+      <h2>Tes données</h2>
       <p>Utiliser EuroKink peut révéler l’orientation sexuelle de ses membres, une donnée sensible au sens de l’article 9 du RGPD. C’est pourquoi :</p>
       <ul>
         <li>ton <strong>consentement explicite</strong> est demandé à l’inscription ;</li>
@@ -45,6 +40,7 @@ export const PAGES = {
         <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta ville, tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
+        <li>aucun outil de statistiques, de publicité ou de suivi, et aucune ressource chargée depuis un service tiers ;</li>
         <li>tu peux exporter tes données et <strong>supprimer définitivement ton compte</strong> à tout moment depuis Paramètres.</li>
       </ul>
       <h2>Localisation</h2>
