@@ -1,6 +1,6 @@
 // EuroKink — textes d'information (versions provisoires, à faire relire avant le lancement public)
 
-export const CONTACT_EMAIL = '';   // à renseigner quand l'adresse EuroKink sera créée
+export const CONTACT_EMAIL = 'contact@eurokink.eu';
 export const LEGAL_UPDATED = '11 novembre 2026';
 
 const draft = '<p class="draft">Version provisoire, à faire relire avant le lancement public.</p>';
