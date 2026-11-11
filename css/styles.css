@@ -327,3 +327,27 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .propose-cta { display: flex; align-items: center; gap: 12px; }
 .propose-cta > div { flex: 1; }
 .propose-cta .ic { color: var(--muted); }
+
+/* Espace organisateur (0.7.0) */
+.perks ul { margin: 8px 0; padding-left: 20px; color: #BDBDBD; font-size: 14px; line-height: 1.6; }
+.perks p { margin: 0; }
+.org-head { display: flex; flex-direction: column; gap: 10px; }
+.org-name { font-size: 19px; font-weight: 800; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.org-links { display: flex; gap: 18px; }
+.stat-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.stat-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 8px; background: var(--surface-2); color: #BDBDBD; font-size: 12px; }
+.stat-chip .ic { width: 13px; height: 13px; color: var(--red-text); }
+.stat-chip b { color: var(--text); }
+.org-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.mini-btn { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
+.mini-btn.danger { color: var(--red-text); }
+.mini-btn:disabled { opacity: 0.5; }
+.org-public { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.org-public .org-name { justify-content: center; }
+.org-public .btn { min-width: 160px; }
+.org-avatar { width: 72px; height: 72px; border-radius: 50%; background: var(--red-tint); color: var(--red-text); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 800; border: 2px solid var(--red); }
+.org-link { color: inherit; text-decoration: underline; text-decoration-color: var(--red); text-underline-offset: 3px; }
+.seg-btn button { padding: 8px 6px; font-size: 13px; }
+.stats.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.stats.four .stat strong { font-size: 20px; }
+.stats.four .stat span { font-size: 11px; }

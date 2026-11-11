@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -139,6 +139,7 @@ const I = {
   download: ic('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'),
   trash: ic('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
   map: ic('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><path d="M8 2v16M16 6v16"/>'),
+  eye: ic('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),
   close: ic('<path d="M18 6 6 18M6 6l12 12"/>'),
   list: ic('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'),
   route: ic('<path d="M3 11l19-9-9 19-2-8-8-2z"/>'),
@@ -226,7 +227,7 @@ function viewHome() {
     <div class="list">${weekend.length ? weekend.map(eventRow).join('') : empty('Rien ce week-end dans ton coin. Regarde les prochaines dates ci-dessous.')}</div>
     <h2 class="section-title">Prochainement</h2>
     <div class="list">${later.map(eventRow).join('')}</div>
-    <a class="card propose-cta" href="#/proposer"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Propose-la gratuitement à la communauté.</div></div>${I.chevron}</a>
+    <a class="card propose-cta" href="#/${isOrganizer() ? 'orga' : 'devenir-organisateur'}"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Deviens organisateur : publie tes soirées et suis tes statistiques.</div></div>${I.chevron}</a>
   </section>`;
 }
 
@@ -314,7 +315,7 @@ function viewEvent(id) {
     </div>
     <div class="event-body">
       <h1 class="event-title">${esc(e.title)}</h1>
-      <div class="org-line">par <strong>${esc(e.organizer.name)}</strong>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
+      <div class="org-line">par <a class="org-link" href="#/organisateur/${e.organizer.id}"><strong>${esc(e.organizer.name)}</strong></a>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
       <div class="facts">
         <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}</div></div></div>
         <div class="fact"><span class="fact-ic">${I.pin}</span><div class="fact-main"><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)}</div></div>
@@ -417,6 +418,7 @@ function viewProfile() {
   const name = loggedIn() ? profile.pseudo : 'Invité';
   const pills = loggedIn() ? [profile.role === 'admin' ? '<span class="pill-red">ADMIN</span>' : '',
     pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
+    isOrganizer() ? '<span class="pill-red">ORGANISATEUR</span>' : '',
     `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
   const account = loggedIn() ? '' : `<div class="card account-cta"><h2>Crée ton compte EuroKink</h2>
       <p class="muted">Retrouve tes favoris, rappels et sorties sur tous tes appareils, et fais valider tes badges.</p>
@@ -433,8 +435,11 @@ function viewProfile() {
         <span class="b-name">${esc(b.name)}</span><span class="b-bar"><span style="width:${Math.round((100 * b.progress) / b.goal)}%"></span></span></button>`).join('')}</div>
     <div class="card badge-detail"><strong>${esc(sel.name)}</strong> <span class="accent">${sel.earned ? '· obtenu' : `· ${sel.progress} / ${sel.goal}`}</span><p class="muted">${esc(sel.description)}</p></div>
     ${loggedIn() ? `<div class="practical flat">
-      <a class="line-btn" href="#/proposer">${I.calendar}<span>Proposer une soirée</span>${I.chevron}</a>
-      <a class="line-btn" href="#/mes-propositions">${I.doc}<span>Mes propositions</span>${I.chevron}</a>
+      ${isOrganizer() ? `<a class="line-btn" href="#/orga">${I.sliders}<span>Espace organisateur</span>${I.chevron}</a>`
+        : orgStatus && orgStatus.request && orgStatus.request.status === 'pending' ? `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Demande en cours d’examen</span></span>${I.chevron}</a>`
+        : `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Publie tes soirées et suis tes statistiques</span></span>${I.chevron}</a>`}
+      <a class="line-btn" href="#/proposer" data-act="new-signal">${I.flag}<span>Signaler une soirée manquante</span>${I.chevron}</a>
+      <a class="line-btn" href="#/mes-propositions">${I.doc}<span>Mes signalements</span>${I.chevron}</a>
       ${isAdmin() ? `<a class="line-btn" href="#/admin">${I.lock}<span>Espace admin</span>${adminCount() ? `<span class="count-pill">${adminCount()}</span>` : ''}${I.chevron}</a>` : ''}
     </div>` : ''}
     <a class="line-btn rounded" href="#/parametres">${I.gear}<span>Paramètres, confidentialité et informations</span>${I.chevron}</a>
@@ -593,15 +598,28 @@ let loadingSubs = false, loadingAdmin = false, submitting = false;
 const isAdmin = () => loggedIn() && profile.role === 'admin';
 const dv = (k) => esc(draft[k] ?? '');
 const selectField = (name, pairs, cur) => `<select name="${name}">${pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur ?? '') ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
-const adminCount = () => (adminData ? adminData.pending.length + adminData.reports.length : 0);
+const adminCount = () => (adminData ? adminData.pending.length + adminData.reports.length + (adminData.requests || []).length : 0);
 const loadingScreen = (title, back) => `<section class="screen">${accountTopRaw(title, back)}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
 const ADDR_FIELDS = ['address', 'postal_code', 'city', 'latitude', 'longitude', 'addrLabel'];
 
 function viewSubmit() {
   const types = draft.types || [];
   const chosen = draft.latitude != null;
-  return `<section class="screen">${accountTopRaw('Proposer une soirée', '#/profil')}
-    <p class="muted">Ta soirée est vérifiée par l’équipe EuroKink avant d’être publiée. Les champs marqués * sont obligatoires.</p>
+  const orgMode = !!(draft.id || draft.organizer_id);
+  if (orgMode && orgStatus === null) { loadOrgStatus(); return loadingScreen('Soirée', '#/orga'); }
+  const org = myOrgs().find((o) => o.id === draft.organizer_id);
+  if (orgMode && !org && !isAdmin()) { draft = {}; saveDraft(); return viewSubmit(); }
+  const title = draft.id ? 'Modifier la soirée' : orgMode ? 'Nouvelle soirée' : 'Signaler une soirée';
+  const intro = orgMode
+    ? (org && org.is_verified ? 'Organisateur vérifié : ta soirée est publiée tout de suite.' : 'Ta soirée est vérifiée par l’équipe EuroKink avant d’être publiée.')
+    : 'Une soirée manque dans l’appli ? Indique-la : l’équipe EuroKink la vérifie avant de la publier. Tu l’organises ? <a class="accent" href="#/devenir-organisateur">Deviens organisateur</a>.';
+  const orgSection = orgMode
+    ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${myOrgs().length > 1 && !draft.id
+        ? `<label class="field">Organisation${selectField('organizer_id', myOrgs().map((o) => [o.id, esc(o.name)]), draft.organizer_id)}</label>`
+        : `<div class="line-btn static">${I.users}<span>${esc(org ? org.name : 'Ton organisation')}</span></div>`}</div>`
+    : null;
+  return `<section class="screen">${accountTopRaw(title, orgMode ? '#/orga' : '#/profil')}
+    <p class="muted">${intro} Les champs marqués * sont obligatoires.</p>
     <form id="submitForm" class="settings-groups" novalidate>
       <h2 class="group-title">La soirée</h2>
       <div class="card settings">
@@ -620,12 +638,12 @@ function viewSubmit() {
         ${chosen ? `<div class="addr-chosen">${I.pin}<span>${esc(draft.addrLabel)}</span><button type="button" class="link" data-act="addr-clear">Modifier</button></div>`
           : `<label class="field">${draft.secret ? 'Ville *' : 'Adresse *'}<input id="addrInput" name="addr_q" autocomplete="off" value="${dv('addr_q')}" placeholder="${draft.secret ? 'Ex. Nantes' : 'Ex. 12 rue de la Paix, Nantes'}"><span class="hint">Tape au moins 3 lettres puis choisis dans la liste.</span></label><div id="addrList" class="addr-list"></div>`}
       </div>
-      <h2 class="group-title">L’organisateur</h2>
+      ${orgSection || `<h2 class="group-title">L’organisateur</h2>
       <div class="card settings">
         <label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" placeholder="Ex. Rubber Ouest" autocomplete="off"></label>
         <label class="field">C’est…${selectField('organizer_kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), draft.organizer_kind || 'association')}</label>
         <label class="field">Site internet<input name="organizer_website" type="url" inputmode="url" value="${dv('organizer_website')}" placeholder="https://" autocomplete="off"></label>
-      </div>
+      </div>`}
       <h2 class="group-title">Entrée et dress code</h2>
       <div class="card settings">
         <label class="field">Prix d’entrée (€) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
@@ -640,7 +658,7 @@ function viewSubmit() {
       <div class="card settings">
         <label class="checkline"><input type="checkbox" name="certify" ${draft.certify ? 'checked' : ''}><span>Je certifie que cette soirée existe, qu’elle est réservée aux adultes et qu’elle respecte la <a href="#/infos/charte">charte</a>.</span></label>
         <p class="form-error" id="formError" role="alert" hidden></p>
-        <button class="btn btn-red btn-block" type="submit">Envoyer ma proposition</button>
+        <button class="btn btn-red btn-block" type="submit">${submitLabel()}</button>
       </div>
     </form></section>`;
 }
@@ -679,6 +697,7 @@ function geocode(q) {
   }, 350);
 }
 
+const submitLabel = () => (draft.id ? 'Enregistrer les modifications' : draft.organizer_id ? 'Publier ma soirée' : 'Envoyer');
 const numOrNull = (v) => { const s = String(v ?? '').trim().replace(',', '.'); return s === '' ? null : Number(s); };
 const isoOrNull = (v) => (v ? new Date(v).toISOString() : null);
 
@@ -690,11 +709,11 @@ async function submitEvent(form) {
   if (title.length < 3) return fail('Indique le nom de la soirée (3 caractères minimum).');
   if (!(d.types || []).length) return fail('Choisis au moins un type de soirée.');
   if (!d.starts_at || !d.ends_at) return fail('Indique la date et l’heure de début et de fin.');
-  if (new Date(d.starts_at) < new Date()) return fail('La soirée doit être à venir.');
+  if (!d.id && new Date(d.starts_at) < new Date()) return fail('La soirée doit être à venir.');
   if (new Date(d.ends_at) <= new Date(d.starts_at)) return fail('La fin doit être après le début.');
   if (String(d.venue_name || '').trim().length < 2) return fail('Indique le nom du lieu.');
   if (d.latitude == null) return fail(d.secret ? 'Choisis la ville dans la liste proposée.' : 'Choisis l’adresse dans la liste proposée.');
-  if (String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
+  if (!d.id && !d.organizer_id && String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
   const price = numOrNull(d.price), presale = numOrNull(d.presale_price);
   if (price === null || Number.isNaN(price) || price < 0) return fail('Indique le prix d’entrée (0 si gratuit).');
   if (presale !== null && (Number.isNaN(presale) || presale < 0)) return fail('Prix en prévente invalide.');
@@ -703,10 +722,11 @@ async function submitEvent(form) {
   }
   if (!d.certify) return fail('Coche la case de confirmation en bas du formulaire.');
   const p = {
+    id: d.id || null, organizer_id: d.id ? null : d.organizer_id || null,
     title, types: d.types, starts_at: isoOrNull(d.starts_at), ends_at: isoOrNull(d.ends_at), frequency: d.frequency || 'once',
     description: d.description || '', venue_name: String(d.venue_name).trim(), address: d.secret ? '' : (d.address || ''),
     postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude,
-    organizer_name: String(d.organizer_name).trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
+    organizer_name: String(d.organizer_name || '').trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
     price, presale_price: presale, booking: d.booking || 'door_only', ticket_url: (d.ticket_url || '').trim(), sales_open_at: isoOrNull(d.sales_open_at),
     dress_code: d.dress_code || 'recommended', dress_code_details: d.dress_code_details || '',
     has_cloakroom: d.cloak ? d.cloak !== 'no' : null, cloakroom_paid: d.cloak === 'paid' ? true : d.cloak === 'free' ? false : null
@@ -715,15 +735,19 @@ async function submitEvent(form) {
   submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
   try {
     const r = await sb.rpc('submit_event', { p });
+    const orgMode = !!(d.id || d.organizer_id);
     draft = {}; saveDraft(); mySubs = null; adminData = null;
-    toast(r && r.status === 'published' ? 'Soirée publiée !' : 'Merci ! Ta soirée sera vérifiée avant publication.');
-    if (r && r.status === 'published') refreshEvents();
-    navigate('#/mes-propositions');
+    Object.keys(orgDash).forEach((k) => delete orgDash[k]);
+    const pub = r && r.status === 'published';
+    toast(d.id ? (pub ? 'Modifications enregistrées' : 'Modifications enregistrées : elles seront vérifiées avant publication')
+      : pub ? 'Soirée publiée !' : 'Merci ! La soirée sera vérifiée avant publication.');
+    refreshEvents();
+    navigate(orgMode ? '#/orga' : '#/mes-propositions');
   } catch (err) {
     fail(err.message);
   } finally {
     submitting = false;
-    if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = 'Envoyer ma proposition'; }
+    if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = submitLabel(); }
   }
 }
 
@@ -738,7 +762,7 @@ async function loadMySubs() {
 }
 
 function viewMySubmissions() {
-  if (mySubs === null) { loadMySubs(); return loadingScreen('Mes propositions', '#/profil'); }
+  if (mySubs === null) { loadMySubs(); return loadingScreen('Mes signalements', '#/profil'); }
   const cards = mySubs.map((s) => {
     const [cls, label] = SUB_STATUS[s.status] || ['pill-grey', s.status];
     return `<div class="card sub-card"><div class="sub-head"><strong>${esc(s.title)}</strong><span class="${cls}">${label}</span></div>
@@ -747,9 +771,9 @@ function viewMySubmissions() {
       ${s.status === 'rejected' && s.rejection_reason ? `<p class="tiny">Motif : ${esc(s.rejection_reason)}</p>` : ''}
       ${s.status === 'published' && eventById(s.id) ? `<a class="link" href="#/soiree/${s.id}">Voir la fiche</a>` : ''}</div>`;
   }).join('');
-  return `<section class="screen">${accountTopRaw('Mes propositions', '#/profil')}
-    <a class="btn btn-red btn-block" href="#/proposer">Proposer une soirée</a>
-    ${cards || empty('Tu n’as encore proposé aucune soirée.')}</section>`;
+  return `<section class="screen">${accountTopRaw('Mes signalements', '#/profil')}
+    <a class="btn btn-red btn-block" href="#/proposer" data-act="new-signal">Signaler une soirée manquante</a>
+    ${cards || empty('Tu n’as encore signalé aucune soirée.')}</section>`;
 }
 
 async function loadAdmin() {
@@ -767,7 +791,7 @@ function adminPendingCard(p) {
   const osm = `https://www.openstreetmap.org/?mlat=${v.latitude}&mlon=${v.longitude}#map=16/${v.latitude}/${v.longitude}`;
   const cloak = p.has_cloakroom == null ? 'Vestiaire ?' : p.has_cloakroom ? `Vestiaire ${p.cloakroom_paid ? 'payant' : 'gratuit'}` : 'Sans vestiaire';
   return `<article class="card adm-card">
-    <div class="sub-head"><strong>${esc(p.title)}</strong><span class="pill-grey">${p.source === 'import' ? 'Import' : 'Proposée'}</span></div>
+    <div class="sub-head"><strong>${esc(p.title)}</strong><span class="pill-grey">${p.source === 'import' ? 'Import' : p.by_manager ? 'Organisateur' : 'Signalée'}</span></div>
     <div class="muted tiny">par ${esc(p.submitter || 'le robot d’import')} · reçue le ${fDate.format(new Date(p.created_at))}</div>
     <div class="pills">${(p.types || []).map((t) => `<span class="pill-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}</div>
     <div class="adm-facts">
@@ -797,12 +821,14 @@ function viewAdmin() {
   if (!isAdmin()) return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}${empty('Réservé à l’administrateur.')}</section>`;
   if (adminData === null) { loadAdmin(); return loadingScreen('Espace admin', '#/profil'); }
   const { pending, reports } = adminData;
+  const requests = adminData.requests || [];
   const tab = (k, label, n) => `<button class="${adminTab === k ? 'on' : ''}" data-act="adm-tab" data-tab="${k}" aria-pressed="${adminTab === k}">${label}${n ? ` <span class="count-pill">${n}</span>` : ''}</button>`;
   const body = adminTab === 'pending'
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
+    : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
-    <div class="seg seg-btn">${tab('pending', 'À valider', pending.length)}${tab('reports', 'Signalements', reports.length)}</div>
+    <div class="seg seg-btn">${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}</div>
     ${body}</section>`;
 }
 
@@ -832,6 +858,15 @@ function adminAct(act) {
       adminRun(act, () => sb.rpc('moderate_event', { p_event: id, p_publish: false, p_reason: reason.trim().slice(0, 300) || null }), 'Soirée refusée');
       break;
     }
+    case 'adm-req-ok': case 'adm-req-trust':
+      adminRun(act, () => sb.rpc('handle_organizer_request', { p_request: id, p_approve: true, p_trust: act.dataset.act === 'adm-req-trust' }), 'Demande acceptée : le membre a son espace organisateur');
+      break;
+    case 'adm-req-no': {
+      const reason = prompt('Motif du refus (visible par le membre) :', 'Impossible de vérifier que tu représentes cette organisation');
+      if (reason === null) return;
+      adminRun(act, () => sb.rpc('handle_organizer_request', { p_request: id, p_approve: false, p_reason: reason.trim().slice(0, 300) }), 'Demande refusée');
+      break;
+    }
     case 'adm-report': adminRun(act, () => sb.rpc('handle_report', { p_report: id, p_dismiss: !!act.dataset.dismiss }), act.dataset.dismiss ? 'Signalement ignoré' : 'Signalement traité'); break;
     default: break;
   }
@@ -847,6 +882,239 @@ async function adminWithdraw(e) {
     await refreshEvents();
     navigate('#/');
   } catch (err) { toast(err.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Organisateurs : demande, espace organisateur, page publique
+// ---------------------------------------------------------------------------
+let orgStatus = null;        // { organizations, request } (null = à charger)
+const orgDash = {};          // tableau de bord par organisation
+const orgPublic = {};        // pages publiques déjà chargées
+let orgEditing = false;
+let loadingOrg = false;
+const viewed = new Set();
+const myOrgs = () => (orgStatus && orgStatus.organizations) || [];
+const isOrganizer = () => myOrgs().length > 0;
+const toLocalInput = (iso) => { if (!iso) return ''; const d = new Date(iso); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+const numStr = (n) => (n == null ? '' : String(n).replace('.', ','));
+
+async function loadOrgStatus() {
+  if (loadingOrg || !loggedIn()) return;
+  loadingOrg = true;
+  try { orgStatus = await sb.rpc('my_organizer_status'); } catch (err) { orgStatus = { organizations: [], request: null }; }
+  loadingOrg = false;
+  if (/^#\/(profil|orga|devenir-organisateur|proposer)/.test(location.hash)) render();
+}
+
+function eventToDraft(ev, orgId, copy) {
+  const v = ev.venue;
+  return {
+    id: copy ? undefined : ev.id, organizer_id: orgId, title: ev.title, types: [...(ev.types || [])],
+    starts_at: copy ? '' : toLocalInput(ev.starts_at), ends_at: copy ? '' : toLocalInput(ev.ends_at),
+    frequency: ev.frequency, description: ev.description || '', venue_name: v.name, secret: !v.address,
+    address: v.address || '', postal_code: v.postal_code || '', city: v.city, latitude: v.latitude, longitude: v.longitude,
+    addrLabel: [v.address, v.postal_code, v.city].filter(Boolean).join(' '),
+    price: numStr(ev.price), presale_price: numStr(ev.presale_price), booking: ev.booking, ticket_url: ev.ticket_url || '',
+    sales_open_at: copy ? '' : toLocalInput(ev.sales_open_at), dress_code: ev.dress_code, dress_code_details: ev.dress_code_details || '',
+    cloak: ev.has_cloakroom == null ? '' : !ev.has_cloakroom ? 'no' : ev.cloakroom_paid ? 'paid' : 'free'
+  };
+}
+
+function viewBecomeOrganizer() {
+  if (orgStatus === null) { loadOrgStatus(); return loadingScreen('Devenir organisateur', '#/profil'); }
+  if (isOrganizer()) return viewOrga();
+  const req = orgStatus.request;
+  if (req && req.status === 'pending') {
+    return `<section class="screen">${accountTopRaw('Devenir organisateur', '#/profil')}
+      <div class="card center-card"><h2>Demande en cours d’examen</h2><p class="muted">Ta demande pour « ${esc(req.name)} » a bien été reçue le ${fDate.format(new Date(req.created_at))}. L’équipe EuroKink la vérifie et te répond rapidement.</p></div></section>`;
+  }
+  return `<section class="screen">${accountTopRaw('Devenir organisateur', '#/profil')}
+    <div class="card perks"><strong>Ton espace organisateur, c’est :</strong>
+      <ul><li>Publier et modifier tes soirées en quelques minutes</li><li>Des statistiques : vues, favoris, « J’y vais », alertes billetterie</li>
+      <li>Ta page publique, que les membres peuvent suivre</li><li>Une fois vérifié, tes soirées sont publiées sans attente</li></ul>
+      <p class="tiny muted">C’est gratuit. Sur l’appli, seul le nom de ton organisation apparaît, jamais ton pseudo.</p></div>
+    ${req && req.status === 'rejected' ? `<div class="card"><strong>Ta demande précédente a été refusée</strong>${req.rejection_reason ? `<p class="tiny muted">Motif : ${esc(req.rejection_reason)}</p>` : ''}</div>` : ''}
+    <form id="orgRequestForm" class="card settings" novalidate>
+      <label class="field">Nom de l’organisation *<input name="name" maxlength="80" required placeholder="Ex. Rubber Ouest" autocomplete="off"></label>
+      <label class="field">C’est…${selectField('kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), 'association')}</label>
+      <label class="field">Ville<input name="city" maxlength="80" autocomplete="off"></label>
+      <label class="field">Site ou page officielle *<input name="website" type="url" inputmode="url" placeholder="https://" autocomplete="off"><span class="hint">Permet de vérifier que tu représentes bien l’organisation.</span></label>
+      <label class="field">E-mail de contact *<input name="contact_email" type="email" inputmode="email" autocomplete="email"><span class="hint">Vu uniquement par l’équipe EuroKink.</span></label>
+      <label class="field">Message pour l’équipe<textarea name="message" rows="3" maxlength="1000" placeholder="Ton rôle dans l’organisation, tes soirées…"></textarea></label>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <button class="btn btn-red btn-block" type="submit">Envoyer ma demande</button>
+    </form></section>`;
+}
+
+async function submitOrgRequest(form) {
+  const f = new FormData(form);
+  const btn = form.querySelector('button[type=submit]');
+  const p = Object.fromEntries(['name', 'kind', 'city', 'website', 'contact_email', 'message'].map((k) => [k, String(f.get(k) || '').trim()]));
+  if (p.name.length < 2) return formError(form, 'Indique le nom de ton organisation.');
+  if (!/^https?:\/\/\S+$/i.test(p.website)) return formError(form, 'Indique le site ou la page officielle (lien commençant par https://).');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.contact_email)) return formError(form, 'Adresse e-mail de contact invalide.');
+  btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    await sb.rpc('request_organizer', { p });
+    orgStatus = null; adminData = null;
+    toast('Demande envoyée ! Tu seras prévenu dès qu’elle sera validée.');
+    render();
+  } catch (err) { formError(form, err.message); btn.disabled = false; btn.textContent = 'Envoyer ma demande'; }
+}
+
+async function loadOrgDash(id) {
+  try { orgDash[id] = await sb.rpc('org_dashboard', { p_org: id }); } catch (err) { orgDash[id] = { error: err.message }; }
+  if (location.hash.startsWith('#/orga')) render();
+}
+
+const statLine = (s, past) => [[I.eye, s.views, 'vues'], [I.heart, s.favorites, 'favoris'], [I.check, s.attending, 'j’y vais'],
+  [I.bell, s.reminders, 'rappels'], [I.ticket, s.alerts, 'alertes'], ...(past ? [[I.locate, s.checkins, 'présents']] : [])]
+  .map(([ic, n, l]) => `<span class="stat-chip" title="${l}">${ic}<b>${n}</b> ${l}</span>`).join('');
+
+function orgEventCard(ev, past) {
+  const st = ev.status === 'published' ? (ev.is_sold_out ? ['pill-red', 'Complet'] : ['pill-red', 'Publiée']) : SUB_STATUS[ev.status] || ['pill-grey', ev.status];
+  const live = !past && ev.status !== 'cancelled';
+  return `<article class="card sub-card">
+    <div class="sub-head"><strong>${esc(ev.title)}</strong><span class="${st[0]}">${st[1]}</span></div>
+    <div class="muted tiny">${dayLabel(ev.starts_at)} · ${timeLabel(ev.starts_at)} · ${esc(ev.venue.city)}</div>
+    ${ev.status === 'pending' ? '<p class="tiny muted">En cours de vérification par l’équipe EuroKink.</p>' : ''}
+    ${ev.status === 'rejected' ? `<p class="tiny">Refusée${ev.rejection_reason ? ` : ${esc(ev.rejection_reason)}` : ''}. Corrige-la pour la renvoyer en vérification.</p>` : ''}
+    <div class="stat-row">${statLine(ev.stats, past)}</div>
+    <div class="org-actions">
+      ${live ? `<button class="mini-btn" data-act="org-edit" data-id="${ev.id}">Modifier</button>` : ''}
+      <button class="mini-btn" data-act="org-copy" data-id="${ev.id}">Dupliquer</button>
+      ${live && ev.status === 'published' ? `<button class="mini-btn" data-act="org-soldout" data-id="${ev.id}" data-on="${ev.is_sold_out ? '' : '1'}">${ev.is_sold_out ? 'Remettre en vente' : 'Complet'}</button>` : ''}
+      ${live ? `<button class="mini-btn danger" data-act="org-cancel" data-id="${ev.id}">Annuler</button>` : ''}
+      ${ev.status === 'published' && eventById(ev.id) ? `<a class="mini-btn" href="#/soiree/${ev.id}">Voir</a>` : ''}
+    </div></article>`;
+}
+
+let currentOrgId = null;
+function viewOrga(param) {
+  if (orgStatus === null) { loadOrgStatus(); return loadingScreen('Espace organisateur', '#/profil'); }
+  const orgs = myOrgs();
+  if (!orgs.length) return viewBecomeOrganizer();
+  const id = orgs.some((o) => o.id === param) ? param : (orgs.some((o) => o.id === currentOrgId) ? currentOrgId : orgs[0].id);
+  currentOrgId = id;
+  const d = orgDash[id];
+  if (!d) { loadOrgDash(id); return loadingScreen('Espace organisateur', '#/profil'); }
+  if (d.error) return `<section class="screen">${accountTopRaw('Espace organisateur', '#/profil')}${empty(esc(d.error))}</section>`;
+  const o = d.organizer;
+  const now = new Date();
+  const upcoming = d.events.filter((e) => new Date(e.ends_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const past = d.events.filter((e) => new Date(e.ends_at) < now);
+  const sum = (k) => upcoming.reduce((n, e) => n + Number(e.stats[k] || 0), 0);
+  const switcher = orgs.length > 1 ? `<div class="chips wrap">${orgs.map((x) => `<a class="chip ${x.id === id ? 'on' : ''}" href="#/orga/${x.id}">${esc(x.name)}</a>`).join('')}</div>` : '';
+  const edit = orgEditing ? `<form id="orgPageForm" class="card settings">
+      <label class="field">Présentation<textarea name="description" rows="5" maxlength="2000" placeholder="Qui vous êtes, l’esprit de vos soirées…">${esc(o.description || '')}</textarea></label>
+      <label class="field">Site internet<input name="website" type="url" inputmode="url" value="${esc(o.website || '')}" placeholder="https://"></label>
+      <label class="field">Ville<input name="city" maxlength="80" value="${esc(o.city || '')}"></label>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <div class="adm-actions"><button class="btn btn-red" type="submit">Enregistrer</button><button class="btn btn-ghost" type="button" data-act="org-page-cancel">Annuler</button></div>
+      <p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p></form>` : '';
+  return `<section class="screen">${accountTopRaw('Espace organisateur', '#/profil')}
+    ${switcher}
+    <div class="card org-head"><div><div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
+      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div>
+      <div class="org-links"><a class="link" href="#/organisateur/${o.id}">Voir ma page</a>${orgEditing ? '' : '<button class="link" data-act="org-page-edit">Modifier ma page</button>'}</div></div>
+    ${edit}
+    <div class="stats four">${[[o.followers, 'abonnés'], [upcoming.length, 'à venir'], [sum('views'), 'vues'], [sum('attending'), 'j’y vais']].map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
+    <button class="btn btn-red btn-block" data-act="org-new" data-id="${o.id}">Nouvelle soirée</button>
+    <h2 class="group-title">À venir</h2>
+    ${upcoming.map((e) => orgEventCard(e, false)).join('') || empty('Aucune soirée à venir. Ajoute ta prochaine soirée !')}
+    ${past.length ? `<h2 class="group-title">Passées</h2>${past.map((e) => orgEventCard(e, true)).join('')}` : ''}
+    <p class="tiny muted center">Vues : membres différents ayant ouvert la fiche. Les chiffres sont anonymes.</p>
+  </section>`;
+}
+
+async function orgAct(act) {
+  const d = orgDash[currentOrgId];
+  const ev = d && d.events && d.events.find((x) => x.id === act.dataset.id);
+  switch (act.dataset.act) {
+    case 'org-new': draft = { organizer_id: act.dataset.id }; saveDraft(); navigate('#/proposer'); break;
+    case 'org-edit': if (ev) { draft = eventToDraft(ev, currentOrgId, false); saveDraft(); navigate('#/proposer'); } break;
+    case 'org-copy': if (ev) { draft = eventToDraft(ev, currentOrgId, true); saveDraft(); toast('Copie prête : indique les nouvelles dates'); navigate('#/proposer'); } break;
+    case 'org-page-edit': orgEditing = true; render(); break;
+    case 'org-page-cancel': orgEditing = false; render(); break;
+    case 'org-soldout': case 'org-cancel': {
+      const action = act.dataset.act === 'org-cancel' ? 'cancel' : act.dataset.on ? 'soldout' : 'available';
+      if (action === 'cancel' && !confirm(`Annuler « ${ev ? ev.title : 'cette soirée'} » ? Elle sera retirée de l’appli.`)) return;
+      act.disabled = true;
+      try {
+        await sb.rpc('org_event_action', { p_event: act.dataset.id, p_action: action });
+        toast(action === 'cancel' ? 'Soirée annulée' : action === 'soldout' ? 'Soirée marquée complète' : 'Soirée remise en vente');
+        delete orgDash[currentOrgId]; render(); refreshEvents();
+      } catch (err) { toast(err.message); act.disabled = false; }
+      break;
+    }
+    default: break;
+  }
+}
+
+async function saveOrgPage(form) {
+  const f = new FormData(form);
+  const patch = { description: String(f.get('description') || '').trim() || null, website: String(f.get('website') || '').trim() || null, city: String(f.get('city') || '').trim() || null };
+  if (patch.website && !/^https?:\/\/\S+$/i.test(patch.website)) return formError(form, 'Le site doit commencer par https://');
+  try {
+    await sb.update('organizers', `id=eq.${currentOrgId}`, patch);
+    orgEditing = false; delete orgDash[currentOrgId]; delete orgPublic[currentOrgId];
+    toast('Page mise à jour'); render();
+  } catch (err) { formError(form, err.message); }
+}
+
+async function loadOrgPublic(id) {
+  try { orgPublic[id] = (await sb.rpc('organizer_public', { p_org: id })) || { missing: true }; } catch (err) { orgPublic[id] = { missing: true }; }
+  if (location.hash.startsWith('#/organisateur/')) render();
+}
+
+function viewOrganizerPage(id) {
+  const o = orgPublic[id];
+  if (!o) { loadOrgPublic(id); return loadingScreen('Organisateur', '#/'); }
+  if (o.missing) return `<section class="screen">${accountTopRaw('Organisateur', '#/')}${empty('Organisateur introuvable.')}</section>`;
+  const list = EVENTS.filter((e) => e.organizer.id === id);
+  return `<section class="screen"><div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small">Organisateur</h1></div>
+    <div class="card org-public">
+      <div class="org-avatar">${esc(o.name.charAt(0).toUpperCase())}</div>
+      <div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
+      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
+      <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
+      ${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site officiel</a>` : ''}
+    </div>
+    ${o.description ? `<p class="about">${esc(o.description)}</p>` : ''}
+    ${o.manager ? `<a class="line-btn rounded" href="#/orga/${o.id}">${I.gear}<span>Gérer dans mon espace organisateur</span>${I.chevron}</a>` : ''}
+    <h2 class="group-title">Prochaines soirées</h2>
+    <div class="list">${list.map(eventRow).join('') || empty('Aucune soirée annoncée pour le moment.')}</div>
+  </section>`;
+}
+
+async function toggleFollow(act) {
+  const id = act.dataset.id, on = !!act.dataset.on;
+  const o = orgPublic[id];
+  act.disabled = true;
+  try {
+    if (on) await sb.insert('organizer_follows', { user_id: profile.id, organizer_id: id }, { ignoreDuplicates: true, onConflict: 'user_id,organizer_id' });
+    else await sb.remove('organizer_follows', `user_id=eq.${profile.id}&organizer_id=eq.${id}`);
+    if (o) { o.following = on; o.followers = Math.max(0, o.followers + (on ? 1 : -1)); }
+    toast(on ? 'Tu suis cet organisateur' : 'Tu ne suis plus cet organisateur');
+    render();
+  } catch (err) { toast(err.message); act.disabled = false; }
+}
+
+function adminRequestCard(q) {
+  const ex = q.existing;
+  return `<article class="card adm-card">
+    <div class="sub-head"><strong>${esc(q.name)}</strong><span class="pill-grey">${ORG_KIND[q.kind] || ''}</span></div>
+    <div class="muted tiny">demandé par ${esc(q.requester || 'membre supprimé')} · le ${fDate.format(new Date(q.created_at))}</div>
+    <div class="adm-facts">
+      ${q.city ? `<div>${I.pin}<span>${esc(q.city)}</span></div>` : ''}
+      <div>${I.doc}<span>${esc(q.website)}</span><a class="link" href="${esc(q.website)}" target="_blank" rel="noopener">Ouvrir</a></div>
+      <div>${I.mail}<span>${esc(q.contact_email)}</span><a class="link" href="mailto:${esc(q.contact_email)}">Écrire</a></div>
+      ${ex ? `<div>${I.users}<span>Existe déjà : ${esc(ex.name)}${ex.is_verified ? ' (vérifié)' : ''} · ${ex.managers} gestionnaire${ex.managers > 1 ? 's' : ''}. Accepter ajoute ce membre comme gestionnaire.</span></div>` : ''}
+    </div>
+    ${q.message ? `<p class="adm-desc">${esc(q.message)}</p>` : ''}
+    <div class="adm-actions"><button class="btn btn-red" data-act="adm-req-ok" data-id="${q.id}">Accepter</button><button class="btn btn-ghost" data-act="adm-req-no" data-id="${q.id}">Refuser</button></div>
+    <button class="link" data-act="adm-req-trust" data-id="${q.id}">Accepter et vérifier l’organisateur</button>
+  </article>`;
 }
 
 const segmented = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
@@ -907,7 +1175,10 @@ function render() {
   }
   let html;
   let active = '#/';
-  const needsEvents = ['', undefined, 'explorer', 'carte', 'soiree', 'favoris'].includes(route);
+  const needsEvents = ['', undefined, 'explorer', 'carte', 'soiree', 'favoris', 'organisateur'].includes(route);
+  if (route === 'soiree' && param && eventsReady && loggedIn() && !viewed.has(param) && isUuid(param)) {
+    viewed.add(param); sb.rpc('log_view', { p_event: param }).catch(() => {});
+  }
   if (needsEvents && !eventsReady) {
     if (mapCleanup) { mapCleanup(); mapCleanup = null; }
     $('#view').innerHTML = viewLoading();
@@ -928,6 +1199,9 @@ function render() {
     case 'proposer': html = viewSubmit(); active = '#/profil'; break;
     case 'mes-propositions': html = viewMySubmissions(); active = '#/profil'; break;
     case 'admin': html = viewAdmin(); active = '#/profil'; break;
+    case 'devenir-organisateur': html = viewBecomeOrganizer(); active = '#/profil'; break;
+    case 'orga': html = viewOrga(param); active = '#/profil'; break;
+    case 'organisateur': html = viewOrganizerPage(decodeURIComponent(param || '')); active = null; break;
     default: html = viewHome();
   }
   if (mapCleanup) { mapCleanup(); mapCleanup = null; }
@@ -978,6 +1252,12 @@ document.addEventListener('submit', (ev) => {
     navigate('#/explorer');
   } else if (form.id === 'settingsForm') {
     ev.preventDefault();
+  } else if (form.id === 'orgRequestForm') {
+    ev.preventDefault();
+    submitOrgRequest(form);
+  } else if (form.id === 'orgPageForm') {
+    ev.preventDefault();
+    saveOrgPage(form);
   } else if (form.id === 'submitForm') {
     ev.preventDefault();
     submitEvent(form);
@@ -1036,7 +1316,11 @@ document.addEventListener('click', (ev) => {
     case 'export': exportData(); break;
     case 'report': reportEvent(e); break;
     case 'adm-withdraw': adminWithdraw(e); break;
-    case 'adm-tab': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report': adminAct(act); break;
+    case 'adm-tab': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report':
+    case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
+    case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
+    case 'follow': toggleFollow(act); break;
+    case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
     case 'ptype': {
       const t = act.dataset.slug;
       const list = draft.types || [];
@@ -1318,6 +1602,7 @@ async function loadUser() {
   await loadPassport();
   save();
   if (profile.role === 'admin') loadAdmin();
+  loadOrgStatus();
   return 'ok';
 }
 
@@ -1359,7 +1644,8 @@ async function reportEvent(e) {
 async function logout() {
   await sb.signOut();
   profile = null; serverPassport = null; checkinInfo = [];
-  mySubs = null; adminData = null; draft = {}; saveDraft();
+  mySubs = null; adminData = null; draft = {}; saveDraft(); orgStatus = null; currentOrgId = null;
+  Object.keys(orgDash).forEach((k) => delete orgDash[k]); Object.keys(orgPublic).forEach((k) => delete orgPublic[k]);
   Object.assign(state, { pseudo: '', favorites: [], reminders: [], alerts: [], attending: [], checkins: [] });
   save();
   clearEvents();
