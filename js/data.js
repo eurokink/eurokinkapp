@@ -23,9 +23,13 @@ export const CITIES = [
   { name: 'Angers', lat: 47.4784, lon: -0.5632 },
   { name: 'Bordeaux', lat: 44.8378, lon: -0.5792 },
   { name: 'Brest', lat: 48.3904, lon: -4.4861 },
+  { name: 'Bâle', lat: 47.5596, lon: 7.5886, country: 'CH' },
+  { name: 'Berne', lat: 46.9480, lon: 7.4474, country: 'CH' },
   { name: 'Bruxelles', lat: 50.8503, lon: 4.3517, country: 'BE' },
   { name: 'Cholet', lat: 47.0600, lon: -0.8789 },
+  { name: 'Genève', lat: 46.2044, lon: 6.1432, country: 'CH' },
   { name: 'Grenoble', lat: 45.1885, lon: 5.7245 },
+  { name: 'Lausanne', lat: 46.5197, lon: 6.6323, country: 'CH' },
   { name: 'La Roche-sur-Yon', lat: 46.6705, lon: -1.4260 },
   { name: 'Le Mans', lat: 48.0061, lon: 0.1996 },
   { name: 'Lille', lat: 50.6292, lon: 3.0573 },
@@ -41,7 +45,8 @@ export const CITIES = [
   { name: 'Rouen', lat: 49.4432, lon: 1.0999 },
   { name: 'Strasbourg', lat: 48.5734, lon: 7.7521 },
   { name: 'Toulouse', lat: 43.6047, lon: 1.4442 },
-  { name: 'Tours', lat: 47.3941, lon: 0.6848 }
+  { name: 'Tours', lat: 47.3941, lon: 0.6848 },
+  { name: 'Zurich', lat: 47.3769, lon: 8.5417, country: 'CH' }
 ];
 
 export const BADGES = [

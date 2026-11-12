@@ -17,9 +17,13 @@ const CORSICA = [[9.4, 42.98], [9.55, 42.6], [9.53, 42.1], [9.4, 41.7], [9.2, 41
   [9.0, 42.6], [9.3, 42.7]];
 const BELGIUM = [[2.55, 51.08], [3.37, 51.37], [4.25, 51.37], [4.8, 51.5], [5.2, 51.3], [5.8, 51.1], [5.7, 50.75], [6.1, 50.65],
   [6.4, 50.33], [6.1, 50.1], [5.8, 49.55], [5.4, 49.6], [4.85, 50.15], [4.2, 49.95], [3.7, 50.3], [3.2, 50.7], [2.6, 50.8]];
+const SWITZERLAND = [[5.96, 46.2], [6.1, 46.14], [6.31, 46.26], [6.8, 46.4], [6.86, 46.12], [7.04, 45.93], [7.86, 45.92], [8.44, 46.24],
+  [8.97, 45.96], [9.02, 45.82], [9.29, 46.5], [10.13, 46.23], [10.49, 46.55], [10.45, 46.87], [9.88, 46.98], [9.6, 47.05], [9.53, 47.27],
+  [9.67, 47.53], [9.18, 47.66], [8.56, 47.81], [8.4, 47.58], [7.59, 47.59], [7.17, 47.49], [6.94, 47.29], [6.69, 47.07], [6.44, 46.92],
+  [6.12, 46.59], [6.06, 46.41]];
 const LABELS = [['Paris', 2.35, 48.86], ['Lyon', 4.84, 45.76], ['Marseille', 5.37, 43.3], ['Bordeaux', -0.58, 44.84],
   ['Toulouse', 1.44, 43.6], ['Nantes', -1.55, 47.22], ['Lille', 3.06, 50.63], ['Strasbourg', 7.75, 48.57],
-  ['Rennes', -1.68, 48.12], ['Nice', 7.26, 43.71], ['Bruxelles', 4.35, 50.85]];
+  ['Rennes', -1.68, 48.12], ['Nice', 7.26, 43.71], ['Bruxelles', 4.35, 50.85], ['Genève', 6.14, 46.2], ['Lausanne', 6.63, 46.52], ['Zurich', 8.54, 47.38], ['Berne', 7.45, 46.95]];
 
 const LAT0 = 46.5;
 const K = 100;
@@ -28,7 +32,7 @@ export const project = (lon, lat) => [lon * COS * K, -(lat - LAT0) * K];
 const path = (pts) => `M${pts.map(([lon, lat]) => project(lon, lat).map((v) => v.toFixed(1)).join(' ')).join('L')}Z`;
 const BOUNDS = (() => {
   const xs = []; const ys = [];
-  [...FRANCE, ...CORSICA, ...BELGIUM].forEach(([lon, lat]) => { const [x, y] = project(lon, lat); xs.push(x); ys.push(y); });
+  [...FRANCE, ...CORSICA, ...BELGIUM, ...SWITZERLAND].forEach(([lon, lat]) => { const [x, y] = project(lon, lat); xs.push(x); ys.push(y); });
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
 })();
 
@@ -38,7 +42,7 @@ let view = null;   // { s, tx, ty } conservé entre deux affichages de la carte
 // onSelect reçoit la liste des villes du repère touché.
 export function mountMap(root, { markers, home, onSelect, markerSvg, unit = 'soirées' }) {
   root.innerHTML = `<svg class="map-svg" aria-hidden="true"><g class="map-world">
-      <path class="land land-near" d="${path(BELGIUM)}"/><path class="land" d="${path(FRANCE)}"/><path class="land" d="${path(CORSICA)}"/>
+      <path class="land land-near" d="${path(BELGIUM)}"/><path class="land" d="${path(FRANCE)}"/><path class="land" d="${path(CORSICA)}"/><path class="land" d="${path(SWITZERLAND)}"/>
     </g></svg><div class="map-layer"></div>
     <div class="map-ctrl"><button class="icon-btn" data-zoom="1" aria-label="Zoomer">+</button><button class="icon-btn" data-zoom="-1" aria-label="Dézoomer">−</button><button class="icon-btn" data-zoom="0" aria-label="Recentrer">⤢</button></div>`;
   const svg = root.querySelector('.map-svg');

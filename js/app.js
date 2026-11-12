@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.18.2';
+const VERSION = '0.19.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -85,7 +85,7 @@ const dayLabel = (iso) => cap(fDayLong.format(new Date(iso)));
 const shortDay = (iso) => fDayShort.format(new Date(iso)).replace('.', '').toUpperCase();
 const dayNum = (iso) => new Date(iso).getDate();
 const timeLabel = (iso) => fTime.format(new Date(iso));
-const priceLabel = (p) => (p === 0 ? 'Gratuit' : `${Number(p).toLocaleString('fr-FR')} €`);
+const priceLabel = (p, cur = 'EUR') => (p === 0 ? 'Gratuit' : `${Number(p).toLocaleString('fr-FR')} ${cur === 'CHF' ? 'CHF' : '€'}`);
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const REMINDER_TIMINGS = { eve18: 'la veille à 18 h', day14: 'le jour même à 14 h', h2: '2 heures avant' };
@@ -183,7 +183,7 @@ function eventRow(e) {
   return `<a class="row-card" href="#/soiree/${e.id}">
     <div class="date-chip"><span>${shortDay(e.startsAt)}</span><strong>${dayNum(e.startsAt)}</strong></div>
     <div class="row-main"><div class="row-title">${esc(e.title)}</div><div class="row-meta">${esc(meta.join(' · '))}</div></div>
-    <div class="price-pill">${e.soldOut ? 'Complet' : priceLabel(e.price)}</div>
+    <div class="price-pill">${e.soldOut ? 'Complet' : priceLabel(e.price, e.currency)}</div>
   </a>`;
 }
 
@@ -195,7 +195,7 @@ function featuredCard(e) {
       <div class="feature-title">${esc(e.title)}</div></div>
     <div class="feature-body">
       <div class="feature-line"><span>${dayLabel(e.startsAt)} · ${timeLabel(e.startsAt)}</span><span>${esc(e.venue.city)}</span></div>
-      <div class="feature-line muted"><span>${priceLabel(e.price)} · Réservation ${BOOKING[e.booking].toLowerCase()}</span><span class="accent">${attendeesLabel(attendeesOf(e))}</span></div>
+      <div class="feature-line muted"><span>${priceLabel(e.price, e.currency)} · Réservation ${BOOKING[e.booking].toLowerCase()}</span><span class="accent">${attendeesLabel(attendeesOf(e))}</span></div>
     </div></a>`;
 }
 
@@ -364,7 +364,7 @@ function viewEvent(id) {
       </div>
     </div>
     <div class="event-bar">
-      <div><div class="bar-price">${priceLabel(e.price)}</div>${e.presalePrice ? `<div class="muted tiny">${priceLabel(e.presalePrice)} en prévente</div>` : ''}</div>
+      <div><div class="bar-price">${priceLabel(e.price, e.currency)}</div>${e.presalePrice ? `<div class="muted tiny">${priceLabel(e.presalePrice, e.currency)} en prévente</div>` : ''}</div>
       ${cta}
     </div>
   </section>`;
@@ -867,22 +867,40 @@ function viewLoading() {
   return `<section class="screen"><div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des soirées…</p></div></section>`;
 }
 
+// Suisse : recherche de swisstopo (gratuite, sans clé). kind 'city' = communes et NPA, 'address' = adresses et communes.
+const stripTags = (h) => String(h || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+async function swissSearch(q, kind) {
+  try {
+    const origins = kind === 'city' ? 'zipcode,gg25' : 'address,gg25,zipcode';
+    const r = await fetch(`https://api3.geo.admin.ch/rest/services/api/SearchServer?searchText=${encodeURIComponent(q)}&type=locations&origins=${origins}&limit=5&sr=4326`);
+    if (!r.ok) return [];
+    return ((await r.json()).results || []).map((x) => x.attrs || {}).filter((a) => a.lat && a.lon).map((a) => {
+      const t = stripTags(a.label);
+      let m;
+      if (a.origin === 'zipcode' && (m = t.match(/^(\d{4}) - (.+)$/))) return { name: m[2], postal: m[1], address: '', lat: a.lat, lon: a.lon };
+      if (a.origin === 'address' && (m = t.match(/^(.*) (\d{4}) (.+)$/))) return { name: m[3], postal: m[2], address: m[1], lat: a.lat, lon: a.lon };
+      if ((m = t.match(/^(.+?) \(([A-Z]{2})\)$/))) return { name: m[1], postal: '', address: '', lat: a.lat, lon: a.lon, canton: m[2] };
+      return { name: t, postal: '', address: '', lat: a.lat, lon: a.lon };
+    });
+  } catch (e) { return []; }
+}
+
 // Ville du membre : code postal ou commune, choisie dans les propositions du géocodeur public (IGN)
 const cityLabel = (c) => (c.postal ? `${c.name} (${c.postal})` : c.name);
-const cityKey = () => `${state.city}|${state.postal || ''}|${state.cityLat}`;
+const cityKey = () => `${state.city}|${state.postal || ''}|${state.cityLat}|${state.country || 'FR'}`;
 function cityField(label, hint) {
   const cur = cityLabel({ name: state.city, postal: state.postal });
   return `<div class="field city-field"><span>${label}</span>
     <input class="city-input" data-city-input value="${esc(cur)}" data-picked="${esc(cur)}" placeholder="Code postal ou nom de ta ville" autocomplete="off" enterkeyhint="search" aria-label="${esc(label)}">
     <input type="hidden" name="city" value="${esc(state.city)}"><input type="hidden" name="postal_code" value="${esc(state.postal || '')}">
-    <input type="hidden" name="city_lat" value="${state.cityLat ?? ''}"><input type="hidden" name="city_lon" value="${state.cityLon ?? ''}">
+    <input type="hidden" name="city_lat" value="${state.cityLat ?? ''}"><input type="hidden" name="city_lon" value="${state.cityLon ?? ''}"><input type="hidden" name="city_country" value="${state.country || 'FR'}">
     <div class="addr-list city-list"></div>
     <span class="hint">${hint}</span></div>`;
 }
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
-const readCity = (f) => ({ name: f.elements.city.value, postal: f.elements.postal_code.value || '', lat: num(f.elements.city_lat.value), lon: num(f.elements.city_lon.value) });
+const readCity = (f) => ({ name: f.elements.city.value, postal: f.elements.postal_code.value || '', lat: num(f.elements.city_lat.value), lon: num(f.elements.city_lon.value), country: f.elements.city_country.value || 'FR' });
 function setCity(c) {
-  state.city = c.name; state.postal = c.postal || '';
+  state.city = c.name; state.postal = c.postal || ''; state.country = c.country || 'FR';
   const known = CITIES.find((x) => x.name === c.name);
   state.cityLat = c.lat ?? (known ? known.lat : null); state.cityLon = c.lon ?? (known ? known.lon : null);
 }
@@ -897,23 +915,30 @@ function cityGeocode(input) {
   cityTimer = setTimeout(async () => {
     const seq = ++citySeq;
     let feats = [], failed = false;
+    const wantFr = !/^\d{4}$/.test(q); const wantCh = !/^\d{5}$/.test(q);
+    const ch = wantCh ? swissSearch(q, 'city') : Promise.resolve([]);
     try {
-      const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
-      const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&type=municipality&limit=6&autocomplete=1${pc}`);
-      if (!r.ok) throw new Error(String(r.status));
-      feats = (await r.json()).features || [];
+      if (wantFr) {
+        const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
+        const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&type=municipality&limit=6&autocomplete=1${pc}`);
+        if (!r.ok) throw new Error(String(r.status));
+        feats = (await r.json()).features || [];
+      }
     } catch (e) { failed = true; }
+    const chList = await ch;
     if (seq !== citySeq || !box.isConnected) return;
     const seen = new Set();
     cityResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
       const p = f.properties || {};
       const [lon, lat] = f.geometry.coordinates;
-      return { name: p.city || p.name, postal: p.postcode || '', lat, lon, dept: String(p.context || '').split(',')[1]?.trim() || '' };
-    }).filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
+      return { name: p.city || p.name, postal: p.postcode || '', lat, lon, country: 'FR', dept: String(p.context || '').split(',')[1]?.trim() || '' };
+    }).slice(0, 5).concat(chList.slice(0, 3).map((c) => ({ ...c, country: 'CH', dept: `Suisse${c.canton ? ` · ${c.canton}` : ''}` })))
+      .filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
+    if (chList.length) failed = false;
     if (!cityResults.length) {
       const ql = q.toLowerCase();
       cityResults = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
-        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, dept: c.country === 'BE' ? 'Belgique' : '' }));
+        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: { BE: 'Belgique', CH: 'Suisse' }[c.country] || '' }));
     }
     box.innerHTML = cityResults.length
       ? cityResults.map((c, i) => `<button type="button" class="addr-opt" data-act="city-pick" data-i="${i}"><strong>${esc(cityLabel(c))}</strong>${c.dept ? `<span class="muted tiny block">${esc(c.dept)}</span>` : ''}</button>`).join('')
@@ -926,7 +951,7 @@ function pickCity(btn) {
   const wrap = btn.closest('.city-field');
   const inp = wrap.querySelector('[data-city-input]');
   const set = (n, v) => { wrap.querySelector(`[name=${n}]`).value = v ?? ''; };
-  set('postal_code', c.postal); set('city_lat', c.lat); set('city_lon', c.lon); set('city', c.name);
+  set('postal_code', c.postal); set('city_lat', c.lat); set('city_lon', c.lon); set('city_country', c.country || 'FR'); set('city', c.name);
   inp.value = inp.dataset.picked = cityLabel(c);
   wrap.querySelector('.city-list').innerHTML = '';
   cityResults = [];
@@ -1017,7 +1042,7 @@ const dv = (k) => esc(draft[k] ?? '');
 const selectField = (name, pairs, cur) => `<select name="${name}">${pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur ?? '') ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
 const adminCount = () => (adminData ? adminData.pending.length + adminData.reports.length + (adminData.requests || []).length : 0);
 const loadingScreen = (title, back) => `<section class="screen">${accountTopRaw(title, back)}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
-const ADDR_FIELDS = ['address', 'postal_code', 'city', 'latitude', 'longitude', 'addrLabel'];
+const ADDR_FIELDS = ['address', 'postal_code', 'city', 'latitude', 'longitude', 'addrLabel', 'country'];
 
 function viewSubmit() {
   const types = draft.types || [];
@@ -1078,8 +1103,9 @@ function viewSubmit() {
       </div>`}
       <h2 class="group-title">Entrée et dress code</h2>
       <div class="card settings">
-        <label class="field">Prix d’entrée (€) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
-        <label class="field">Prix en prévente (€)<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>
+        <label class="field">Devise<select name="currency">${[['EUR', 'Euro (€)'], ['CHF', 'Franc suisse (CHF)']].map(([v, l]) => `<option value="${v}" ${(draft.currency || 'EUR') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Prix d’entrée (${draft.currency === 'CHF' ? 'CHF' : '€'}) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
+        <label class="field">Prix en prévente (${draft.currency === 'CHF' ? 'CHF' : '€'})<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>
         <label class="field">Réservation${selectField('booking', Object.entries({ door_only: 'Sur place, sans réservation', recommended: 'Conseillée', required: 'Obligatoire' }), draft.booking || 'door_only')}</label>
         <label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
         <label class="field">Ouverture de la billetterie<input name="sales_open_at" type="datetime-local" value="${dv('sales_open_at')}"><span class="hint">Si les places ne sont pas encore en vente : les membres seront alertés.</span></label>
@@ -1105,24 +1131,28 @@ function geocode(q) {
   geoTimer = setTimeout(async () => {
     const seq = ++geoSeq;
     let feats = [], failed = false;
+    const ch = swissSearch(q, draft.secret ? 'city' : 'address');
     try {
       const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=5&autocomplete=1${draft.secret ? '&type=municipality' : ''}`);
       if (!r.ok) throw new Error(String(r.status));
       feats = (await r.json()).features || [];
     } catch (e) { failed = true; }
+    const chList = await ch;
     const box = $('#addrList');
     if (seq !== geoSeq || !box) return;
-    addrResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
+    addrResults = feats.filter((f) => f.geometry && f.geometry.coordinates && (f.properties || {}).score !== 0).map((f) => {
       const p = f.properties || {};
       const [lon, lat] = f.geometry.coordinates;
       const town = p.type === 'municipality';
-      return { label: p.label || p.name, address: town ? '' : (p.name || ''), postal_code: p.postcode || '', city: p.city || p.name || '', lat, lon };
-    });
+      return { label: p.label || p.name, address: town ? '' : (p.name || ''), postal_code: p.postcode || '', city: p.city || p.name || '', lat, lon, country: 'FR' };
+    }).slice(0, 4).concat(chList.slice(0, 3).map((c) => ({ label: `${[c.address, c.postal, c.name].filter(Boolean).join(' ')} · Suisse`,
+      address: draft.secret ? '' : c.address, postal_code: c.postal, city: c.name, lat: c.lat, lon: c.lon, country: 'CH' })));
+    if (chList.length) failed = false;
     if (!addrResults.length) {
       // Secours : centre d'une grande ville connue
       const ql = q.trim().toLowerCase();
       addrResults = CITIES.filter((c) => ql.includes(c.name.toLowerCase()) || c.name.toLowerCase().startsWith(ql))
-        .slice(0, 3).map((c) => ({ label: `${c.name} (centre-ville)`, address: '', postal_code: '', city: c.name, lat: c.lat, lon: c.lon }));
+        .slice(0, 3).map((c) => ({ label: `${c.name} (centre-ville)`, address: '', postal_code: '', city: c.name, lat: c.lat, lon: c.lon, country: c.country || 'FR' }));
     }
     box.innerHTML = addrResults.length
       ? addrResults.map((a, i) => `<button type="button" class="addr-opt" data-act="addr-pick" data-i="${i}">${esc(a.label)}</button>`).join('')
@@ -1161,7 +1191,7 @@ async function submitEvent(form) {
     id: d.id || null, organizer_id: d.id || !isUuid(d.organizer_id) ? null : d.organizer_id,
     title, types: d.types, starts_at: isoOrNull(d.starts_at), ends_at: isoOrNull(d.ends_at), frequency: d.frequency || 'once',
     description: d.description || '', venue_name: String(d.venue_name).trim(), address: d.secret ? '' : (d.address || ''),
-    postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude,
+    postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude, country: d.country || 'FR', currency: d.currency || 'EUR',
     organizer_name: String(d.organizer_name || '').trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
     price, presale_price: presale, booking: d.booking || 'door_only', ticket_url: (d.ticket_url || '').trim(), sales_open_at: isoOrNull(d.sales_open_at),
     dress_code: d.dress_code || 'recommended', dress_code_details: d.dress_code_details || '',
@@ -1510,6 +1540,7 @@ function eventToDraft(ev, orgId, copy) {
     frequency: ev.frequency, description: ev.description || '', venue_name: v.name, secret: !v.address,
     address: v.address || '', postal_code: v.postal_code || '', city: v.city, latitude: v.latitude, longitude: v.longitude,
     addrLabel: [v.address, v.postal_code, v.city].filter(Boolean).join(' '),
+    country: v.country || 'FR', currency: ev.currency || 'EUR',
     price: numStr(ev.price), presale_price: numStr(ev.presale_price), booking: ev.booking, ticket_url: ev.ticket_url || '',
     sales_open_at: copy ? '' : toLocalInput(ev.sales_open_at), sales_close_at: copy ? '' : toLocalInput(ev.sales_close_at),
     _close: copy ? '' : toLocalInput(ev.sales_close_at), dress_code: ev.dress_code, dress_code_details: ev.dress_code_details || '',
@@ -2100,7 +2131,8 @@ document.addEventListener('click', (ev) => {
     case 'addr-pick': {
       const a = addrResults[Number(act.dataset.i)];
       if (!a) break;
-      Object.assign(draft, { address: a.address, postal_code: a.postal_code, city: a.city, latitude: a.lat, longitude: a.lon, addrLabel: a.label });
+      Object.assign(draft, { address: a.address, postal_code: a.postal_code, city: a.city, latitude: a.lat, longitude: a.lon, addrLabel: a.label, country: a.country || 'FR' });
+      if (a.country === 'CH' && !draft.currency) draft.currency = 'CHF';
       saveDraft(); render();
       break;
     }
@@ -2164,6 +2196,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'logoFile') { handleLogoFile(t); return; }
   if (t.id === 'orgSwitch') { navigate(`#/orga/${t.value}`); return; }
   if (t.form && t.form.id === 'submitForm' && t.name === 'image_path') { draft.image_path = t.value.trim(); draft.image_x = 50; draft.image_y = 50; saveDraft(); render(); return; }
+  if (t.form && t.form.id === 'submitForm' && t.name === 'currency') { draft.currency = t.value; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name === 'organizer_id') { draft.organizer_id = t.value; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name) {
     if (t.name === 'secret') { draft.secret = t.checked; ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); return; }
@@ -2191,7 +2224,7 @@ document.addEventListener('change', (ev) => {
       const patch = {};
       const pseudo = f.pseudo ? f.pseudo.value.trim().slice(0, 30) : profile.pseudo;
       if (pseudo !== before.pseudo) patch.pseudo = pseudo;
-      if (cityKey() !== before.city) Object.assign(patch, { city: state.city, postal_code: state.postal || null, latitude: state.cityLat, longitude: state.cityLon });
+      if (cityKey() !== before.city) Object.assign(patch, { city: state.city, postal_code: state.postal || null, latitude: state.cityLat, longitude: state.cityLon, country: state.country || 'FR' });
       if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
       const np = { notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
@@ -2279,7 +2312,7 @@ function askCalendar(e) {
 
 // Écran de bienvenue (une seule fois par compte et par téléphone)
 const ONBOARD = [
-  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte de France.'],
+  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte, en France et en Suisse.'],
   [I.bell, 'Ne rate plus rien', 'Mets une soirée en favori, active un rappel ou une alerte billetterie, et suis tes organisateurs préférés pour être prévenu de leurs nouvelles dates.'],
   [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
 ];
@@ -2441,7 +2474,7 @@ function downloadIcs(e) {
 // ---------------------------------------------------------------------------
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
 const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
-  'booking', 'ticket_url', 'sales_open_at', 'sales_close_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
+  'currency', 'booking', 'ticket_url', 'sales_open_at', 'sales_close_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
   'organizer:organizers(id,name,kind,is_verified,logo_path)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
 
@@ -2454,7 +2487,7 @@ function mapEvent(r, counts) {
     country: r.venue.country,
     types: (r.types || []).map((t) => t.type && t.type.slug).filter(Boolean),
     dressCode: r.dress_code, dressCodeDetails: r.dress_code_details,
-    price: Number(r.price), presalePrice: r.presale_price == null ? null : Number(r.presale_price),
+    currency: r.currency || 'EUR', price: Number(r.price), presalePrice: r.presale_price == null ? null : Number(r.presale_price),
     booking: r.booking, ticketUrl: r.ticket_url, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, soldOut: r.is_sold_out,
     hasCloakroom: r.has_cloakroom, cloakroomPaid: r.cloakroom_paid, frequency: r.frequency,
     languages: r.languages || [], attendees: counts.get(r.id) || 0
@@ -2548,7 +2581,7 @@ async function loadUser() {
     if (!md.pseudo) { profile = null; return 'incomplete'; }
     rows = await sb.insert('profiles', {
       id: uid, pseudo: md.pseudo, city: md.city || state.city,
-      postal_code: md.postal_code || null, latitude: md.latitude ?? state.cityLat ?? null, longitude: md.longitude ?? state.cityLon ?? null,
+      postal_code: md.postal_code || null, country: md.country || 'FR', latitude: md.latitude ?? state.cityLat ?? null, longitude: md.longitude ?? state.cityLon ?? null,
       adult_confirmed_at: md.adult_confirmed_at || new Date().toISOString(),
       sensitive_consent_at: md.sensitive_consent_at || new Date().toISOString()
     }, { returnRow: true });
@@ -2556,7 +2589,7 @@ async function loadUser() {
   profile = rows[0];
   state.adult = true;
   state.pseudo = profile.pseudo;
-  if (profile.city) setCity({ name: profile.city, postal: profile.postal_code, lat: profile.latitude, lon: profile.longitude });
+  if (profile.city) setCity({ name: profile.city, postal: profile.postal_code, lat: profile.latitude, lon: profile.longitude, country: profile.country });
   state.visibility = profile.attendance_visibility;
   state.invisible = profile.is_invisible;
   if (profile.notif_reminders !== undefined) {
@@ -2691,9 +2724,9 @@ async function submitAccountForm(form) {
       if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
       if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
       const now = new Date().toISOString();
-      const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
+      const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, country: city.country || 'FR', adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
       if (form.id === 'completeForm') {
-        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, postal_code: meta.postal_code, latitude: meta.latitude, longitude: meta.longitude, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
+        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, postal_code: meta.postal_code, latitude: meta.latitude, longitude: meta.longitude, country: meta.country, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
         profile = rows[0];
         await loadUser();
         await refreshEvents();
