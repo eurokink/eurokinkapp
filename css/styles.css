@@ -364,3 +364,18 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .adm-img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; }
 .adm-actions .btn { padding-left: 8px; padding-right: 8px; }
+
+/* Logos organisateurs (0.9.0) */
+.org-logo { flex: none; width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; border: 2px solid var(--red); display: inline-flex; align-items: center; justify-content: center; }
+.org-initial { background: var(--red-tint); color: var(--red-text); font-weight: 800; font-size: 16px; }
+.org-logo.xs { width: 22px; height: 22px; border-width: 1px; font-size: 11px; vertical-align: -6px; margin-right: 6px; }
+.org-logo.lg { width: 56px; height: 56px; font-size: 22px; }
+.org-logo.xl { width: 88px; height: 88px; font-size: 34px; }
+.org-head-top { display: flex; align-items: center; gap: 12px; }
+.logo-edit { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.logo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.logo-actions .btn { min-height: 40px; padding: 0 14px; }
+.hero-logo { width: 120px; height: 120px; border-radius: 50%; object-fit: cover; background: #fff; border: 3px solid var(--red); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6); }
+.hero-studs.hidden { display: none; }
+.mm-logo { display: block; width: 38px; height: 38px; border-radius: 50%; overflow: hidden; border: 2.5px solid var(--red); background: #fff; }
+.mm-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }

@@ -89,7 +89,7 @@ export function mountMap(root, { markers, home, onSelect, markerSvg }) {
       const el = document.createElement('button');
       el.className = `map-marker${c.items.length > 1 ? ' cluster' : ''}`;
       el.setAttribute('aria-label', c.items.length > 1 ? `${names.join(', ')} : ${count} soirées` : c.items[0].label);
-      el.innerHTML = `${markerSvg}${count > 1 ? `<span class="map-count">${count}</span>` : ''}`;
+      el.innerHTML = `${c.items.length === 1 && c.items[0].svg ? c.items[0].svg : markerSvg}${count > 1 ? `<span class="map-count">${count}</span>` : ''}`;
       el._p = c.p;
       el.addEventListener('click', (ev) => {
         if (moved) { ev.preventDefault(); return; }

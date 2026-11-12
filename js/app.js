@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.8.0';
+const VERSION = '0.9.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -24,6 +24,9 @@ let checkinInfo = [];       // présences validées : { id, city, country }
 const EVENTS_CACHE = 'ek.events.v1';
 const isUuid = (x) => /^[0-9a-f-]{36}$/i.test(String(x));
 const imgSrc = (path) => (!path ? '' : /^https:\/\//i.test(path) ? path : sb.publicUrl('event-images', path));
+const orgLogo = (o, cls = '') => (o && o.logo
+  ? `<img class="org-logo ${cls}" src="${esc(imgSrc(o.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+  : `<span class="org-logo org-initial ${cls}">${esc(((o && o.name) || '?').charAt(0).toUpperCase())}</span>`);
 const heroImg = (e) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
@@ -312,14 +315,14 @@ function viewEvent(id) {
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
   const showCheckin = !checked && (isLive(e) || (state.testMode && !loggedIn()));
   return `<section class="screen screen-event">
-    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e)}<svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
+    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e)}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
       <button class="icon-btn hero-btn hero-right" data-act="share" aria-label="Partager">${I.share}</button>
       <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
     </div>
     <div class="event-body">
       <h1 class="event-title">${esc(e.title)}</h1>
-      <div class="org-line">par <a class="org-link" href="#/organisateur/${e.organizer.id}"><strong>${esc(e.organizer.name)}</strong></a>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
+      <div class="org-line">${e.organizer.logo ? orgLogo(e.organizer, 'xs') : ''}par <a class="org-link" href="#/organisateur/${e.organizer.id}"><strong>${esc(e.organizer.name)}</strong></a>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
       <div class="facts">
         <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}</div></div></div>
         <div class="fact"><span class="fact-ic">${I.pin}</span><div class="fact-main"><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)}</div></div>
@@ -982,7 +985,7 @@ async function openEditor(id, { copy = false, returnTo = '#/orga' } = {}) {
   } catch (err) { toast(err.message); }
 }
 
-function shrinkImage(file, max = 1600) {
+function shrinkImage(file, max = 1600, type = 'image/jpeg') {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -992,7 +995,7 @@ function shrinkImage(file, max = 1600) {
       c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Image illisible'))), 'image/jpeg', 0.82);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Image illisible'))), type, 0.85);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible : essaie un JPEG ou un PNG')); };
     img.src = url;
@@ -1015,6 +1018,27 @@ async function handleImageFile(input) {
   uploading = false;
 }
 
+async function setOrgLogo(value) {
+  await sb.update('organizers', `id=eq.${currentOrgId}`, { logo_path: value });
+  delete orgDash[currentOrgId]; delete orgPublic[currentOrgId];
+  render(); refreshEvents();
+}
+
+async function handleLogoFile(input) {
+  const file = input.files && input.files[0];
+  if (!file || uploading || !isUuid(currentOrgId)) return;
+  if (!/^image\//.test(file.type)) { toast('Choisis une image'); return; }
+  uploading = true; toast('Envoi du logo…');
+  try {
+    const blob = await shrinkImage(file, 512, 'image/png');
+    const path = `${currentOrgId}/logo-${Date.now().toString(36)}.png`;
+    await sb.uploadImage('event-images', path, blob);
+    await setOrgLogo(path);
+    toast('Logo ajouté');
+  } catch (err) { toast(err.message); }
+  uploading = false;
+}
+
 async function submitOrgRequest(form) {
   const f = new FormData(form);
   const btn = form.querySelector('button[type=submit]');
@@ -1032,7 +1056,11 @@ async function submitOrgRequest(form) {
 }
 
 async function loadOrgDash(id) {
-  try { orgDash[id] = (await sb.rpc('org_dashboard', { p_org: id })) || { error: 'Organisation introuvable' }; } catch (err) { orgDash[id] = { error: err.message }; }
+  try {
+    const [d, rows] = await Promise.all([sb.rpc('org_dashboard', { p_org: id }), sb.select('organizers', `select=logo_path&id=eq.${id}`).catch(() => [])]);
+    orgDash[id] = d ? d : { error: 'Organisation introuvable' };
+    if (d) d.organizer.logo = rows && rows[0] ? rows[0].logo_path : null;
+  } catch (err) { orgDash[id] = { error: err.message }; }
   if (location.hash.startsWith('#/orga')) render();
 }
 
@@ -1076,6 +1104,11 @@ function viewOrga(param) {
   const switcher = orgs.length > 3 ? `<label class="field">Organisation${`<select id="orgSwitch">${orgs.map((x) => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`
     : orgs.length > 1 ? `<div class="chips wrap">${orgs.map((x) => `<a class="chip ${x.id === id ? 'on' : ''}" href="#/orga/${x.id}">${esc(x.name)}</a>`).join('')}</div>` : '';
   const edit = orgEditing ? `<form id="orgPageForm" class="card settings">
+      <div class="field">Logo<div class="logo-edit">${orgLogo(o, 'lg')}<div class="logo-actions">
+        <label class="btn btn-ghost file-btn">${I.image}<span>${o.logo ? 'Changer' : 'Choisir une image'}</span><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp"></label>
+        ${o.logo ? '<button type="button" class="link" data-act="logo-clear">Retirer le logo</button>' : ''}</div></div>
+        <span class="hint">Carré de préférence, il s’affiche en rond sur la carte, ta page et tes soirées.</span></div>
+      <label class="field">Ou lien vers le logo<input name="logo_path" type="url" inputmode="url" value="${o.logo && /^https:/i.test(o.logo) ? esc(o.logo) : ''}" placeholder="https://…"></label>
       <label class="field">Présentation<textarea name="description" rows="5" maxlength="2000" placeholder="Qui vous êtes, l’esprit de vos soirées…">${esc(o.description || '')}</textarea></label>
       <label class="field">Site internet<input name="website" type="url" inputmode="url" value="${esc(o.website || '')}" placeholder="https://"></label>
       <label class="field">Ville<input name="city" maxlength="80" value="${esc(o.city || '')}"></label>
@@ -1084,8 +1117,8 @@ function viewOrga(param) {
       <p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p></form>` : '';
   return `<section class="screen">${accountTopRaw('Espace organisateur', '#/profil')}
     ${switcher}
-    <div class="card org-head"><div><div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
-      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div>
+    <div class="card org-head"><div class="org-head-top">${orgLogo(o, 'lg')}<div><div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
+      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div></div>
       <div class="org-links"><a class="link" href="#/organisateur/${o.id}">Voir ma page</a>${orgEditing ? '' : '<button class="link" data-act="org-page-edit">Modifier ma page</button>'}</div></div>
     ${edit}
     <div class="stats four">${[[o.followers, 'abonnés'], [upcoming.length, 'à venir'], [sum('views'), 'vues'], [sum('attending'), 'j’y vais']].map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
@@ -1124,16 +1157,24 @@ async function orgAct(act) {
 async function saveOrgPage(form) {
   const f = new FormData(form);
   const patch = { description: String(f.get('description') || '').trim() || null, website: String(f.get('website') || '').trim() || null, city: String(f.get('city') || '').trim() || null };
+  const logoLink = String(f.get('logo_path') || '').trim();
+  if (logoLink) {
+    if (!/^https:\/\/\S+$/i.test(logoLink)) return formError(form, 'Le lien du logo doit commencer par https://');
+    patch.logo_path = logoLink;
+  }
   if (patch.website && !/^https?:\/\/\S+$/i.test(patch.website)) return formError(form, 'Le site doit commencer par https://');
   try {
     await sb.update('organizers', `id=eq.${currentOrgId}`, patch);
     orgEditing = false; delete orgDash[currentOrgId]; delete orgPublic[currentOrgId];
-    toast('Page mise à jour'); render();
+    toast('Page mise à jour'); render(); refreshEvents();
   } catch (err) { formError(form, err.message); }
 }
 
 async function loadOrgPublic(id) {
-  try { orgPublic[id] = (await sb.rpc('organizer_public', { p_org: id })) || { missing: true }; } catch (err) { orgPublic[id] = { missing: true }; }
+  try {
+    const [o, rows] = await Promise.all([sb.rpc('organizer_public', { p_org: id }), sb.select('organizers', `select=logo_path&id=eq.${id}`).catch(() => [])]);
+    orgPublic[id] = o ? { ...o, logo: rows && rows[0] ? rows[0].logo_path : null } : { missing: true };
+  } catch (err) { orgPublic[id] = { missing: true }; }
   if (location.hash.startsWith('#/organisateur/')) render();
 }
 
@@ -1144,7 +1185,7 @@ function viewOrganizerPage(id) {
   const list = EVENTS.filter((e) => e.organizer.id === id);
   return `<section class="screen"><div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small">Organisateur</h1></div>
     <div class="card org-public">
-      <div class="org-avatar">${esc(o.name.charAt(0).toUpperCase())}</div>
+      ${orgLogo(o, 'xl')}
       <div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
       <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
       <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
@@ -1211,6 +1252,8 @@ function initMap() {
     groups.set(e.venue.city, g);
   });
   const markers = [...groups.values()].map((g) => ({
+    svg: (() => { const orgs = new Set(g.events.map((x) => x.organizer.id)); const o = g.events[0].organizer;
+      return orgs.size === 1 && o.logo ? `<span class="mm mm-logo"><img src="${esc(imgSrc(o.logo))}" alt="" referrerpolicy="no-referrer"></span>` : null; })(),
     id: g.id, lat: g.lat / g.events.length, lon: g.lon / g.events.length, count: g.events.length,
     label: `${g.id} : ${g.events.length} soirée${g.events.length > 1 ? 's' : ''}`
   }));
@@ -1394,6 +1437,7 @@ document.addEventListener('click', (ev) => {
     case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;
     case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
     case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
+    case 'logo-clear': setOrgLogo(null).then(() => toast('Logo retiré')).catch((err) => toast(err.message)); break;
     case 'ptype': {
       const t = act.dataset.slug;
       const list = draft.types || [];
@@ -1443,6 +1487,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'fNoBooking') { filters.noBooking = t.checked; renderResults(); }
   if (t.id === 'fCloak') { filters.cloakroom = t.checked; renderResults(); }
   if (t.id === 'imgFile') { handleImageFile(t); return; }
+  if (t.id === 'logoFile') { handleLogoFile(t); return; }
   if (t.id === 'orgSwitch') { navigate(`#/orga/${t.value}`); return; }
   if (t.form && t.form.id === 'submitForm' && t.name === 'organizer_id') { draft.organizer_id = t.value; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name) {
@@ -1554,14 +1599,14 @@ function downloadIcs(e) {
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
 const EVENT_SELECT = ['id', 'image_path', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
   'booking', 'ticket_url', 'sales_open_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
-  'organizer:organizers(id,name,kind,is_verified)', 'venue:venues(name,city,country,latitude,longitude)',
+  'organizer:organizers(id,name,kind,is_verified,logo_path)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
 
 function mapEvent(r, counts) {
   return {
     id: r.id, title: r.title, description: r.description || '', image: r.image_path || null,
     startsAt: r.starts_at, endsAt: r.ends_at,
-    organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified },
+    organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified, logo: r.organizer.logo_path || null },
     venue: { name: r.venue.name, city: r.venue.city, lat: r.venue.latitude, lon: r.venue.longitude },
     country: r.venue.country,
     types: (r.types || []).map((t) => t.type && t.type.slug).filter(Boolean),
