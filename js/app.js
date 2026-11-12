@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.17.0';
+const VERSION = '0.18.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -210,6 +210,7 @@ function viewWelcome() {
   return `<section class="gate">
     <div class="gate-logo">${LOGO_MARK}${WORDMARK}</div>
     <p class="gate-tag">Toutes les soirées fetish, en France puis en Europe.</p>
+    ${inviteBanner()}
     <div class="card gate-card">
       <h1>Réservé aux adultes</h1>
       <p class="muted">EuroKink est réservée aux membres majeurs. Crée ton compte ou connecte-toi pour découvrir les soirées.</p>
@@ -502,6 +503,120 @@ const outingsCache = new Map();
 async function loadOutings(id) {
   try { outingsCache.set(id, (await sb.select('attendances', `user_id=eq.${id}&select=event_id`)).map((r) => r.event_id)); } catch (e) { outingsCache.set(id, []); }
   if (location.hash === `#/membre/${id}`) render();
+}
+
+// Invitations des organisateurs
+const INVITE_KEY = 'ek.invite';
+const pendingInvite = () => { try { return localStorage.getItem(INVITE_KEY) || ''; } catch (e) { return ''; } };
+const setPendingInvite = (t) => { try { if (t) localStorage.setItem(INVITE_KEY, t); else localStorage.removeItem(INVITE_KEY); } catch (e) { /* stockage indisponible */ } };
+const inviteCache = new Map();
+const inviteUrl = (token) => `${location.origin}${location.pathname}#/invitation/${token}`;
+function loadInvite(token) {
+  if (inviteCache.has(token)) return inviteCache.get(token);
+  inviteCache.set(token, undefined);
+  sb.rpc('invite_info', { p_token: token }).catch(() => ({ status: 'unknown' }))
+    .then((r) => { inviteCache.set(token, r || { status: 'unknown' }); render(); });
+  return undefined;
+}
+function inviteBanner() {
+  const t = pendingInvite();
+  if (!t) return '';
+  const i = loadInvite(t);
+  if (!i || i.status !== 'valid') return '';
+  return `<div class="card invite-banner">${orgLogo({ name: i.organizer.name, logo: i.organizer.logo_path }, 'lg')}<div><strong>Invitation : ${esc(i.organizer.name)}</strong>
+    <p class="muted tiny">Crée ton compte (ou connecte-toi) pour gérer la page de ${esc(i.organizer.name)} et publier vos soirées.</p></div></div>`;
+}
+function viewInvitation(token) {
+  const top = accountTopRaw('Invitation', '#/');
+  if (!/^[0-9a-f]{32}$/.test(token || '')) return `<section class="screen">${top}${empty('Lien d’invitation invalide.')}</section>`;
+  setPendingInvite('');
+  const i = loadInvite(token);
+  if (i === undefined) return `<section class="screen">${top}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
+  if (i.status === 'unknown') return `<section class="screen">${top}${empty('Cette invitation n’existe pas ou a été supprimée.')}</section>`;
+  const o = i.organizer;
+  const msg = i.member ? `Tu gères déjà ${esc(o.name)}.` : i.status === 'used' ? 'Cette invitation a déjà été utilisée.' : i.status === 'expired' ? 'Cette invitation a expiré : demande un nouveau lien à la personne qui te l’a envoyé.' : '';
+  return `<section class="screen">${top}
+    <div class="card center-card invite-card">${orgLogo({ name: o.name, logo: o.logo_path }, 'xl')}
+      <h2>${esc(o.name)} ${o.is_verified ? I.verified : ''}</h2>
+      <p class="muted">${ORG_KIND[o.kind] || 'Organisateur'}${o.city ? ` · ${esc(o.city)}` : ''}</p>
+      ${msg ? `<p>${msg}</p>${i.member ? `<a class="btn btn-red btn-block" href="#/orga/${o.id}">Ouvrir l’espace organisateur</a>` : ''}` : `
+      <p>Tu es invité à rejoindre la gestion de <strong>${esc(o.name)}</strong> sur EuroKink.</p>
+      <ul class="soon-list">${[o.is_verified || i.verify ? 'Publier vos soirées directement, sans validation' : 'Publier vos soirées (vérifiées par l’équipe avant mise en ligne)', 'Ajouter votre logo et votre présentation', 'Suivre vos statistiques : vues, «\u00a0J’y vais\u00a0», abonnés', 'Prévenir automatiquement vos abonnés à chaque nouvelle date'].map((x) => `<li>${I.check}<span>${x}</span></li>`).join('')}</ul>
+      <button class="btn btn-red btn-block" data-act="invite-accept" data-token="${token}">Accepter l’invitation</button>
+      <p class="tiny muted">Ton pseudo sera visible des autres gestionnaires de l’organisation.</p>`}
+    </div></section>`;
+}
+async function acceptInvite(btn) {
+  btn.disabled = true;
+  try {
+    const orgId = await sb.rpc('accept_organizer_invite', { p_token: btn.dataset.token });
+    inviteCache.delete(btn.dataset.token); orgStatus = null; Object.keys(orgDash).forEach((k) => delete orgDash[k]);
+    toast('Bienvenue dans ton espace organisateur !');
+    await loadOrgStatus();
+    navigate(`#/orga/${orgId}`);
+    setTimeout(maybeOnboard, 1500);
+  } catch (err) { toast(err.message); btn.disabled = false; }
+}
+
+// Équipe d'une organisation : gestionnaires et liens d'invitation
+const orgTeam = {};
+function loadTeam(id) {
+  orgTeam[id] = orgTeam[id] || { loading: true };
+  sb.rpc('org_invites', { p_org: id }).then((r) => { orgTeam[id] = r; }).catch((err) => { orgTeam[id] = { error: err.message }; })
+    .then(() => { if ((location.hash || '').startsWith('#/orga')) render(); });
+}
+function teamBlock(o) {
+  const t = orgTeam[o.id];
+  if (!t) { loadTeam(o.id); return ''; }
+  if (t.loading || t.error) return '';
+  const open = t.invites.filter((i) => !i.used_at);
+  return `<h2 class="group-title">Équipe</h2>
+    <div class="card team">
+      <div class="team-list">${t.managers.map((m) => `<a class="member-row" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">Gestionnaire</div></div></a>`).join('') || '<p class="muted tiny">Aucun gestionnaire pour le moment.</p>'}</div>
+      ${open.map((i) => `<div class="invite-row"><span class="mini-av inv">${I.mail}</span><div class="mr-main"><strong>${esc(i.note || 'Invitation')}</strong><div class="muted tiny">En attente · expire le ${fDate.format(new Date(i.expires_at))}</div></div>
+        <button class="icon-btn small" data-act="invite-share" data-token="${i.token}" data-org="${o.id}" aria-label="Partager le lien">${I.share}</button>
+        <button class="icon-btn small" data-act="invite-revoke" data-id="${i.id}" data-org="${o.id}" aria-label="Supprimer l’invitation">${I.trash}</button></div>`).join('')}
+      <button class="btn btn-ghost btn-block" data-act="invite-new" data-org="${o.id}">${I.plus}<span>Inviter un gestionnaire</span></button>
+      <p class="tiny muted">Chaque lien est personnel, utilisable une seule fois et valable 30 jours.${isAdmin() && !o.is_verified ? ' Envoyé par toi, il rend aussi l’organisation vérifiée.' : ''}</p>
+    </div>`;
+}
+function inviteMessage(orgName, token) {
+  return `Bonjour ! 👋\n\nNous avons ajouté ${orgName} sur EuroKink, l’appli gratuite qui rassemble les soirées fetish en France.\n\nAvec ce lien personnel, tu peux gérer votre page organisateur : publier vos soirées directement, ajouter votre logo et suivre vos statistiques (vues, participants, abonnés). Vos abonnés sont prévenus à chaque nouvelle date.\n\n${inviteUrl(token)}\n(lien valable 30 jours, utilisable une seule fois)\n\nÀ bientôt,\nL’équipe EuroKink`;
+}
+function inviteNew(orgId) {
+  const name = (orgDash[orgId] && orgDash[orgId].organizer.name) || '';
+  const el = sheet(`<h2>Inviter un gestionnaire</h2>
+    <p class="muted">Crée un lien personnel à envoyer à la personne qui gérera ${esc(name)} : par e-mail, Instagram, WhatsApp…</p>
+    <label class="field">Pour qui ? (facultatif, visible de ton équipe uniquement)<input id="invNote" maxlength="100" placeholder="Ex. Président de l’asso, Instagram @…"></label>
+    <div class="adm-actions"><button class="btn btn-red" data-inv-create>Créer le lien</button><button class="btn btn-ghost" data-sheet-close>Annuler</button></div>`);
+  el.querySelector('[data-inv-create]').addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    try {
+      const r = await sb.rpc('create_organizer_invite', { p_org: orgId, p_note: el.querySelector('#invNote').value.trim() || null });
+      closeOverlay();
+      loadTeam(orgId);
+      setTimeout(() => inviteShare(orgId, r.token), 150);
+    } catch (err) { toast(err.message); ev.target.disabled = false; }
+  });
+}
+function inviteShare(orgId, token) {
+  const name = (orgDash[orgId] && orgDash[orgId].organizer.name) || 'votre organisation';
+  const text = inviteMessage(name, token);
+  const el = sheet(`<h2>Lien d’invitation</h2>
+    <p class="muted">Envoie ce message à la personne invitée. Tu peux le modifier avant de le copier.</p>
+    <label class="field">Message<textarea id="invMsg" rows="9">${esc(text)}</textarea></label>
+    <div class="invite-link"><span>${esc(inviteUrl(token))}</span></div>
+    <div class="adm-actions"><button class="btn btn-red" data-inv-copy>Copier le message</button>${navigator.share ? '<button class="btn btn-ghost" data-inv-send>Partager…</button>' : ''}</div>
+    <button class="link center" data-inv-link>Copier seulement le lien</button>`);
+  const copy = async (t, msg) => { try { await navigator.clipboard.writeText(t); toast(msg); } catch (e) { toast('Copie impossible : sélectionne le texte à la main'); } };
+  el.querySelector('[data-inv-copy]').addEventListener('click', () => copy(el.querySelector('#invMsg').value, 'Message copié'));
+  el.querySelector('[data-inv-link]').addEventListener('click', () => copy(inviteUrl(token), 'Lien copié'));
+  const send = el.querySelector('[data-inv-send]');
+  if (send) send.addEventListener('click', () => navigator.share({ text: el.querySelector('#invMsg').value }).catch(() => {}));
+}
+async function inviteRevoke(btn) {
+  if (!confirm('Supprimer cette invitation ? Le lien ne fonctionnera plus.')) return;
+  try { await sb.rpc('revoke_organizer_invite', { p_id: btn.dataset.id }); toast('Invitation supprimée'); loadTeam(btn.dataset.org); } catch (err) { toast(err.message); }
 }
 
 // Fiche d'un membre
@@ -1638,6 +1753,7 @@ function viewOrga(param) {
     ${upcoming.map((e) => orgEventCard(e, false)).join('') || empty('Aucune soirée à venir. Ajoute ta prochaine soirée !')}
     ${past.length ? `<h2 class="group-title">Passées</h2>${past.map((e) => orgEventCard(e, true)).join('')}` : ''}
     <p class="tiny muted center">Vues : membres différents ayant ouvert la fiche. Les chiffres sont anonymes.</p>
+    ${teamBlock(o)}
   </section>`;
 }
 
@@ -1794,11 +1910,13 @@ function render() {
   const [, route, param] = hash.split('/');
   if (!loggedIn() && route !== 'compte' && route !== 'infos') {
     if (route === 'soiree' && isUuid(param)) sessionStorage.setItem('ek.after', hash);
+    if (route === 'invitation' && /^[0-9a-f]{32}$/.test(param || '')) setPendingInvite(param);
     if (mapCleanup) { mapCleanup(); mapCleanup = null; }
     view.innerHTML = sb.getSession() && !userChecked ? viewLoading() : viewWelcome();
     nav.hidden = true;
     return;
   }
+  if (pendingInvite() && route !== 'invitation' && route !== 'compte' && route !== 'infos') { location.replace(`#/invitation/${pendingInvite()}`); return; }
   let html;
   let active = '#/';
   const needsEvents = ['', undefined, 'explorer', 'carte', 'soiree', 'favoris', 'organisateur'].includes(route);
@@ -1820,6 +1938,7 @@ function render() {
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(param === 'liste' ? 'list' : 'map'); active = '#/communaute'; break;
     case 'membre': html = viewMember(param); active = '#/communaute'; break;
+    case 'invitation': html = viewInvitation(param); active = null; break;
     case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
     case 'profil': html = viewProfile(); active = '#/profil'; break;
     case 'parametres': html = viewSettings(); active = '#/profil'; break;
@@ -1991,6 +2110,10 @@ document.addEventListener('click', (ev) => {
     }
     case 'report-member': reportMember(act.dataset.id); break;
     case 'follow-member': toggleMemberFollow(act.dataset.id); break;
+    case 'invite-accept': acceptInvite(act); break;
+    case 'invite-new': inviteNew(act.dataset.org); break;
+    case 'invite-share': inviteShare(act.dataset.org, act.dataset.token); break;
+    case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
     case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
@@ -2159,7 +2282,7 @@ const ONBOARD = [
   [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
 ];
 function maybeOnboard() {
-  if (!loggedIn() || overlayClose) return;
+  if (!loggedIn() || overlayClose || pendingInvite() || (location.hash || '').startsWith('#/invitation')) return;
   const key = `ek.onboarded.${profile.id}`;
   try { if (localStorage.getItem(key)) return; } catch (err) { return; }
   let i = 0;
@@ -2503,7 +2626,7 @@ function formError(form, msg) {
 
 // Après connexion : retour sur la soirée partagée qu'on voulait voir, puis bienvenue si première fois
 function afterLogin() {
-  const h = sessionStorage.getItem('ek.after');
+  const h = pendingInvite() ? `#/invitation/${pendingInvite()}` : sessionStorage.getItem('ek.after');
   sessionStorage.removeItem('ek.after');
   setTimeout(maybeOnboard, 400);
   return h || '#/';
