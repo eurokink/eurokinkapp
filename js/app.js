@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.25.1';
+const VERSION = '0.25.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -151,6 +151,7 @@ const I = {
   share: ic('<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>'),
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
   plus: ic('<path d="M12 5v14M5 12h14"/>'),
+  star: ic('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
   chat: ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
   send: ic('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>'),
   dots: ic('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
@@ -235,18 +236,13 @@ function viewHome() {
   const weekend = list.filter((e) => new Date(e.startsAt) < end && new Date(e.endsAt) > start && kmFromMe(e) <= 150);
   const featured = list.find((e) => e.featured) || list[0];
   const later = list.filter((e) => !weekend.includes(e) && e !== featured).slice(0, 6);
-  const chips = [['weekend', 'Ce week-end'], ['free', 'Gratuit'], ...EVENT_TYPES.slice(0, 6).map((t) => [`type:${t.slug}`, t.name])];
   return `<section class="screen">
     <header class="topbar"><div class="brand">${LOGO_MARK}${WORDMARK}</div>
       <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}</p></div>
     ${homeMsgCard()}
-    <form class="search-row" id="homeSearch">
-      <label class="search"><span>${I.search}</span><input name="q" type="search" placeholder="Ville, soirée, organisateur…" aria-label="Rechercher"></label>
-      <a class="filter-btn" href="#/explorer" aria-label="Filtres">${I.sliders}</a>
-    </form>
-    <div class="chips scroll-x">${chips.map(([k, l]) => `<button class="chip" data-quick="${k}">${esc(l)}</button>`).join('')}</div>
+    ${newsCard()}
     ${featured ? `<div class="section-head"><h2>À la une</h2><a href="#/explorer" class="link">Tout voir</a></div>${featuredCard(featured)}` : ''}
     <h2 class="section-title">Ce week-end près de toi</h2>
     <div class="list">${weekend.length ? weekend.map(eventRow).join('') : empty('Rien ce week-end dans ton coin. Regarde les prochaines dates ci-dessous.')}</div>
@@ -704,6 +700,38 @@ function updateMsgBadges() {
 const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
 setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
+
+// Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
+const NEWS = [
+  { v: '0.25', date: '2026-11-12',
+    fr: ['Messagerie privée : écris aux membres depuis leur fiche, le premier message est une demande à accepter', 'L’appli parle français, anglais et allemand (Paramètres › Langue), et traduit les descriptions des soirées', 'Toute l’Europe sur la carte, avec les prix dans la monnaie de chaque pays'],
+    en: ['Private messages: write to members from their profile, your first message is a request they can accept', 'The app speaks French, English and German (Settings › Language) and translates event descriptions', 'All of Europe on the map, with prices in each country’s currency'],
+    de: ['Private Nachrichten: Schreib Mitgliedern über ihr Profil, die erste Nachricht ist eine Anfrage zum Annehmen', 'Die App spricht Französisch, Englisch und Deutsch (Einstellungen › Sprache) und übersetzt Partybeschreibungen', 'Ganz Europa auf der Karte, mit Preisen in der Währung jedes Landes'] },
+  { v: '0.17', date: '2026-11-12',
+    fr: ['Carte et liste des membres dans la Communauté', 'Fiches membres avec présentation et centres d’intérêt', '« Qui y va ? » sur chaque soirée'],
+    en: ['Member map and list in the Community', 'Member profiles with an introduction and interests', '“Who’s going?” on every event'],
+    de: ['Mitgliederkarte und -liste in der Community', 'Mitgliederprofile mit Vorstellung und Interessen', '„Wer geht hin?“ bei jeder Party'] }
+];
+const NEWS_KEY = 'ek.newsSeen';
+const newsSeen = () => { try { return localStorage.getItem(NEWS_KEY) || ''; } catch (e) { return NEWS[0].v; } };
+const newsItems = (n) => n[LANG] || n.fr;
+function newsCard() {
+  const n = NEWS[0];
+  if (!loggedIn() || newsSeen() === n.v) return '';
+  const title = { fr: 'Nouveau dans EuroKink', en: 'New in EuroKink', de: 'Neu bei EuroKink' }[LANG];
+  return `<div class="card news-card" data-no-i18n><span class="msg-card-ic">${I.star}</span>
+    <button class="news-main" data-act="news-open"><strong>${title}</strong><span class="muted tiny">${esc(newsItems(n)[0])}</span></button>
+    <button class="icon-btn small" data-act="news-close" aria-label="${{ fr: 'Fermer', en: 'Close', de: 'Schließen' }[LANG]}">${I.close}</button></div>`;
+}
+function newsSheet() {
+  const head = { fr: 'Nouveautés', en: 'What’s new', de: 'Neuigkeiten' }[LANG];
+  const df = fmt({ day: 'numeric', month: 'long', year: 'numeric' });
+  const el = sheet(`<div class="sheet-head"><h2>${head}</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <div data-no-i18n>${NEWS.map((n) => `<div class="news-block"><div class="muted tiny">Version ${esc(n.v)} · ${df.format(new Date(n.date))}</div>
+      <ul class="soon-list">${newsItems(n).map((x) => `<li>${I.check}<span>${esc(x)}</span></li>`).join('')}</ul></div>`).join('')}</div>`,
+  () => { try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); });
+  return el;
+}
 
 // Encart « Messages » de l'accueil : bien visible quand il y a du nouveau
 function homeMsgCard() {
@@ -2427,6 +2455,8 @@ document.addEventListener('click', (ev) => {
     case 'invite-share': inviteShare(act.dataset.org, act.dataset.token); break;
     case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
+    case 'news-open': newsSheet(); break;
+    case 'news-close': try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'msg-tab': msgTab = act.dataset.tab; render(); break;
     case 'msg-menu': msgMenu(act.dataset.user, act.dataset.conv); break;
     case 'msg-accept': case 'msg-decline':
@@ -2641,7 +2671,7 @@ function maybeOnboard() {
   const key = `ek.onboarded.${profile.id}`;
   try { if (localStorage.getItem(key)) { maybeAskPush(); return; } } catch (err) { return; }
   let i = 0;
-  const done = () => { try { localStorage.setItem(key, '1'); } catch (err) { /* stockage indisponible */ } setTimeout(maybeAskPush, 450); };
+  const done = () => { try { localStorage.setItem(key, '1'); localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (err) { /* stockage indisponible */ } setTimeout(maybeAskPush, 450); render(); };
   const el = sheet('', done);
   el.classList.add('onboard');
   const draw = () => {
@@ -3096,7 +3126,7 @@ startI18n();
 })();
 if (sessionStorage.getItem('ek.updated')) {
   sessionStorage.removeItem('ek.updated');
-  setTimeout(() => toast(`Nouvelle version installée (${VERSION})`), 400);
+  if (newsSeen() === NEWS[0].v) setTimeout(() => toast(`Nouvelle version installée (${VERSION})`), 400);
 }
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   // Mise à jour automatique : on vérifie à chaque ouverture et à chaque retour dans l'appli,
