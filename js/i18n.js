@@ -721,6 +721,7 @@ const R = [
   [/^Vu il y a (\d+) min$/, (m) => [`Seen ${m[1]} min ago`, `Vor ${m[1]} Min. gesehen`]],
   [/^Vu à (.+)$/, (m) => [`Seen at ${m[1]}`, `Gesehen um ${m[1]}`]],
   [/^Vu le (.+)$/, (m) => [`Seen on ${m[1]}`, `Gesehen am ${m[1]}`]],
+  [/^(.+?) et (\d+) autres?(?: · (\d+) discrets?)?$/, (m) => { const n = m[1].replace(/^Toi\b/, LANG === 'de' ? 'Du' : 'You'); return [`${n} and ${m[2]} ${P(m[2], 'other', 'others')}${m[3] ? ` · ${m[3]} discreet` : ''}`, `${n} und ${m[2]} ${P(m[2], 'weiterer', 'weitere')}${m[3] ? ` · ${m[3]} diskret` : ''}`]; }],
   [/^Du (.+) au (.+)$/, (m) => [`From ${m[1]} to ${m[2]}`, `Vom ${m[1]} bis ${m[2]}`]],
   [/^Version (.+)$/, (m) => [`Version ${m[1]}`, `Version ${m[1]}`]],
   [/^(.+) · version (.+)$/, (m) => [`${m[1]} · version ${m[2]}`, `${m[1]} · Version ${m[2]}`]],
