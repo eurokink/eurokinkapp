@@ -90,6 +90,10 @@ export async function signUp(email, password, data) {
   return { confirmed: false };
 }
 
+export async function resendSignup(email) {
+  await request(`/auth/v1/resend?${redirect}`, { method: 'POST', body: { type: 'signup', email }, auth: false });
+}
+
 export async function signIn(email, password) {
   const d = await request('/auth/v1/token?grant_type=password', { method: 'POST', body: { email, password }, auth: false });
   setSession(sessionFrom(d));

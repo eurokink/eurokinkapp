@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.1';
+const VERSION = '0.28.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -243,6 +243,7 @@ function viewHome() {
       <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length ? `${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}` : `${list.length} soirée${list.length > 1 ? 's' : ''} à venir en Europe`}</p></div>
+    ${cityCard()}
     ${homeMsgCard()}
     ${earlyCard()}
     ${newsCard()}
@@ -745,6 +746,17 @@ const newsSeen = () => { try { return localStorage.getItem(NEWS_KEY) || ''; } ca
 const newsItems = (n) => n[LANG] || n.fr;
 // Message temporaire de lancement : l'agenda se remplit petit à petit
 const EARLY_KEY = 'ek.earlyHide';
+// Ville jamais choisie (anciennes inscriptions) : on invite le membre à la renseigner
+function cityCard() {
+  if (!profile || profile.latitude != null) return '';
+  const t = {
+    fr: ['Indique ta ville', 'Elle sert à te montrer les soirées proches et à t’alerter quand une nouvelle est annoncée près de chez toi.', 'Choisir ma ville'],
+    en: ['Add your city', 'It’s used to show you nearby events and to alert you when a new one is announced near you.', 'Choose my city'],
+    de: ['Gib deine Stadt an', 'Damit zeigen wir dir Partys in der Nähe und benachrichtigen dich, wenn eine neue in deiner Nähe angekündigt wird.', 'Meine Stadt wählen']
+  }[LANG];
+  return `<div class="card early-card" data-no-i18n><div class="early-top"><span class="msg-card-ic">${I.pin}</span><strong>${t[0]}</strong></div>
+    <p class="muted tiny">${t[1]}</p><a class="btn btn-red btn-block" href="#/parametres">${t[2]}</a></div>`;
+}
 function earlyCard() {
   try { if (localStorage.getItem(EARLY_KEY)) return ''; } catch (e) { /* stockage indisponible */ }
   const t = {
@@ -1255,12 +1267,14 @@ async function photonSearch(q, kind) {
 // Ville du membre : code postal ou commune, choisie dans les propositions du géocodeur public (IGN)
 const cityLabel = (c) => (c.postal ? `${c.name} (${c.postal})` : c.name);
 const cityKey = () => `${state.city}|${state.postal || ''}|${state.cityLat}|${state.country || 'FR'}`;
-function cityField(label, hint) {
-  const cur = cityLabel({ name: state.city, postal: state.postal });
+function cityField(label, hint, fresh) {
+  // À l'inscription, pas de ville par défaut : le membre doit choisir la sienne dans la liste
+  const blank = fresh && (state.cityLat == null || state.cityLat === '');
+  const cur = blank ? '' : cityLabel({ name: state.city, postal: state.postal });
   return `<div class="field city-field"><span>${label}</span>
     <input class="city-input" data-city-input value="${esc(cur)}" data-picked="${esc(cur)}" placeholder="Code postal ou nom de ta ville" autocomplete="off" enterkeyhint="search" aria-label="${esc(label)}">
-    <input type="hidden" name="city" value="${esc(state.city)}"><input type="hidden" name="postal_code" value="${esc(state.postal || '')}">
-    <input type="hidden" name="city_lat" value="${state.cityLat ?? ''}"><input type="hidden" name="city_lon" value="${state.cityLon ?? ''}"><input type="hidden" name="city_country" value="${state.country || 'FR'}">
+    <input type="hidden" name="city" value="${blank ? '' : esc(state.city)}"><input type="hidden" name="postal_code" value="${blank ? '' : esc(state.postal || '')}">
+    <input type="hidden" name="city_lat" value="${blank ? '' : state.cityLat ?? ''}"><input type="hidden" name="city_lon" value="${blank ? '' : state.cityLon ?? ''}"><input type="hidden" name="city_country" value="${state.country || 'FR'}">
     <div class="addr-list city-list"></div>
     <span class="hint">${hint}</span></div>`;
 }
@@ -1271,7 +1285,7 @@ function setCity(c) {
   const known = CITIES.find((x) => x.name === c.name);
   state.cityLat = c.lat ?? (known ? known.lat : null); state.cityLon = c.lon ?? (known ? known.lon : null);
 }
-const cityPicked = (form) => { const i = form.querySelector('[data-city-input]'); return !i || i.value.trim() === i.dataset.picked; };
+const cityPicked = (form) => { const i = form.querySelector('[data-city-input]'); return !i || (i.value.trim() !== '' && i.value.trim() === i.dataset.picked && form.elements.city_lat.value !== ''); };
 
 let cityTimer, citySeq = 0, cityResults = [];
 function cityGeocode(input) {
@@ -1340,7 +1354,7 @@ function viewAccount(mode) {
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
           ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
-          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.')}
+          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
@@ -1352,8 +1366,10 @@ function viewAccount(mode) {
       return `<section class="screen">${accountTop('Vérifie tes e-mails')}
         <div class="card center-card">${I.mail}<h2>Plus qu’une étape !</h2>
           <p>Nous avons envoyé un lien de confirmation à <strong>${esc(lastSignupEmail || 'ton adresse')}</strong>. Clique dessus pour activer ton compte, puis reviens ici te connecter.</p>
-          <p class="muted tiny">L’e-mail peut mettre quelques minutes à arriver et provient de « Supabase Auth ». Pense à regarder dans les indésirables.</p>
-          <a class="btn btn-red" href="#/compte/connexion">Me connecter</a></div></section>`;
+          <p class="muted tiny">L’e-mail s’intitule « Confirm your EuroKink account » et peut mettre quelques minutes à arriver. Regarde aussi dans les <strong>indésirables / courrier indésirable</strong>, surtout avec Hotmail, Outlook ou Live.</p>
+          <a class="btn btn-red" href="#/compte/connexion">Me connecter</a>
+          ${lastSignupEmail ? '<button class="btn btn-ghost" data-act="resend-confirm">Renvoyer l’e-mail de confirmation</button>' : ''}
+          <p class="muted tiny">Toujours rien ? Écris-nous à <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> depuis l’adresse utilisée pour t’inscrire.</p></div></section>`;
     case 'confirme':
       return `<section class="screen">${accountTop('Compte confirmé', '#/')}
         <div class="card center-card">${I.check}<h2>Ton adresse est confirmée</h2>
@@ -1377,7 +1393,7 @@ function viewAccount(mode) {
         <form id="completeForm" class="card settings">
           <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
-          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.')}
+          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
@@ -2643,6 +2659,11 @@ document.addEventListener('click', (ev) => {
     case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
     case 'news-open': newsSheet(); break;
+    case 'resend-confirm':
+      act.disabled = true;
+      sb.resendSignup(lastSignupEmail).then(() => { toast('E-mail renvoyé. Pense à regarder dans les indésirables.'); act.textContent = 'E-mail renvoyé ✓'; })
+        .catch((err) => { act.disabled = false; toast(/second|rate|60/i.test(err.message) ? 'Patiente une minute avant de redemander un e-mail.' : err.message); });
+      break;
     case 'early-close': try { localStorage.setItem(EARLY_KEY, '1'); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'news-close': try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'msg-tab': msgTab = act.dataset.tab; render(); break;
@@ -3266,7 +3287,10 @@ async function submitAccountForm(form) {
       lastSignupEmail = email;
       if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate(afterLogin()); } else navigate('#/compte/verifier');
     } else if (form.id === 'loginForm') {
-      await sb.signIn(String(f.get('email') || '').trim(), String(f.get('password') || ''));
+      try { await sb.signIn(String(f.get('email') || '').trim(), String(f.get('password') || '')); } catch (err) {
+        if (!/pas encore confirmée/.test(err.message)) throw err;
+        lastSignupEmail = String(f.get('email') || '').trim(); navigate('#/compte/verifier'); toast(err.message); return;
+      }
       const status = await loadUser();
       if (status === 'incomplete') { navigate('#/compte/profil'); return; }
       await refreshEvents();
