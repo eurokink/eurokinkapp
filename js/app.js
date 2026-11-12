@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.12.0';
+const VERSION = '0.13.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -438,7 +438,9 @@ function viewProfile() {
       <div class="cta-row"><a class="btn btn-red" href="#/compte/inscription">Créer un compte</a><a class="btn btn-ghost" href="#/compte/connexion">Me connecter</a></div></div>`;
   return `<section class="screen"><div class="profile-top"><h1 class="page-title">Profil</h1><a class="icon-btn" href="#/parametres" aria-label="Paramètres">${I.gear}</a></div>
     ${account}<div class="profile-head">
-      <div class="avatar">${esc(name.charAt(0).toUpperCase())}</div>
+      ${loggedIn() ? `<button class="avatar avatar-btn" data-act="avatar" aria-label="Changer ma photo de profil">${profile.avatar_path
+        ? `<img src="${esc(sb.publicUrl('avatars', profile.avatar_path))}" alt="">` : esc(name.charAt(0).toUpperCase())}<span class="avatar-cam">${I.image}</span></button>`
+        : `<div class="avatar">${esc(name.charAt(0).toUpperCase())}</div>`}
       <div><div class="pseudo">${esc(name)}</div><div class="muted">${esc(state.city)}</div>
       <div class="pills">${pills}</div></div></div>
     <div class="stats">${stats.map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
@@ -1669,6 +1671,7 @@ document.addEventListener('click', (ev) => {
     case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
     case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
     case 'img-view': openViewer(act.dataset.src); break;
+    case 'avatar': avatarMenu(); break;
     case 'logo-clear': setOrgLogo(null).then(() => toast('Logo retiré')).catch((err) => toast(err.message)); break;
     case 'ptype': {
       const t = act.dataset.slug;
@@ -1864,6 +1867,51 @@ function maybeOnboard() {
     if (ev.target.closest('[data-onb-push]')) { closeOverlay(); setTimeout(() => pushAct({ dataset: { act: 'push-on' } }), 300); }
   });
   draw();
+}
+
+// Photo de profil : recadrée en carré au centre, 480 px, envoyée dans le dossier du membre
+function squareImage(file, size = 480) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const c = document.createElement('canvas'); c.width = size; c.height = size;
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Image illisible'))), 'image/jpeg', 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible : essaie un JPEG ou un PNG')); };
+    img.src = url;
+  });
+}
+async function setAvatar(path) {
+  const old = profile.avatar_path;
+  const rows = await sb.update('profiles', `id=eq.${profile.id}`, { avatar_path: path });
+  if (rows && rows[0]) profile = rows[0]; else profile.avatar_path = path;
+  if (old && old !== path) sb.deleteObject('avatars', old).catch(() => {});
+  render();
+}
+function avatarMenu() {
+  const el = sheet(`<h2>Photo de profil</h2>
+    <p class="muted tiny">Une photo qui respecte la charte : pas de nudité, et pas le visage de quelqu’un d’autre sans son accord.</p>
+    <label class="btn btn-red btn-block file-btn">${I.image}<span>Choisir une photo</span><input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp,image/heic"></label>
+    ${profile.avatar_path ? '<button class="btn btn-ghost btn-block" data-avatar-del>Retirer ma photo</button>' : ''}
+    <button class="link onb-skip" data-sheet-close>Annuler</button>`);
+  el.querySelector('#avatarFile').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    closeOverlay(); toast('Envoi de la photo…');
+    try {
+      const blob = await squareImage(file);
+      const path = `${profile.id}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      await sb.uploadImage('avatars', path, blob);
+      await setAvatar(path);
+      toast('Photo de profil mise à jour');
+    } catch (err) { toast(err.message); }
+  });
+  const del = el.querySelector('[data-avatar-del]');
+  if (del) del.addEventListener('click', async () => { closeOverlay(); try { await setAvatar(null); toast('Photo retirée'); } catch (err) { toast(err.message); } });
 }
 
 function downloadIcs(e) {

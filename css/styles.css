@@ -433,3 +433,9 @@ img.org-logo.xl { padding: 14px; }
 .onb-skip { align-self: center; color: var(--muted); }
 @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Photo de profil (0.13.0) */
+.avatar-btn { position: relative; padding: 0; color: var(--text); cursor: pointer; overflow: visible; }
+.avatar-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.avatar-cam { position: absolute; right: -4px; bottom: -4px; width: 28px; height: 28px; border-radius: 50%; background: var(--red); border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; color: #fff; }
+.avatar-cam .ic { width: 14px; height: 14px; }
