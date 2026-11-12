@@ -417,3 +417,19 @@ img.org-logo.xl { padding: 14px; }
 .push-on { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--red-tint); font-size: 14px; font-weight: 600; }
 .push-on .ic { color: var(--red-text); }
 .push-hint { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: #BDBDBD; line-height: 1.5; }
+
+/* Fenêtres du bas (calendrier) et bienvenue (0.12.0) */
+.sheet-wrap { position: fixed; inset: 0; z-index: 900; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; animation: fadeIn 0.15s ease-out; }
+.sheet-card { width: 100%; max-width: 560px; background: var(--surface); border-top: 1px solid var(--border); border-radius: 20px 20px 0 0; padding: 22px 20px calc(18px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 14px; animation: slideUp 0.2s ease-out; }
+.sheet-card h2 { margin: 0; font-size: 20px; }
+.sheet-card p { margin: 0; line-height: 1.5; }
+.onboard { align-items: center; padding: 20px; }
+.onboard .sheet-card { border-radius: 22px; text-align: center; align-items: center; padding: 30px 22px 22px; border: 1px solid var(--border); }
+.onb-icon { width: 76px; height: 76px; border-radius: 50%; background: var(--red-tint); border: 2px solid var(--red); display: flex; align-items: center; justify-content: center; color: var(--red-text); }
+.onb-icon .ic { width: 34px; height: 34px; }
+.onb-dots { display: flex; gap: 8px; margin: 4px 0; }
+.onb-dots span { width: 8px; height: 8px; border-radius: 50%; background: #3A3A3A; }
+.onb-dots span.on { background: var(--red); width: 22px; border-radius: 4px; }
+.onb-skip { align-self: center; color: var(--muted); }
+@keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.11.2';
+const VERSION = '0.12.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -488,6 +488,7 @@ function viewSettings() {
       <h2 class="group-title">Notifications</h2>
       <div class="card settings">
         ${sw('remindersOn', state.remindersOn, 'Rappels de soirée')}
+        ${sw('calAsk', state.calAsk !== 'never', 'Proposer l’ajout au calendrier', 'Après « J’y vais », une question te propose d’ajouter la soirée à ton calendrier')}
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
         ${sw('followsOn', state.followsOn !== false, 'Organisateurs suivis', 'Quand ils annoncent une nouvelle soirée')}
@@ -1503,6 +1504,7 @@ function render() {
   const hash = location.hash || '#/';
   const [, route, param] = hash.split('/');
   if (!loggedIn() && route !== 'compte' && route !== 'infos') {
+    if (route === 'soiree' && isUuid(param)) sessionStorage.setItem('ek.after', hash);
     if (mapCleanup) { mapCleanup(); mapCleanup = null; }
     view.innerHTML = sb.getSession() && !userChecked ? viewLoading() : viewWelcome();
     nav.hidden = true;
@@ -1645,7 +1647,7 @@ document.addEventListener('click', (ev) => {
     case 'fav': toggleAction('favorites', id, 'Ajoutée à tes favoris', 'Retirée de tes favoris'); break;
     case 'reminder': toggleAction('reminders', id, `Rappel programmé ${reminderLabel()}`, 'Rappel supprimé'); break;
     case 'alert': toggleAction('alerts', id, 'Alerte activée : tu seras prévenu à l’ouverture des places', 'Alerte désactivée'); break;
-    case 'attend': toggleAction('attending', id, 'Bonne soirée ! Elle est dans « Mes soirées »', 'Participation retirée'); break;
+    case 'attend': if (toggleAction('attending', id, 'Bonne soirée ! Elle est dans « Mes soirées »', 'Participation retirée') && state.calAsk !== 'never') setTimeout(() => askCalendar(e), 350); break;
     case 'logout': logout(); break;
     case 'delete-account': deleteAccount(); break;
     case 'retry': eventsError = ''; render(); refreshEvents(); break;
@@ -1739,6 +1741,7 @@ document.addEventListener('change', (ev) => {
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
     if (f.followsOn) state.followsOn = f.followsOn.checked;
+    if (f.calAsk) state.calAsk = f.calAsk.checked ? 'ask' : 'never';
     if (f.adminNotifs) state.adminNotifs = f.adminNotifs.checked;
     if (f.testMode) state.testMode = f.testMode.checked;
     save();
@@ -1792,9 +1795,10 @@ function checkIn(e) {
 
 async function shareEvent(e) {
   const url = `${location.origin}${location.pathname}#/soiree/${e.id}`;
-  const text = `${e.title} · ${dayLabel(e.startsAt)} · ${e.venue.city}`;
+  const discreet = state.neutralNotifs;
+  const text = discreet ? `Une sortie à voir sur EuroKink · ${dayLabel(e.startsAt)}` : `${e.title} · ${dayLabel(e.startsAt)} · ${e.venue.city}`;
   try {
-    if (navigator.share) await navigator.share({ title: e.title, text, url });
+    if (navigator.share) await navigator.share({ title: discreet ? 'EuroKink' : e.title, text, url });
     else { await navigator.clipboard.writeText(`${text}\n${url}`); toast('Lien copié'); }
   } catch (err) { /* partage annulé */ }
 }
@@ -1810,6 +1814,56 @@ function exportData() {
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   toast('Tes données ont été exportées');
+}
+
+function sheet(html, onClose) {
+  const el = document.createElement('div');
+  el.className = 'sheet-wrap';
+  el.innerHTML = `<div class="sheet-card" role="dialog" aria-modal="true">${html}</div>`;
+  el.addEventListener('click', (ev) => { if (ev.target === el || ev.target.closest('[data-sheet-close]')) closeOverlay(); });
+  document.body.appendChild(el);
+  openOverlay(() => { if (onClose) onClose(el); el.remove(); });
+  return el;
+}
+function askCalendar(e) {
+  if (!e) return;
+  const el = sheet(`<h2>Ajouter au calendrier ?</h2>
+    <p class="muted">${state.neutralNotifs ? 'Souhaites-tu ajouter cette soirée à ton calendrier personnel ? Elle y apparaîtra sous le titre discret « Sortie ».' : `Souhaites-tu ajouter « ${esc(e.title)} » à ton calendrier personnel ?`}</p>
+    <label class="checkline"><input type="checkbox" id="calNever"><span>Ne plus me demander</span></label>
+    <div class="adm-actions"><button class="btn btn-red" data-cal-yes>Ajouter</button><button class="btn btn-ghost" data-sheet-close>Non merci</button></div>`,
+  (node) => { if (node.querySelector('#calNever').checked) { state.calAsk = 'never'; save(); toast('Tu peux le réactiver dans Paramètres'); } });
+  el.querySelector('[data-cal-yes]').addEventListener('click', () => { downloadIcs(e); closeOverlay(); });
+}
+
+// Écran de bienvenue (une seule fois par compte et par téléphone)
+const ONBOARD = [
+  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte de France.'],
+  [I.bell, 'Ne rate plus rien', 'Mets une soirée en favori, active un rappel ou une alerte billetterie, et suis tes organisateurs préférés pour être prévenu de leurs nouvelles dates.'],
+  [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
+];
+function maybeOnboard() {
+  if (!loggedIn() || overlayClose) return;
+  const key = `ek.onboarded.${profile.id}`;
+  try { if (localStorage.getItem(key)) return; } catch (err) { return; }
+  let i = 0;
+  const done = () => { try { localStorage.setItem(key, '1'); } catch (err) { /* stockage indisponible */ } };
+  const el = sheet('', done);
+  el.classList.add('onboard');
+  const draw = () => {
+    const [icon, title, text] = ONBOARD[i];
+    const last = i === ONBOARD.length - 1;
+    el.querySelector('.sheet-card').innerHTML = `
+      <div class="onb-icon">${icon}</div><h2>${title}</h2><p class="muted">${text}</p>
+      <div class="onb-dots">${ONBOARD.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</div>
+      ${last && pushState === 'off' ? '<button class="btn btn-ghost btn-block" data-onb-push>Activer les notifications</button>' : ''}
+      <button class="btn btn-red btn-block" data-onb-next>${last ? 'C’est parti !' : 'Suivant'}</button>
+      ${last ? '' : '<button class="link onb-skip" data-sheet-close>Passer</button>'}`;
+  };
+  el.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-onb-next]')) { if (i < ONBOARD.length - 1) { i += 1; draw(); } else closeOverlay(); }
+    if (ev.target.closest('[data-onb-push]')) { closeOverlay(); setTimeout(() => pushAct({ dataset: { act: 'push-on' } }), 300); }
+  });
+  draw();
 }
 
 function downloadIcs(e) {
@@ -1918,13 +1972,14 @@ function toggleAction(list, id, onMsg, offMsg) {
   if (loggedIn() && list === 'attending' && e) e.attendees = Math.max(0, e.attendees + (on ? 1 : -1));
   toast(on ? onMsg : offMsg);
   render();
-  if (!loggedIn()) return;
+  if (!loggedIn()) return on;
   pushToggle(list, id, on).catch((err) => {
     toggleIn(list, id);
     if (list === 'attending' && e) e.attendees = Math.max(0, e.attendees + (on ? -1 : 1));
     render();
     toast(`Non enregistré : ${err.message}`);
   });
+  return on;
 }
 
 // Charge le profil et les données du membre connecté
@@ -2035,6 +2090,14 @@ function formError(form, msg) {
   if (el) { el.textContent = msg; el.hidden = !msg; }
 }
 
+// Après connexion : retour sur la soirée partagée qu'on voulait voir, puis bienvenue si première fois
+function afterLogin() {
+  const h = sessionStorage.getItem('ek.after');
+  sessionStorage.removeItem('ek.after');
+  setTimeout(maybeOnboard, 400);
+  return h || '#/';
+}
+
 async function submitAccountForm(form) {
   const f = new FormData(form);
   const btn = form.querySelector('button[type=submit]');
@@ -2055,7 +2118,7 @@ async function submitAccountForm(form) {
         profile = rows[0];
         await loadUser();
         await refreshEvents();
-        navigate('#/');
+        navigate(afterLogin());
         return;
       }
       const email = String(f.get('email') || '').trim();
@@ -2065,14 +2128,14 @@ async function submitAccountForm(form) {
       state.city = meta.city; state.adult = true; save();
       const res = await sb.signUp(email, password, meta);
       lastSignupEmail = email;
-      if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate('#/'); } else navigate('#/compte/verifier');
+      if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate(afterLogin()); } else navigate('#/compte/verifier');
     } else if (form.id === 'loginForm') {
       await sb.signIn(String(f.get('email') || '').trim(), String(f.get('password') || ''));
       const status = await loadUser();
       if (status === 'incomplete') { navigate('#/compte/profil'); return; }
       await refreshEvents();
       toast(`Content de te revoir, ${profile.pseudo} !`);
-      navigate('#/');
+      navigate(afterLogin());
     } else if (form.id === 'forgotForm') {
       await sb.sendPasswordReset(String(f.get('email') || '').trim());
       form.innerHTML = '<p>Si un compte existe avec cette adresse, tu vas recevoir un lien pour choisir un nouveau mot de passe. Pense à regarder dans les indésirables.</p>';
@@ -2108,6 +2171,7 @@ async function submitAccountForm(form) {
     userChecked = true;
     render();
     await refreshEvents();
+    if (loggedIn() && !location.hash.startsWith('#/compte')) setTimeout(maybeOnboard, 600);
   }
   userChecked = true;
   render();
