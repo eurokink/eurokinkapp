@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.2';
+const VERSION = '0.28.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1288,6 +1288,36 @@ function setCity(c) {
 const cityPicked = (form) => { const i = form.querySelector('[data-city-input]'); return !i || (i.value.trim() !== '' && i.value.trim() === i.dataset.picked && form.elements.city_lat.value !== ''); };
 
 let cityTimer, citySeq = 0, cityResults = [];
+async function citySearch(q) {
+  let feats = [], failed = false;
+  const wantFr = !/^\d{4}$/.test(q); const wantCh = !/^\d{5}$/.test(q);
+  const ch = wantCh ? swissSearch(q, 'city') : Promise.resolve([]);
+  const eu = photonSearch(q, 'city');
+  try {
+    if (wantFr) {
+      const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
+      const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&type=municipality&limit=6&autocomplete=1${pc}`);
+      if (!r.ok) throw new Error(String(r.status));
+      feats = (await r.json()).features || [];
+    }
+  } catch (e) { failed = true; }
+  const chList = await ch; const euList = await eu;
+  const seen = new Set();
+  let list = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
+    const p = f.properties || {};
+    const [lon, lat] = f.geometry.coordinates;
+    return { name: p.city || p.name, postal: p.postcode || '', lat, lon, country: 'FR', dept: String(p.context || '').split(',')[1]?.trim() || '' };
+  }).slice(0, 5).concat(chList.slice(0, 3).map((c) => ({ ...c, country: 'CH', dept: `Suisse${c.canton ? ` · ${c.canton}` : ''}` })),
+    euList.slice(0, 3).map((c) => ({ ...c, dept: `${PHOTON_COUNTRIES[c.country]}${c.region ? ` · ${c.region}` : ''}` })))
+    .filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
+  if (chList.length || euList.length) failed = false;
+  if (!list.length) {
+    const ql = q.toLowerCase();
+    list = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
+      .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: c.country && c.country !== 'FR' ? (COUNTRY_NAMES[c.country] || c.country) : '' }));
+  }
+  return { list, failed };
+}
 function cityGeocode(input) {
   clearTimeout(cityTimer);
   const box = input.parentNode.querySelector('.city-list');
@@ -1295,34 +1325,9 @@ function cityGeocode(input) {
   if (q.length < 2 || q === input.dataset.picked) { box.innerHTML = ''; cityResults = []; return; }
   cityTimer = setTimeout(async () => {
     const seq = ++citySeq;
-    let feats = [], failed = false;
-    const wantFr = !/^\d{4}$/.test(q); const wantCh = !/^\d{5}$/.test(q);
-    const ch = wantCh ? swissSearch(q, 'city') : Promise.resolve([]);
-    const eu = photonSearch(q, 'city');
-    try {
-      if (wantFr) {
-        const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
-        const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&type=municipality&limit=6&autocomplete=1${pc}`);
-        if (!r.ok) throw new Error(String(r.status));
-        feats = (await r.json()).features || [];
-      }
-    } catch (e) { failed = true; }
-    const chList = await ch; const euList = await eu;
+    const { list, failed } = await citySearch(q);
     if (seq !== citySeq || !box.isConnected) return;
-    const seen = new Set();
-    cityResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
-      const p = f.properties || {};
-      const [lon, lat] = f.geometry.coordinates;
-      return { name: p.city || p.name, postal: p.postcode || '', lat, lon, country: 'FR', dept: String(p.context || '').split(',')[1]?.trim() || '' };
-    }).slice(0, 5).concat(chList.slice(0, 3).map((c) => ({ ...c, country: 'CH', dept: `Suisse${c.canton ? ` · ${c.canton}` : ''}` })),
-      euList.slice(0, 3).map((c) => ({ ...c, dept: `${PHOTON_COUNTRIES[c.country]}${c.region ? ` · ${c.region}` : ''}` })))
-      .filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
-    if (chList.length || euList.length) failed = false;
-    if (!cityResults.length) {
-      const ql = q.toLowerCase();
-      cityResults = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
-        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: c.country && c.country !== 'FR' ? (COUNTRY_NAMES[c.country] || c.country) : '' }));
-    }
+    cityResults = list;
     box.innerHTML = cityResults.length
       ? cityResults.map((c, i) => `<button type="button" class="addr-opt" data-act="city-pick" data-i="${i}"><strong>${esc(cityLabel(c))}</strong>${c.dept ? `<span class="muted tiny block">${esc(c.dept)}</span>` : ''}</button>`).join('')
       : `<p class="hint">${failed ? 'Recherche indisponible pour le moment : tape le nom d’une grande ville.' : 'Aucune ville trouvée : vérifie l’orthographe ou le code postal.'}</p>`;
@@ -1330,14 +1335,31 @@ function cityGeocode(input) {
 }
 function pickCity(btn) {
   const c = cityResults[Number(btn.dataset.i)];
-  if (!c) return;
-  const wrap = btn.closest('.city-field');
+  if (c) applyCity(btn.closest('.city-field'), c);
+}
+// Ville tapée sans choisir de suggestion : on prend la meilleure correspondance
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+async function resolveTypedCity(wrap) {
+  const inp = wrap && wrap.querySelector('[data-city-input]');
+  if (!inp) return true;
+  const q = inp.value.trim();
+  if (q && q === inp.dataset.picked && wrap.querySelector('[name=city_lat]').value !== '') return true;
+  if (q.length < 2) return false;
+  const { list } = await citySearch(q);
+  if (inp.value.trim() !== q) return true; // une suggestion a été choisie entre-temps
+  if (!list.length) return false;
+  const nq = norm(q.replace(/\(.*\)/, ''));
+  const best = list.find((c) => c.postal && q.includes(c.postal)) || list.find((c) => norm(c.name) === nq) || list[0];
+  applyCity(wrap, best);
+  return true;
+}
+function applyCity(wrap, c) {
   const inp = wrap.querySelector('[data-city-input]');
   const set = (n, v) => { wrap.querySelector(`[name=${n}]`).value = v ?? ''; };
   set('postal_code', c.postal); set('city_lat', c.lat); set('city_lon', c.lon); set('city_country', c.country || 'FR'); set('city', c.name);
   inp.value = inp.dataset.picked = cityLabel(c);
   wrap.querySelector('.city-list').innerHTML = '';
-  cityResults = [];
+  cityResults = []; citySeq++;
   wrap.querySelector('[name=city]').dispatchEvent(new Event('change', { bubbles: true }));
 }
 const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="8" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
@@ -1354,7 +1376,7 @@ function viewAccount(mode) {
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
           ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
-          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.', true)}
+          ${cityField('Ma ville', 'Tape le nom de ta ville ou ton code postal. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
@@ -1393,7 +1415,7 @@ function viewAccount(mode) {
         <form id="completeForm" class="card settings">
           <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
-          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.', true)}
+          ${cityField('Ma ville', 'Tape le nom de ta ville ou ton code postal. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
@@ -2721,6 +2743,7 @@ document.addEventListener('input', (ev) => {
 });
 
 document.addEventListener('change', (ev) => {
+  if (ev.target.matches && ev.target.matches('[data-city-input]')) { const w = ev.target.closest('.city-field'); setTimeout(() => resolveTypedCity(w), 250); return; }
   const t = ev.target;
   if (t.id === 'langSel') { setLang(t.value); location.reload(); return; }
   if (t.id === 'fCity') { filters.around = t.value; renderResults(); }
@@ -3264,7 +3287,7 @@ async function submitAccountForm(form) {
     if (form.id === 'signupForm' || form.id === 'completeForm') {
       const pseudo = String(f.get('pseudo') || '').trim();
       if (pseudo.length < 3) throw new Error('Choisis un pseudo de 3 caractères minimum.');
-      if (!cityPicked(form)) throw new Error('Choisis ta ville dans la liste proposée.');
+      if (!cityPicked(form) && !(await resolveTypedCity(form.querySelector('.city-field')))) throw new Error('Ville introuvable : vérifie l’orthographe ou tape ton code postal.');
       const city = readCity(form);
       if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
       if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
