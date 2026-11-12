@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.16.0';
+const VERSION = '0.17.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -31,7 +31,7 @@ const salesEnded = (e) => !!(e.salesCloseAt && new Date(e.salesCloseAt) <= new D
 const heroImg = (e, zoom = false) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" style="object-position:${e.imageX}% ${e.imageY}%" alt="" loading="lazy" referrerpolicy="no-referrer"${zoom ? ` data-act="img-view" data-src="${esc(imgSrc(e.image))}"` : ''} onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
-  adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
+  adult: false, pseudo: '', city: 'Nantes', visibility: 'everyone', invisible: false, neutralNotifs: true, testMode: false,
   remindersOn: true, reminderTiming: 'eve18', ticketAlertsOn: true, defaultRadius: 100,
   favorites: [], reminders: [], alerts: [], attending: [], checkins: []
 };
@@ -145,6 +145,7 @@ const I = {
   bed: ic('<path d="M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8M2 16h20M6 10V7a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3"/>'),
   share: ic('<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>'),
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
+  plus: ic('<path d="M12 5v14M5 12h14"/>'),
   lock: ic('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
   gear: ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   doc: ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'),
@@ -348,7 +349,7 @@ function viewEvent(id) {
         ${actionBtn('alert', al, I.ticket, 'Alerte billets')}
         ${actionBtn('attend', att, I.check, 'J’y vais')}
       </div>
-      <div class="card who"><div><strong>Qui y va ?</strong> <span class="muted">${attendeesLabel(attendeesOf(e))}</span></div><span class="muted tiny">Liste visible avec la communauté (V2)</span></div>
+      ${whoCardHtml(e)}
       <h2 class="section-title">À propos</h2>
       <p class="about">${esc(e.description)}</p>
       <h2 class="section-title">Pratique</h2>
@@ -445,6 +446,64 @@ function viewCommunity(mode) {
   </section>`;
 }
 
+// « Qui y va ? » : participants visibles selon les réglages de chacun (filtré par la base)
+const whoCache = new Map();
+function whoCardHtml(e) {
+  const list = whoCache.get(e.id);
+  const n = Math.max(attendeesOf(e), list ? list.length : 0);
+  let inner = '';
+  if (!loggedIn()) inner = '<p class="muted tiny">Connecte-toi pour voir qui y va.</p>';
+  else if (list === undefined) inner = n ? '<p class="muted tiny">Chargement…</p>' : '';
+  else if (!list.length) inner = n ? '<p class="muted tiny">Les participants ont choisi de rester discrets.</p>' : '';
+  else {
+    const hidden = Math.max(0, n - list.length);
+    inner = `<button class="who-faces" data-act="who-all" data-id="${e.id}" aria-label="Voir les participants">${list.slice(0, 7).map((m) => memberAv(m, 'who-av')).join('')}${list.length > 7 ? `<span class="who-more">+${list.length - 7}</span>` : ''}<span class="who-see">Voir</span></button>
+      <p class="muted tiny">${list.map((m) => (profile && m.id === profile.id ? 'Toi' : esc(m.pseudo))).slice(0, 3).join(', ')}${list.length > 3 ? ` et ${list.length - 3} autre${list.length - 3 > 1 ? 's' : ''}` : ''}${hidden ? ` · ${hidden} discret${hidden > 1 ? 's' : ''}` : ''}</p>`;
+  }
+  return `<div class="card who" id="whoCard"><div><strong>Qui y va ?</strong> <span class="muted">${attendeesLabel(n)}</span></div>${inner}</div>`;
+}
+async function loadWho(id) {
+  try {
+    const rows = await sb.select('attendances', `event_id=eq.${id}&select=user_id,created_at,profile:profiles(id,pseudo,avatar_path,city)&order=created_at.asc&limit=500`);
+    const list = rows.map((r) => r.profile).filter(Boolean);
+    list.sort((a, b) => (profile && b.id === profile.id) - (profile && a.id === profile.id));
+    whoCache.set(id, list);
+  } catch (e) { whoCache.set(id, []); }
+  const card = $('#whoCard'); const ev = eventById(id);
+  if (card && ev && location.hash === `#/soiree/${id}`) card.outerHTML = whoCardHtml(ev);
+}
+function whoSheet(id) {
+  const list = whoCache.get(id) || []; const e = eventById(id);
+  const el = sheet(`<div class="sheet-head"><h2>Qui y va ?</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <p class="muted tiny">${e ? esc(e.title) : ''}</p>
+    <div class="member-list">${list.map((m) => `<a class="member-row" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">${esc(m.city || '')}</div></div>${I.chevron}</a>`).join('')}</div>`);
+  el.addEventListener('click', (ev) => {
+    const a = ev.target.closest('a.member-row'); if (!a) return;
+    ev.preventDefault(); const href = a.getAttribute('href');
+    closeOverlay(); setTimeout(() => navigate(href), 120);
+  });
+}
+
+// Membres suivis
+let following = new Set();
+async function toggleMemberFollow(id) {
+  const on = !following.has(id);
+  if (on) following.add(id); else following.delete(id);
+  render();
+  try {
+    if (on) await sb.insert('member_follows', { follower_id: profile.id, followed_id: id }, { ignoreDuplicates: true, onConflict: 'follower_id,followed_id' });
+    else await sb.remove('member_follows', `follower_id=eq.${profile.id}&followed_id=eq.${id}`);
+    toast(on ? 'Tu suis ce membre' : 'Tu ne suis plus ce membre');
+  } catch (err) { if (on) following.delete(id); else following.add(id); render(); toast(err.message); }
+}
+
+// Sorties à venir d'un membre (visibles selon ses réglages)
+const outingsCache = new Map();
+async function loadOutings(id) {
+  try { outingsCache.set(id, (await sb.select('attendances', `user_id=eq.${id}&select=event_id`)).map((r) => r.event_id)); } catch (e) { outingsCache.set(id, []); }
+  if (location.hash === `#/membre/${id}`) render();
+}
+
 // Fiche d'un membre
 const memberCache = new Map();
 const fMonth = fmt({ month: 'long', year: 'numeric' });
@@ -470,9 +529,16 @@ function viewMember(id) {
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${esc(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
+    ${(() => {
+      if (!outingsCache.has(m.id)) { loadOutings(m.id); return ''; }
+      const evs = outingsCache.get(m.id).map(eventById).filter((x) => x && new Date(x.endsAt) > new Date()).sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+      return `<h2 class="section-title">${mine ? 'Mes prochaines sorties' : 'Ses prochaines sorties'}</h2>${evs.length ? `<div class="list">${evs.map(eventRow).join('')}</div>` : `<p class="muted">${mine ? 'Touche « J’y vais » sur une soirée pour l’afficher ici.' : 'Aucune sortie visible pour le moment.'}</p>`}`;
+    })()}
     ${mine ? `<a class="btn btn-red btn-block" href="#/ma-fiche">Modifier ma fiche</a>
       <p class="tiny muted center">${state.invisible ? 'Ton profil est invisible : personne d’autre ne voit cette fiche.' : 'Cette fiche est visible des membres connectés.'}</p>`
-      : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
+      : `<button class="btn ${following.has(m.id) ? 'btn-ghost' : 'btn-red'} btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
+        <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
+        <button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
   </section>`;
 }
 
@@ -638,7 +704,7 @@ function viewSettings() {
       <div class="card settings">
         <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
         ${sw('invisible', state.invisible, 'Profil invisible', 'Tu n’apparais plus sur la carte des membres ni dans la communauté')}
-        <p class="tiny muted">« Qui peut voir mes sorties » s’appliquera avec l’arrivée de « Qui y va ? ».</p>
+        <p class="tiny muted">Tes sorties (« J’y vais ») apparaissent dans « Qui y va ? » sur chaque soirée et sur ta fiche membre. « Les membres que je suis » : seuls ceux que tu suis les voient.</p>
       </div>
       <h2 class="group-title">Notifications</h2>
       <div class="card settings">
@@ -1772,6 +1838,7 @@ function render() {
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
+  if (route === 'soiree' && isUuid(param) && loggedIn()) loadWho(param);
   if (route === 'communaute' && param !== 'liste' && $('#map')) initMembersMap();
 }
 
@@ -1923,6 +1990,8 @@ document.addEventListener('click', (ev) => {
       act.classList.toggle('on', on); act.setAttribute('aria-pressed', on); break;
     }
     case 'report-member': reportMember(act.dataset.id); break;
+    case 'follow-member': toggleMemberFollow(act.dataset.id); break;
+    case 'who-all': whoSheet(act.dataset.id); break;
     case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
@@ -2311,7 +2380,9 @@ function toggleAction(list, id, onMsg, offMsg) {
   toast(on ? onMsg : offMsg);
   render();
   if (!loggedIn()) return on;
-  pushToggle(list, id, on).catch((err) => {
+  pushToggle(list, id, on).then(() => {
+    if (list === 'attending') { outingsCache.delete(profile.id); if (location.hash === `#/soiree/${id}`) loadWho(id); }
+  }).catch((err) => {
     toggleIn(list, id);
     if (list === 'attending' && e) e.attendees = Math.max(0, e.attendees + (on ? -1 : 1));
     render();
@@ -2356,6 +2427,7 @@ async function loadUser() {
   [state.favorites, state.reminders, state.alerts, state.attending] = await Promise.all(
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
+  following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
   save();
   if (profile.role === 'admin') loadAdmin();
   loadOrgStatus();
