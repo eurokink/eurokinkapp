@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.15.1';
+const VERSION = '0.16.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -397,30 +397,132 @@ function viewFavorites() {
 
 // Communauté : carte des membres, placés sur la ville indiquée dans leur profil
 let members = null; let membersAt = 0; let membersError = '';
+function memberListHtml() {
+  const q = memberQ.trim().toLowerCase();
+  const list = (members || []).filter((m) => !q || [m.pseudo, m.city, m.postal_code || '', ...(m.interests || []).map(typeName)].some((x) => String(x).toLowerCase().includes(q)))
+    .map((m) => ({ m, km: memberKm(m) })).sort((a, b) => a.km - b.km || a.m.pseudo.localeCompare(b.m.pseudo));
+  if (!list.length) return empty(q ? 'Aucun membre ne correspond à ta recherche.' : 'Aucun membre visible pour le moment.');
+  return list.map(({ m, km }) => `<a class="member-row card" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}
+    <div class="muted tiny">${esc(m.city)}${profile && m.id === profile.id ? '' : ` · ${km} km`}</div>${(m.interests || []).length ? `<div class="chips mini">${interestChips(m.interests, 3)}</div>` : ''}</div>${I.chevron}</a>`).join('');
+}
 async function loadMembers(force) {
   if (!force && members && Date.now() - membersAt < 120000) return;
   try {
-    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
+    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
     membersAt = Date.now(); membersError = '';
   } catch (e) { membersError = e.message || 'Impossible de charger les membres.'; }
 }
 const memberAv = (m, cls = '') => `<span class="mini-av ${cls}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
 
-function viewCommunity() {
+const commSeg = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
+  <a href="#/communaute/liste" role="tab" aria-selected="${mode === 'list'}" class="${mode === 'list' ? 'on' : ''}">${I.list}<span>Liste</span></a>
+  <a href="#/communaute" role="tab" aria-selected="${mode === 'map'}" class="${mode === 'map' ? 'on' : ''}">${I.map}<span>Carte</span></a></div>`;
+const memberKm = (m) => { const c = cityObj(); return Math.round(distanceKm(c.lat, c.lon, +m.latitude, +m.longitude)); };
+const interestChips = (list, max = 8) => (list || []).slice(0, max).map((t) => `<span class="chip static">${esc(typeName(t))}</span>`).join('');
+let memberQ = '';
+
+function viewCommunity(mode) {
+  const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1>${commSeg(mode)}</div>`;
   if (!membersError && (!members || Date.now() - membersAt > 120000)) {
     members = null;
     loadMembers().then(() => { if ((location.hash || '').startsWith('#/communaute')) render(); });
-    return `<section class="screen"><h1 class="page-title">Communauté</h1><div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des membres…</p></div></section>`;
+    return `<section class="screen">${top}<div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des membres…</p></div></section>`;
   }
   const n = (members || []).length;
   const me = state.invisible ? 'Tu es masqué' : 'Tu es visible';
+  if (mode === 'list' && !membersError) {
+    return `<section class="screen">${top}
+      <label class="search"><span>${I.search}</span><input id="mQ" type="search" placeholder="Pseudo, ville, centre d’intérêt…" value="${esc(memberQ)}" aria-label="Rechercher un membre"></label>
+      <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} · ${me}</span><span class="accent">Réglages</span></a>
+      <div id="memberList" class="member-list big">${memberListHtml()}</div></section>`;
+  }
   return `<section class="screen screen-map">
-    <h1 class="page-title">Communauté</h1>
+    ${top}
     ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
     <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
     <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
     <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse. Profils, « Qui y va ? » et buddies arrivent ensuite.</p>`}
   </section>`;
+}
+
+// Fiche d'un membre
+const memberCache = new Map();
+const fMonth = fmt({ month: 'long', year: 'numeric' });
+function viewMember(id) {
+  const back = `<div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small">Membre</h1></div>`;
+  if (!isUuid(id)) return `<section class="screen">${back}${empty('Profil introuvable.')}</section>`;
+  const mine = profile && id === profile.id;
+  const m = mine ? profile : memberCache.get(id);
+  if (m === undefined) {
+    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at`)
+      .then((r) => { memberCache.set(id, r[0] || null); }).catch(() => memberCache.set(id, null))
+      .then(() => { if (location.hash === `#/membre/${id}`) render(); });
+    return `<section class="screen">${back}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
+  }
+  if (!m) return `<section class="screen">${back}${empty('Ce profil est introuvable ou masqué.')}</section>`;
+  const av = m.avatar_path ? sb.publicUrl('avatars', m.avatar_path) : '';
+  return `<section class="screen">${back}
+    <div class="member-head">
+      ${av ? `<button class="avatar member-av" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
+      <div class="pseudo">${esc(m.pseudo)}</div>
+      <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
+      <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
+    </div>
+    <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${esc(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
+    <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
+    ${mine ? `<a class="btn btn-red btn-block" href="#/ma-fiche">Modifier ma fiche</a>
+      <p class="tiny muted center">${state.invisible ? 'Ton profil est invisible : personne d’autre ne voit cette fiche.' : 'Cette fiche est visible des membres connectés.'}</p>`
+      : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
+  </section>`;
+}
+
+function viewEditMember() {
+  if (!loggedIn()) return viewProfile();
+  const sel = new Set(profile.interests || []);
+  return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/membre/${profile.id}" aria-label="Retour">${I.back}</a><h1 class="page-title small">Ma fiche membre</h1></div>
+    <form id="memberForm" class="card settings">
+      <label class="field">Présentation<textarea name="bio" maxlength="500" rows="5" placeholder="Quelques mots sur toi, tes soirées préférées, ce que tu recherches comme sorties…">${esc(profile.bio || '')}</textarea><span class="hint"><span id="bioCount">${(profile.bio || '').length}</span> / 500 · Pas de contenu explicite ni de coordonnées personnelles.</span></label>
+      <div class="field"><span>Centres d’intérêt <span class="muted tiny">(8 maximum)</span></span>
+        <div class="chips wrap" id="intChips">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${sel.has(t.slug) ? 'on' : ''}" data-act="interest" data-type="${t.slug}" aria-pressed="${sel.has(t.slug)}">${esc(t.name)}</button>`).join('')}</div></div>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <button class="btn btn-red btn-block" type="submit">Enregistrer</button>
+    </form></section>`;
+}
+
+async function saveMemberForm(form) {
+  const btn = form.querySelector('button[type=submit]');
+  const bio = String(new FormData(form).get('bio') || '').trim().slice(0, 500) || null;
+  const interests = [...form.querySelectorAll('[data-act=interest].on')].map((b) => b.dataset.type).slice(0, 8);
+  btn.disabled = true;
+  try {
+    const rows = await sb.update('profiles', `id=eq.${profile.id}`, { bio, interests });
+    profile = (rows && rows[0]) || { ...profile, bio, interests };
+    membersAt = 0;
+    toast('Fiche enregistrée');
+    navigate(`#/membre/${profile.id}`);
+  } catch (err) { formError(form, err.message); btn.disabled = false; }
+}
+
+function reportMember(id) {
+  const el = sheet(`<h2>Signaler ce profil</h2>
+    <p class="muted">Ton signalement est anonyme pour le membre concerné et sera examiné par l’équipe EuroKink.</p>
+    <div class="chips wrap" id="repReasons">${['Photo inappropriée', 'Propos choquants', 'Sollicitation sexuelle', 'Faux profil', 'Mineur', 'Autre'].map((r) => `<button type="button" class="chip" data-r="${r}">${r}</button>`).join('')}</div>
+    <label class="field">Précisions (facultatif)<textarea id="repDetails" maxlength="1000" rows="3"></textarea></label>
+    <div class="adm-actions"><button class="btn btn-red" data-rep-send disabled>Envoyer</button><button class="btn btn-ghost" data-sheet-close>Annuler</button></div>`);
+  let reason = '';
+  el.querySelector('#repReasons').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-r]'); if (!b) return;
+    el.querySelectorAll('[data-r]').forEach((x) => x.classList.toggle('on', x === b)); reason = b.dataset.r;
+    el.querySelector('[data-rep-send]').disabled = false;
+  });
+  el.querySelector('[data-rep-send]').addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    const details = el.querySelector('#repDetails').value.trim();
+    try {
+      await sb.insert('reports', { reporter_id: profile.id, target_type: 'profile', target_id: id, reason, details: details || null });
+      closeOverlay(); toast('Merci ! Ton signalement a été transmis.');
+    } catch (err) { toast(err.message); ev.target.disabled = false; }
+  });
 }
 
 function initMembersMap() {
@@ -441,7 +543,7 @@ function initMembersMap() {
     const names = [...new Set(keys.map((k) => groups.get(k).name))];
     sheet.innerHTML = `<div class="sheet-head"><div><strong>${esc(names.join(', '))}</strong> <span class="muted">· ${list.length} membre${list.length > 1 ? 's' : ''}</span></div>
       <button class="icon-btn small" data-close-sheet aria-label="Fermer">${I.close}</button></div>
-      <div class="member-list">${list.map((m) => `<div class="member-row">${memberAv(m)}<div><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}</div></div></div>`).join('')}</div>`;
+      <div class="member-list">${list.map((m) => `<a class="member-row" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}</div></div>${I.chevron}</a>`).join('')}</div>`;
     sheet.hidden = false;
     openOverlay(() => { sheet.hidden = true; });
   };
@@ -501,6 +603,7 @@ function viewProfile() {
         <span class="b-name">${esc(b.name)}</span><span class="b-bar"><span style="width:${Math.round((100 * b.progress) / b.goal)}%"></span></span></button>`).join('')}</div>
     <div class="card badge-detail"><strong>${esc(sel.name)}</strong> <span class="accent">${sel.earned ? '· obtenu' : `· ${sel.progress} / ${sel.goal}`}</span><p class="muted">${esc(sel.description)}</p></div>
     ${loggedIn() ? `<div class="practical flat">
+      <a class="line-btn" href="#/membre/${profile.id}">${I.user}<span>Ma fiche membre<span class="muted tiny block">${profile.bio || (profile.interests || []).length ? 'Présentation et centres d’intérêt' : 'Ajoute une présentation et tes centres d’intérêt'}</span></span>${I.chevron}</a>
       ${isOrganizer() ? `<a class="line-btn" href="#/orga">${I.sliders}<span>Espace organisateur</span>${I.chevron}</a>`
         : orgStatus && orgStatus.request && orgStatus.request.status === 'pending' ? `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Demande en cours d’examen</span></span>${I.chevron}</a>`
         : `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Publie tes soirées et suis tes statistiques</span></span>${I.chevron}</a>`}
@@ -972,6 +1075,7 @@ function adminReportCard(r) {
     <div class="sub-head"><strong>${esc(r.reason)}</strong><span class="pill-grey">${r.target_type === 'event' ? 'Soirée' : r.target_type === 'profile' ? 'Profil' : 'Organisateur'}</span></div>
     <div class="muted tiny">par ${esc(r.reporter || 'membre supprimé')} · le ${fDate.format(new Date(r.created_at))}</div>
     ${r.details && r.details !== r.reason ? `<p class="adm-desc">${esc(r.details)}</p>` : ''}
+    ${r.target_type === 'profile' ? `<div class="adm-facts"><div>${I.user}<span>Profil signalé</span><a class="link" href="#/membre/${r.target_id}">Voir</a></div></div>` : ''}
     ${r.event_title ? `<div class="adm-facts"><div>${I.calendar}<span>${esc(r.event_title)}</span>${eventById(r.target_id) ? `<a class="link" href="#/soiree/${r.target_id}">Voir</a>` : ''}</div></div>` : ''}
     <div class="adm-actions"><button class="btn btn-red" data-act="adm-report" data-id="${r.id}">Traité</button><button class="btn btn-ghost" data-act="adm-report" data-id="${r.id}" data-dismiss="1">Ignorer</button></div>
   </article>`;
@@ -1648,7 +1752,9 @@ function render() {
     case 'carte': html = viewMap(); active = '#/explorer'; break;
     case 'soiree': html = viewEvent(decodeURIComponent(param || '')); active = null; break;
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
-    case 'communaute': html = viewCommunity(); active = '#/communaute'; break;
+    case 'communaute': html = viewCommunity(param === 'liste' ? 'list' : 'map'); active = '#/communaute'; break;
+    case 'membre': html = viewMember(param); active = '#/communaute'; break;
+    case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
     case 'profil': html = viewProfile(); active = '#/profil'; break;
     case 'parametres': html = viewSettings(); active = '#/profil'; break;
     case 'infos': html = viewInfo(param); active = '#/profil'; break;
@@ -1666,7 +1772,7 @@ function render() {
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
-  if (route === 'communaute' && $('#map')) initMembersMap();
+  if (route === 'communaute' && param !== 'liste' && $('#map')) initMembersMap();
 }
 
 function navigate(hash) {
@@ -1719,6 +1825,9 @@ document.addEventListener('submit', (ev) => {
   } else if (form.id === 'orgPageForm') {
     ev.preventDefault();
     saveOrgPage(form);
+  } else if (form.id === 'memberForm') {
+    ev.preventDefault();
+    saveMemberForm(form);
   } else if (form.id === 'submitForm') {
     ev.preventDefault();
     submitEvent(form);
@@ -1739,7 +1848,7 @@ document.addEventListener('click', (ev) => {
     navigate('#/explorer');
     return;
   }
-  const typeChip = ev.target.closest('[data-type]');
+  const typeChip = ev.target.closest('#fTypes [data-type]');
   if (typeChip) {
     const t = typeChip.dataset.type;
     filters.types = filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t];
@@ -1761,7 +1870,7 @@ document.addEventListener('click', (ev) => {
   const e = eventById(id);
   switch (act.dataset.act) {
     case 'back':
-      if (navDepth > 0) history.back(); else navigate('#/');
+      if (navDepth > 0) history.back(); else navigate((location.hash || '').startsWith('#/membre') ? '#/communaute' : '#/');
       break;
     case 'share': shareEvent(e); break;
     case 'fav': toggleAction('favorites', id, 'Ajoutée à tes favoris', 'Retirée de tes favoris'); break;
@@ -1808,6 +1917,12 @@ document.addEventListener('click', (ev) => {
       break;
     }
     case 'city-pick': pickCity(act); break;
+    case 'interest': {
+      const on = !act.classList.contains('on');
+      if (on && act.parentNode.querySelectorAll('.on').length >= 8) { toast('8 centres d’intérêt maximum'); break; }
+      act.classList.toggle('on', on); act.setAttribute('aria-pressed', on); break;
+    }
+    case 'report-member': reportMember(act.dataset.id); break;
     case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
@@ -1835,6 +1950,8 @@ document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'fBudget') { filters.budget = Number(t.value); $('#budgetLabel').textContent = budgetLabel(); renderResults(); }
   if (t.id === 'fQ') { filters.q = t.value; renderResults(); }
+  if (t.id === 'mQ') { memberQ = t.value; const box = $('#memberList'); if (box) box.innerHTML = memberListHtml(); }
+  if (t.name === 'bio' && t.form && t.form.id === 'memberForm') { const c = $('#bioCount'); if (c) c.textContent = t.value.length; }
   if (t.matches && t.matches('[data-city-input]')) { cityGeocode(t); return; }
   if (t.form && t.form.id === 'submitForm' && t.name && t.name !== 'secret') {
     draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
