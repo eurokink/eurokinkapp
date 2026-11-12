@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.3';
+const VERSION = '0.9.4';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1022,16 +1022,30 @@ async function handleImageFile(input) {
   uploading = false;
 }
 
+// Fenêtres par-dessus l'écran (photo en grand, panneau de la carte) : le geste retour
+// ou le bouton retour d'Android les ferme au lieu de quitter la page
+let overlayClose = null;
+function openOverlay(close) {
+  if (overlayClose) { overlayClose = close; return; }
+  overlayClose = close;
+  history.pushState({ ekOverlay: true }, '');
+}
+function closeOverlay() { if (overlayClose) history.back(); }
+window.addEventListener('popstate', () => {
+  if (!overlayClose) return;
+  const f = overlayClose; overlayClose = null; f();
+});
+
 function openViewer(src) {
   if (!src) return;
   const v = document.createElement('div');
   v.className = 'viewer';
   v.innerHTML = `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer"><button class="icon-btn viewer-close" aria-label="Fermer">${I.close}</button>`;
-  const close = () => { v.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (ev) => { if (ev.key === 'Escape') close(); };
-  v.addEventListener('click', close);
+  const onKey = (ev) => { if (ev.key === 'Escape') closeOverlay(); };
+  v.addEventListener('click', closeOverlay);
   document.addEventListener('keydown', onKey);
   document.body.appendChild(v);
+  openOverlay(() => { v.remove(); document.removeEventListener('keydown', onKey); });
 }
 
 // Cadrage : on fait glisser l'image dans le cadre (même proportions que le bandeau de la fiche)
@@ -1311,8 +1325,9 @@ function initMap() {
       <button class="icon-btn small" data-close-sheet aria-label="Fermer">${I.close}</button></div>
       <div class="list">${evs.map(eventRow).join('')}</div>`;
     sheet.hidden = false;
+    openOverlay(() => { sheet.hidden = true; });
   };
-  sheet.addEventListener('click', (ev) => { if (ev.target.closest('[data-close-sheet]')) sheet.hidden = true; });
+  sheet.addEventListener('click', (ev) => { if (ev.target.closest('[data-close-sheet]')) closeOverlay(); });
   mapCleanup = mountMap($('#map'), { markers, home: { lat: c.lat, lon: c.lon }, onSelect: open, markerSvg: MAP_MARKER });
 }
 
@@ -1389,6 +1404,7 @@ let navDepth = 0;   // nombre de navigations dans l'appli (pour le bouton Retour
 window.addEventListener('hashchange', () => {
   // Lien reçu par e-mail ouvert alors que l'appli est déjà affichée : on relance pour le traiter
   if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; }
+  if (overlayClose) { const f = overlayClose; overlayClose = null; f(); }
   navDepth += 1; render(); window.scrollTo(0, 0);
 });
 
