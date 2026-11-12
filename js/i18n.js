@@ -523,6 +523,8 @@ const T = {
   'Tes sorties (« J’y vais ») apparaissent dans « Qui y va ? » sur chaque soirée et sur ta fiche membre. « Les membres que je suis » : seuls ceux que tu suis les voient.': ['Your outings (“I’m going”) appear in “Who’s going?” on each event and on your profile. “Members I follow”: only those you follow see them.', 'Deine Partybesuche („Ich gehe hin“) erscheinen bei „Wer geht hin?“ und in deinem Profil. „Mitglieder, denen ich folge“: Nur sie sehen sie.'],
   'Titre « EuroKink » et texte neutre, sans le nom de la soirée': ['“EuroKink” title and neutral text, without the event name', 'Titel „EuroKink“ und neutraler Text, ohne Partynamen'],
   'Toi': ['You', 'Du'],
+  'par': ['by', 'von'],
+  'Chaque membre apparaît sur la ville de son profil, jamais à son adresse.': ['Each member appears on the city of their profile, never at their address.', 'Jedes Mitglied erscheint in der Stadt seines Profils, nie an seiner Adresse.'],
   'Ton adresse est confirmée': ['Your address is confirmed', 'Deine Adresse ist bestätigt'],
   'Ton compte a été supprimé.': ['Your account has been deleted.', 'Dein Konto wurde gelöscht.'],
   'Ton espace organisateur, c’est :': ['Your organiser area gives you:', 'Dein Veranstalterbereich bietet:'],
@@ -679,7 +681,7 @@ const I = LANG === 'en' ? 0 : 1;
 const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
-const P = (n, one, many) => (Number(n) > 1 ? many : one);
+const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
   [/^(\d+) soirées? trouvées?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} found`, `${m[1]} ${P(m[1], 'Party', 'Partys')} gefunden`]],
   [/^(\d+) soirées? sur la carte(?: · (\d+) filtres? actifs?)?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} on the map${m[2] ? ` · ${m[2]} ${P(m[2], 'filter', 'filters')} on` : ''}`, `${m[1]} ${P(m[1], 'Party', 'Partys')} auf der Karte${m[2] ? ` · ${m[2]} Filter aktiv` : ''}`]],
@@ -719,6 +721,7 @@ const R = [
   [/^Vu il y a (\d+) min$/, (m) => [`Seen ${m[1]} min ago`, `Vor ${m[1]} Min. gesehen`]],
   [/^Vu à (.+)$/, (m) => [`Seen at ${m[1]}`, `Gesehen um ${m[1]}`]],
   [/^Vu le (.+)$/, (m) => [`Seen on ${m[1]}`, `Gesehen am ${m[1]}`]],
+  [/^Du (.+) au (.+)$/, (m) => [`From ${m[1]} to ${m[2]}`, `Vom ${m[1]} bis ${m[2]}`]],
   [/^Version (.+)$/, (m) => [`Version ${m[1]}`, `Version ${m[1]}`]],
   [/^(.+) · version (.+)$/, (m) => [`${m[1]} · version ${m[2]}`, `${m[1]} · Version ${m[2]}`]],
   [/^© (\d+) (.+) · Tous droits réservés$/, (m) => [`© ${m[1]} ${m[2]} · All rights reserved`, `© ${m[1]} ${m[2]} · Alle Rechte vorbehalten`]],
@@ -746,7 +749,8 @@ export function t(s) {
     if (k) return wrap(tr(k).toUpperCase());
   }
   for (const [re, f] of R) { const m = core.match(re); if (m) return wrap(f(m)[I]); }
-  if (/^[A-ZÀ-Ý][a-zà-ÿ]+(, [A-ZÀ-Ý][a-zà-ÿ]+)+$/.test(core)) {
+  if (/^· (.+)$/.test(core)) { const x = t(core.slice(2)); if (x !== core.slice(2)) return wrap('· ' + x); }
+  if (/^[^,\s]+(?: [^,\s]+){0,2}(, [^,\s]+(?: [^,\s]+){0,2})+$/.test(core)) {
     const parts = core.split(', '); const out = parts.map((p) => tr(p) || p);
     if (out.some((o, i) => o !== parts[i])) return wrap(out.join(', '));
   }

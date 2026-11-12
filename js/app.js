@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.26.1';
+const VERSION = '0.26.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -470,7 +470,7 @@ function viewCommunity(mode) {
     ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
     <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
     <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
-    <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse. Profils, « Qui y va ? » et buddies arrivent ensuite.</p>`}
+    <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse.</p>`}
   </section>`;
 }
 
