@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.27.0';
+const VERSION = '0.27.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -243,6 +243,7 @@ function viewHome() {
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}</p></div>
     ${homeMsgCard()}
+    ${earlyCard()}
     ${newsCard()}
     ${featured ? `<div class="section-head"><h2>À la une</h2><a href="#/explorer" class="link">Tout voir</a></div>${featuredCard(featured)}` : ''}
     <h2 class="section-title">Ce week-end près de toi</h2>
@@ -737,6 +738,19 @@ const NEWS = [
 const NEWS_KEY = 'ek.newsSeen';
 const newsSeen = () => { try { return localStorage.getItem(NEWS_KEY) || ''; } catch (e) { return NEWS[0].v; } };
 const newsItems = (n) => n[LANG] || n.fr;
+// Message temporaire de lancement : l'agenda se remplit petit à petit
+const EARLY_KEY = 'ek.earlyHide';
+function earlyCard() {
+  try { if (localStorage.getItem(EARLY_KEY)) return ''; } catch (e) { /* stockage indisponible */ }
+  const t = {
+    fr: ['EuroKink fait ses premiers pas', 'L’appli vient d’ouvrir : les soirées arrivent petit à petit, partout en Europe. Une soirée manque ? Propose-la, on la publie après vérification.', 'Proposer une soirée'],
+    en: ['EuroKink is just getting started', 'The app has just opened: events are being added little by little, all over Europe. Missing one? Suggest it and we’ll publish it once checked.', 'Suggest an event'],
+    de: ['EuroKink steht noch am Anfang', 'Die App ist gerade gestartet: Nach und nach kommen Partys aus ganz Europa dazu. Fehlt eine? Schlag sie vor, wir veröffentlichen sie nach Prüfung.', 'Party vorschlagen']
+  }[LANG];
+  return `<div class="card early-card" data-no-i18n><div class="early-top"><span class="msg-card-ic">${I.flag}</span><strong>${t[0]}</strong>
+    <button class="icon-btn small" data-act="early-close" aria-label="${{ fr: 'Fermer', en: 'Close', de: 'Schließen' }[LANG]}">${I.close}</button></div>
+    <p class="muted tiny">${t[1]}</p><a class="btn btn-red btn-block" href="#/proposer">${I.plus}<span>${t[2]}</span></a></div>`;
+}
 function newsCard() {
   const n = NEWS[0];
   if (!loggedIn() || newsSeen() === n.v) return '';
@@ -2543,6 +2557,7 @@ document.addEventListener('click', (ev) => {
     case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
     case 'news-open': newsSheet(); break;
+    case 'early-close': try { localStorage.setItem(EARLY_KEY, '1'); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'news-close': try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'msg-tab': msgTab = act.dataset.tab; render(); break;
     case 'msg-menu': msgMenu(act.dataset.user, act.dataset.conv); break;
