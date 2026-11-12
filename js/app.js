@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.15.0';
+const VERSION = '0.15.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -2320,6 +2320,26 @@ function afterLogin() {
   return h || '#/';
 }
 
+// Mot de passe déjà paru dans une fuite de données ? (Have I Been Pwned, k-anonymat :
+// seuls les 5 premiers caractères de l'empreinte SHA-1 quittent l'appareil). null si le service ne répond pas.
+async function pwnedCount(password) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(password));
+    const hex = [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
+    const r = await fetch(`https://api.pwnedpasswords.com/range/${hex.slice(0, 5)}`, { headers: { 'Add-Padding': 'true' }, signal: ctl.signal });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const line = (await r.text()).split('\n').find((l) => l.startsWith(hex.slice(5) + ':'));
+    return line ? Number(line.split(':')[1]) || 0 : 0;
+  } catch (e) { return null; }
+}
+async function checkPassword(password) {
+  if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+  const n = await pwnedCount(password);
+  if (n > 0) throw new Error(`Ce mot de passe figure dans des fuites de données connues (vu ${n.toLocaleString('fr-FR')} fois) : il pourrait être deviné facilement. Choisis-en un autre.`);
+}
+
 async function submitAccountForm(form) {
   const f = new FormData(form);
   const btn = form.querySelector('button[type=submit]');
@@ -2348,7 +2368,7 @@ async function submitAccountForm(form) {
       const email = String(f.get('email') || '').trim();
       const password = String(f.get('password') || '');
       if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Adresse e-mail invalide.');
-      if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+      await checkPassword(password);
       setCity(city); state.adult = true; save();
       const res = await sb.signUp(email, password, meta);
       lastSignupEmail = email;
@@ -2365,7 +2385,7 @@ async function submitAccountForm(form) {
       form.innerHTML = '<p>Si un compte existe avec cette adresse, tu vas recevoir un lien pour choisir un nouveau mot de passe. Pense à regarder dans les indésirables.</p>';
     } else if (form.id === 'newPasswordForm') {
       const password = String(f.get('password') || '');
-      if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+      await checkPassword(password);
       await sb.updatePassword(password);
       toast('Mot de passe modifié.');
       navigate('#/profil');
