@@ -36,7 +36,7 @@ let view = null;   // { s, tx, ty } conservé entre deux affichages de la carte
 
 // Monte la carte dans `root`. markers = [{ id, lon, lat, count, label }], home = { lon, lat }.
 // onSelect reçoit la liste des villes du repère touché.
-export function mountMap(root, { markers, home, onSelect, markerSvg }) {
+export function mountMap(root, { markers, home, onSelect, markerSvg, unit = 'soirées' }) {
   root.innerHTML = `<svg class="map-svg" aria-hidden="true"><g class="map-world">
       <path class="land land-near" d="${path(BELGIUM)}"/><path class="land" d="${path(FRANCE)}"/><path class="land" d="${path(CORSICA)}"/>
     </g></svg><div class="map-layer"></div>
@@ -88,7 +88,7 @@ export function mountMap(root, { markers, home, onSelect, markerSvg }) {
       const names = c.items.map((i) => i.id);
       const el = document.createElement('button');
       el.className = `map-marker${c.items.length > 1 ? ' cluster' : ''}`;
-      el.setAttribute('aria-label', c.items.length > 1 ? `${names.join(', ')} : ${count} soirées` : c.items[0].label);
+      el.setAttribute('aria-label', c.items.length > 1 ? `${c.items.map((i) => i.name || i.id).join(', ')} : ${count} ${unit}` : c.items[0].label);
       el.innerHTML = `${c.items.length === 1 && c.items[0].svg ? c.items[0].svg : markerSvg}${count > 1 ? `<span class="map-count">${count}</span>` : ''}`;
       el._p = c.p;
       el.addEventListener('click', (ev) => {

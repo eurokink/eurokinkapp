@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.14.0';
+const VERSION = '0.15.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -62,7 +62,11 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const typeName = (slug) => (EVENT_TYPES.find((t) => t.slug === slug) || {}).name || slug;
 const eventById = (id) => EVENTS.find((e) => e.id === id);
-const cityObj = () => CITIES.find((c) => c.name === state.city) || CITIES.find((c) => c.name === 'Nantes');
+const cityObj = () => (state.cityLat != null && state.cityLon != null
+  ? { name: state.city, lat: state.cityLat, lon: state.cityLon }
+  : CITIES.find((c) => c.name === state.city) || CITIES.find((c) => c.name === 'Nantes'));
+// Ville choisie dans « Autour de » sur l'écran Explorer (vide = ma ville)
+const aroundObj = () => (filters.around && CITIES.find((c) => c.name === filters.around)) || cityObj();
 
 function distanceKm(lat1, lon1, lat2, lon2) {
   const r = (d) => (d * Math.PI) / 180;
@@ -242,7 +246,7 @@ function viewHome() {
 }
 
 // Filtres de l'écran Explorer (gardés en mémoire pendant la session)
-const freshFilters = () => ({ q: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
+const freshFilters = () => ({ q: '', around: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
 const filters = freshFilters();
 
 function filtered({ ignoreRadius = false } = {}) {
@@ -254,7 +258,7 @@ function filtered({ ignoreRadius = false } = {}) {
     const s = new Date(e.startsAt);
     if (filters.period === 'weekend' && !(s < end && new Date(e.endsAt) > start)) return false;
     if (horizon && s - now > horizon * 86400000) return false;
-    if (!ignoreRadius && filters.radius && kmFromMe(e) > filters.radius) return false;
+    if (!ignoreRadius && filters.radius) { const c = aroundObj(); if (distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon) > filters.radius) return false; }
     if (filters.types.length && !e.types.some((t) => filters.types.includes(t))) return false;
     if (filters.budget < 100 && e.price > filters.budget) return false;
     if (filters.noBooking && e.booking !== 'door_only') return false;
@@ -266,7 +270,8 @@ function filtered({ ignoreRadius = false } = {}) {
 const budgetLabel = () => (filters.budget >= 100 ? 'Tous budgets' : filters.budget === 0 ? 'Gratuit uniquement' : `Jusqu’à ${filters.budget} €`);
 
 function viewExplorer() {
-  const cityOpts = CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+  const cityOpts = `<option value="" ${filters.around ? '' : 'selected'}>${esc(state.city)} (ma ville)</option>`
+    + CITIES.filter((c) => c.name !== state.city).map((c) => `<option ${c.name === filters.around ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   const radii = [[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']];
   const periods = [['weekend', 'Ce week-end'], ['week', '7 jours'], ['month', '30 jours'], ['all', 'Toutes les dates']];
   return `<section class="screen">
@@ -390,14 +395,60 @@ function viewFavorites() {
   </section>`;
 }
 
+// Communauté : carte des membres, placés sur la ville indiquée dans leur profil
+let members = null; let membersAt = 0; let membersError = '';
+async function loadMembers(force) {
+  if (!force && members && Date.now() - membersAt < 120000) return;
+  try {
+    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
+    membersAt = Date.now(); membersError = '';
+  } catch (e) { membersError = e.message || 'Impossible de charger les membres.'; }
+}
+const memberAv = (m, cls = '') => `<span class="mini-av ${cls}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
+
 function viewCommunity() {
-  const items = ['Profils avec pseudo, photos et description', 'Annuaire par pays et par ville', '« Qui y va ? » pour chaque soirée', 'Trouver un buddy pour y aller ensemble', 'Avis après la soirée', 'Messagerie (V3)'];
-  return `<section class="screen"><h1 class="page-title">Communauté</h1>
-    <div class="card soon"><span class="tag tag-red">BIENTÔT</span><h2>L’espace communauté arrive en V2</h2>
-      <p class="muted">Une fois le catalogue de soirées bien rempli, tu pourras retrouver les membres qui partagent tes sorties.</p>
-      <ul class="soon-list">${items.map((i) => `<li>${I.check}<span>${esc(i)}</span></li>`).join('')}</ul></div>
-    <div class="card note">${I.lock}<p class="muted">Pas de photo explicite, pas de sollicitation sexuelle : EuroKink est une appli de sorties fetish, pas une appli de plans.</p></div>
+  if (!membersError && (!members || Date.now() - membersAt > 120000)) {
+    members = null;
+    loadMembers().then(() => { if ((location.hash || '').startsWith('#/communaute')) render(); });
+    return `<section class="screen"><h1 class="page-title">Communauté</h1><div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des membres…</p></div></section>`;
+  }
+  const n = (members || []).length;
+  const me = state.invisible ? 'Tu es masqué' : 'Tu es visible';
+  return `<section class="screen screen-map">
+    <h1 class="page-title">Communauté</h1>
+    ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
+    <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
+    <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
+    <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse. Profils, « Qui y va ? » et buddies arrivent ensuite.</p>`}
   </section>`;
+}
+
+function initMembersMap() {
+  const groups = new Map();
+  (members || []).forEach((m) => {
+    const key = `${m.city}|${m.postal_code || ''}|${(+m.latitude).toFixed(3)}|${(+m.longitude).toFixed(3)}`;
+    const g = groups.get(key) || { id: key, name: m.city, members: [], lat: +m.latitude, lon: +m.longitude };
+    g.members.push(m); groups.set(key, g);
+  });
+  const markers = [...groups.values()].map((g) => {
+    const face = g.members.find((m) => m.avatar_path) || g.members[0];
+    return { id: g.id, name: g.name, lat: g.lat, lon: g.lon, count: g.members.length,
+      label: `${g.name} : ${g.members.length} membre${g.members.length > 1 ? 's' : ''}`, svg: memberAv(face, 'mm mm-member') };
+  });
+  const sheet = $('#mapSheet');
+  const open = (keys) => {
+    const list = keys.flatMap((k) => groups.get(k).members);
+    const names = [...new Set(keys.map((k) => groups.get(k).name))];
+    sheet.innerHTML = `<div class="sheet-head"><div><strong>${esc(names.join(', '))}</strong> <span class="muted">· ${list.length} membre${list.length > 1 ? 's' : ''}</span></div>
+      <button class="icon-btn small" data-close-sheet aria-label="Fermer">${I.close}</button></div>
+      <div class="member-list">${list.map((m) => `<div class="member-row">${memberAv(m)}<div><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}</div></div></div>`).join('')}</div>`;
+    sheet.hidden = false;
+    openOverlay(() => { sheet.hidden = true; });
+  };
+  sheet.addEventListener('click', (ev) => { if (ev.target.closest('[data-close-sheet]')) closeOverlay(); });
+  const c = cityObj();
+  mapCleanup = mountMap($('#map'), { markers, home: { lat: c.lat, lon: c.lon }, onSelect: open, unit: 'membres',
+    markerSvg: `<span class="mm mm-logo mm-group">${I.users}</span>` });
 }
 
 // Passeport : progression calculée à partir des présences validées
@@ -464,7 +515,6 @@ function viewProfile() {
 
 function viewSettings() {
   const opt = (pairs, cur) => pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
-  const cityOpts = CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
   const sw = (name, on, label, help) => `<label class="toggle-line"><span>${label}${help ? `<span class="muted tiny block">${help}</span>` : ''}</span><input type="checkbox" class="switch" name="${name}" ${on ? 'checked' : ''}></label>`;
   const info = (slug, label) => `<a class="line-btn" href="#/infos/${slug}">${I.doc}<span>${label}</span>${I.chevron}</a>`;
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour au profil">${I.back}</a><h1 class="page-title">Paramètres</h1></div>
@@ -478,14 +528,14 @@ function viewSettings() {
       <h2 class="group-title">Mon profil</h2>
       <div class="card settings">
         ${loggedIn() ? `<label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>` : ''}
-        <label class="field">Ville de référence<select name="city">${cityOpts}</select></label>
+        ${cityField('Ma ville', 'Pour les soirées proches de chez toi et la carte des membres. Seule la ville est utilisée, jamais ton adresse.')}
         <label class="field">Rayon de recherche par défaut<select name="defaultRadius">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']], state.defaultRadius)}</select></label>
       </div>
       <h2 class="group-title">Confidentialité</h2>
       <div class="card settings">
         <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
-        ${sw('invisible', state.invisible, 'Profil invisible', 'Personne ne te trouve dans la communauté')}
-        <p class="tiny muted">Ces choix s’appliqueront dès l’ouverture de la communauté.</p>
+        ${sw('invisible', state.invisible, 'Profil invisible', 'Tu n’apparais plus sur la carte des membres ni dans la communauté')}
+        <p class="tiny muted">« Qui peut voir mes sorties » s’appliquera avec l’arrivée de « Qui y va ? ».</p>
       </div>
       <h2 class="group-title">Notifications</h2>
       <div class="card settings">
@@ -533,7 +583,71 @@ function viewLoading() {
   return `<section class="screen"><div class="loading"><div class="spinner" aria-hidden="true"></div><p class="muted">Chargement des soirées…</p></div></section>`;
 }
 
-const cityOptions = () => CITIES.map((c) => `<option ${c.name === state.city ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+// Ville du membre : code postal ou commune, choisie dans les propositions du géocodeur public (IGN)
+const cityLabel = (c) => (c.postal ? `${c.name} (${c.postal})` : c.name);
+const cityKey = () => `${state.city}|${state.postal || ''}|${state.cityLat}`;
+function cityField(label, hint) {
+  const cur = cityLabel({ name: state.city, postal: state.postal });
+  return `<div class="field city-field"><span>${label}</span>
+    <input class="city-input" data-city-input value="${esc(cur)}" data-picked="${esc(cur)}" placeholder="Code postal ou nom de ta ville" autocomplete="off" enterkeyhint="search" aria-label="${esc(label)}">
+    <input type="hidden" name="city" value="${esc(state.city)}"><input type="hidden" name="postal_code" value="${esc(state.postal || '')}">
+    <input type="hidden" name="city_lat" value="${state.cityLat ?? ''}"><input type="hidden" name="city_lon" value="${state.cityLon ?? ''}">
+    <div class="addr-list city-list"></div>
+    <span class="hint">${hint}</span></div>`;
+}
+const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+const readCity = (f) => ({ name: f.elements.city.value, postal: f.elements.postal_code.value || '', lat: num(f.elements.city_lat.value), lon: num(f.elements.city_lon.value) });
+function setCity(c) {
+  state.city = c.name; state.postal = c.postal || '';
+  const known = CITIES.find((x) => x.name === c.name);
+  state.cityLat = c.lat ?? (known ? known.lat : null); state.cityLon = c.lon ?? (known ? known.lon : null);
+}
+const cityPicked = (form) => { const i = form.querySelector('[data-city-input]'); return !i || i.value.trim() === i.dataset.picked; };
+
+let cityTimer, citySeq = 0, cityResults = [];
+function cityGeocode(input) {
+  clearTimeout(cityTimer);
+  const box = input.parentNode.querySelector('.city-list');
+  const q = input.value.trim();
+  if (q.length < 2 || q === input.dataset.picked) { box.innerHTML = ''; cityResults = []; return; }
+  cityTimer = setTimeout(async () => {
+    const seq = ++citySeq;
+    let feats = [], failed = false;
+    try {
+      const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
+      const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&type=municipality&limit=6&autocomplete=1${pc}`);
+      if (!r.ok) throw new Error(String(r.status));
+      feats = (await r.json()).features || [];
+    } catch (e) { failed = true; }
+    if (seq !== citySeq || !box.isConnected) return;
+    const seen = new Set();
+    cityResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
+      const p = f.properties || {};
+      const [lon, lat] = f.geometry.coordinates;
+      return { name: p.city || p.name, postal: p.postcode || '', lat, lon, dept: String(p.context || '').split(',')[1]?.trim() || '' };
+    }).filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
+    if (!cityResults.length) {
+      const ql = q.toLowerCase();
+      cityResults = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
+        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, dept: c.country === 'BE' ? 'Belgique' : '' }));
+    }
+    box.innerHTML = cityResults.length
+      ? cityResults.map((c, i) => `<button type="button" class="addr-opt" data-act="city-pick" data-i="${i}"><strong>${esc(cityLabel(c))}</strong>${c.dept ? `<span class="muted tiny block">${esc(c.dept)}</span>` : ''}</button>`).join('')
+      : `<p class="hint">${failed ? 'Recherche indisponible pour le moment : tape le nom d’une grande ville.' : 'Aucune ville trouvée : vérifie l’orthographe ou le code postal.'}</p>`;
+  }, 300);
+}
+function pickCity(btn) {
+  const c = cityResults[Number(btn.dataset.i)];
+  if (!c) return;
+  const wrap = btn.closest('.city-field');
+  const inp = wrap.querySelector('[data-city-input]');
+  const set = (n, v) => { wrap.querySelector(`[name=${n}]`).value = v ?? ''; };
+  set('postal_code', c.postal); set('city_lat', c.lat); set('city_lon', c.lon); set('city', c.name);
+  inp.value = inp.dataset.picked = cityLabel(c);
+  wrap.querySelector('.city-list').innerHTML = '';
+  cityResults = [];
+  wrap.querySelector('[name=city]').dispatchEvent(new Event('change', { bubbles: true }));
+}
 const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="8" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
 const accountTop = (title, back = '#/profil') => (!loggedIn() && back === '#/profil' ? accountTopRaw(title, '#/') : accountTopRaw(title, back));
 const accountTopRaw = (title, back) => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
@@ -548,7 +662,7 @@ function viewAccount(mode) {
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
           ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
-          <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
+          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.')}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
@@ -585,7 +699,7 @@ function viewAccount(mode) {
         <form id="completeForm" class="card settings">
           <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
-          <label class="field">Ville de référence<select name="city">${cityOptions()}</select></label>
+          ${cityField('Ma ville', 'Tape ton code postal ou ta commune, puis choisis-la dans la liste. Seule la ville est utilisée, jamais ton adresse.')}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
@@ -1552,6 +1666,7 @@ function render() {
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
+  if (route === 'communaute' && $('#map')) initMembersMap();
 }
 
 function navigate(hash) {
@@ -1692,6 +1807,8 @@ document.addEventListener('click', (ev) => {
       saveDraft(); render();
       break;
     }
+    case 'city-pick': pickCity(act); break;
+    case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
       if (confirm(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
@@ -1707,10 +1824,18 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+document.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' || !ev.target.matches || !ev.target.matches('[data-city-input]')) return;
+  ev.preventDefault();
+  const first = ev.target.parentNode.querySelector('[data-act=city-pick]');
+  if (first) first.click();
+});
+
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'fBudget') { filters.budget = Number(t.value); $('#budgetLabel').textContent = budgetLabel(); renderResults(); }
   if (t.id === 'fQ') { filters.q = t.value; renderResults(); }
+  if (t.matches && t.matches('[data-city-input]')) { cityGeocode(t); return; }
   if (t.form && t.form.id === 'submitForm' && t.name && t.name !== 'secret') {
     draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
     if (t.id === 'addrInput') geocode(t.value);
@@ -1719,7 +1844,7 @@ document.addEventListener('input', (ev) => {
 
 document.addEventListener('change', (ev) => {
   const t = ev.target;
-  if (t.id === 'fCity') { state.city = t.value; save(); renderResults(); }
+  if (t.id === 'fCity') { filters.around = t.value; renderResults(); }
   if (t.id === 'fRadius') { filters.radius = Number(t.value); renderResults(); }
   if (t.id === 'fPeriod') { filters.period = t.value; renderResults(); }
   if (t.id === 'fNoBooking') { filters.noBooking = t.checked; renderResults(); }
@@ -1736,8 +1861,8 @@ document.addEventListener('change', (ev) => {
   }
   if (t.form && t.form.id === 'settingsForm') {
     const f = t.form;
-    const before = { pseudo: profile && profile.pseudo, city: state.city, visibility: state.visibility, invisible: state.invisible };
-    state.city = f.city.value;
+    const before = { pseudo: profile && profile.pseudo, city: cityKey(), visibility: state.visibility, invisible: state.invisible };
+    setCity(readCity(f));
     state.defaultRadius = Number(f.defaultRadius.value);
     filters.radius = state.defaultRadius;
     state.visibility = f.visibility.value;
@@ -1755,7 +1880,7 @@ document.addEventListener('change', (ev) => {
       const patch = {};
       const pseudo = f.pseudo ? f.pseudo.value.trim().slice(0, 30) : profile.pseudo;
       if (pseudo !== before.pseudo) patch.pseudo = pseudo;
-      if (state.city !== before.city) patch.city = state.city;
+      if (cityKey() !== before.city) Object.assign(patch, { city: state.city, postal_code: state.postal || null, latitude: state.cityLat, longitude: state.cityLon });
       if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
       const np = { notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
@@ -1763,7 +1888,7 @@ document.addEventListener('change', (ev) => {
       Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
       if (Object.keys(patch).length) {
         sb.update('profiles', `id=eq.${profile.id}`, patch)
-          .then((rows) => { if (rows && rows[0]) { profile = rows[0]; state.pseudo = profile.pseudo; save(); } toast('Réglages enregistrés'); })
+          .then((rows) => { if (rows && rows[0]) { profile = rows[0]; state.pseudo = profile.pseudo; save(); } membersAt = 0; toast('Réglages enregistrés'); })
           .catch((err) => { toast(err.message); if (f.pseudo) f.pseudo.value = profile.pseudo; });
         return;
       }
@@ -1934,6 +2059,7 @@ async function setAvatar(path) {
   const rows = await sb.update('profiles', `id=eq.${profile.id}`, { avatar_path: path });
   if (rows && rows[0]) profile = rows[0]; else profile.avatar_path = path;
   if (old && old !== path) sb.deleteObject('avatars', old).catch(() => {});
+  membersAt = 0;
   render();
 }
 function avatarMenu() {
@@ -2088,6 +2214,7 @@ async function loadUser() {
     if (!md.pseudo) { profile = null; return 'incomplete'; }
     rows = await sb.insert('profiles', {
       id: uid, pseudo: md.pseudo, city: md.city || state.city,
+      postal_code: md.postal_code || null, latitude: md.latitude ?? state.cityLat ?? null, longitude: md.longitude ?? state.cityLon ?? null,
       adult_confirmed_at: md.adult_confirmed_at || new Date().toISOString(),
       sensitive_consent_at: md.sensitive_consent_at || new Date().toISOString()
     }, { returnRow: true });
@@ -2095,7 +2222,7 @@ async function loadUser() {
   profile = rows[0];
   state.adult = true;
   state.pseudo = profile.pseudo;
-  if (profile.city) state.city = profile.city;
+  if (profile.city) setCity({ name: profile.city, postal: profile.postal_code, lat: profile.latitude, lon: profile.longitude });
   state.visibility = profile.attendance_visibility;
   state.invisible = profile.is_invisible;
   if (profile.notif_reminders !== undefined) {
@@ -2204,12 +2331,14 @@ async function submitAccountForm(form) {
     if (form.id === 'signupForm' || form.id === 'completeForm') {
       const pseudo = String(f.get('pseudo') || '').trim();
       if (pseudo.length < 3) throw new Error('Choisis un pseudo de 3 caractères minimum.');
+      if (!cityPicked(form)) throw new Error('Choisis ta ville dans la liste proposée.');
+      const city = readCity(form);
       if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
       if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
       const now = new Date().toISOString();
-      const meta = { pseudo, city: f.get('city'), adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
+      const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
       if (form.id === 'completeForm') {
-        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
+        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, postal_code: meta.postal_code, latitude: meta.latitude, longitude: meta.longitude, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
         profile = rows[0];
         await loadUser();
         await refreshEvents();
@@ -2220,7 +2349,7 @@ async function submitAccountForm(form) {
       const password = String(f.get('password') || '');
       if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Adresse e-mail invalide.');
       if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
-      state.city = meta.city; state.adult = true; save();
+      setCity(city); state.adult = true; save();
       const res = await sb.signUp(email, password, meta);
       lastSignupEmail = email;
       if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate(afterLogin()); } else navigate('#/compte/verifier');

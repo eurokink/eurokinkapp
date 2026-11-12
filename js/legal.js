@@ -1,7 +1,7 @@
 // EuroKink — textes d'information (versions provisoires, à faire relire avant le lancement public)
 
 export const CONTACT_EMAIL = 'contact@eurokink.eu';
-export const LEGAL_UPDATED = '11 novembre 2026';
+export const LEGAL_UPDATED = '12 novembre 2026';
 
 const draft = '<p class="draft">Version provisoire, à faire relire avant le lancement public.</p>';
 const contactLine = () => (CONTACT_EMAIL
@@ -37,7 +37,8 @@ export const PAGES = {
       <ul>
         <li>ton <strong>consentement explicite</strong> est demandé à l’inscription ;</li>
         <li>les données sont hébergées par Supabase à <strong>Paris</strong> (Union européenne) ;</li>
-        <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta ville, tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
+        <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta photo de profil si tu en ajoutes une, ta ville (commune et code postal, avec les coordonnées du centre de la commune), tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
+        <li>ton pseudo, ta photo et ta ville sont visibles des membres connectés, notamment sur la carte de la communauté ; l’option « Profil invisible » des paramètres te retire de la carte à tout moment ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
         <li>aucun outil de statistiques, de publicité ou de suivi ;</li>
