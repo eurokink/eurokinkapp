@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.3';
+const VERSION = '0.28.5';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -828,7 +828,8 @@ function viewMessages() {
 
 // Fil d'une conversation. param = id de conversation, ou « u-<id membre> » pour écrire à quelqu'un
 function viewThread(param) {
-  const back = `<button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button>`;
+  // Retour toujours vers la liste : l'historique peut être faussé (ouverture depuis une notification, redirection u-<id>)
+  const back = `<a class="icon-btn" href="#/messages" aria-label="Retour">${I.back}</a>`;
   if (!convs) { loadConvs().then(() => { if ((location.hash || '').startsWith('#/messages/')) render(); }); return `<section class="screen">${accountTopRaw('Messages', '#/messages')}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`; }
   let c = null; let other = null;
   if (param.startsWith('u-')) {
@@ -875,11 +876,18 @@ function viewThread(param) {
     ${composer}
   </section>`;
 }
-async function loadThread(id) {
+// Un seul chargement à la fois par fil (évite les messages en double) ; une demande pendant un chargement en relance un après
+function loadThread(id) {
   const th = threads[id] = threads[id] || { msgs: [], lastId: 0, loaded: false };
+  if (th.busy) { th.again = true; return th.busy; }
+  th.busy = loadThreadOnce(id, th).then(() => { th.busy = null; if (th.again) { th.again = false; return loadThread(id); } return undefined; });
+  return th.busy;
+}
+async function loadThreadOnce(id, th) {
   try {
-    const rows = await sb.select('messages', `conversation_id=eq.${id}&id=gt.${th.lastId}&select=id,sender_id,body,created_at&order=id.asc&limit=500`);
+    const got = await sb.select('messages', `conversation_id=eq.${id}&id=gt.${th.lastId}&select=id,sender_id,body,created_at&order=id.asc&limit=500`);
     const first = !th.loaded; th.loaded = true;
+    const rows = got.filter((m) => m.id > th.lastId);
     if (rows.length) {
       th.msgs.push(...rows); th.lastId = rows[rows.length - 1].id;
       if (rows.some((m) => m.sender_id !== profile.id)) sb.rpc('mark_conversation_read', { p_conv: id }).then(() => { const c = convs && convs.find((x) => x.id === id); if (c) c.unread = 0; refreshUnread(); }).catch(() => {});
