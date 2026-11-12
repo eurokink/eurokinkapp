@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.4';
+const VERSION = '0.9.5';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -447,8 +447,9 @@ function viewProfile() {
       ${isOrganizer() ? `<a class="line-btn" href="#/orga">${I.sliders}<span>Espace organisateur</span>${I.chevron}</a>`
         : orgStatus && orgStatus.request && orgStatus.request.status === 'pending' ? `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Demande en cours d’examen</span></span>${I.chevron}</a>`
         : `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Publie tes soirées et suis tes statistiques</span></span>${I.chevron}</a>`}
-      <a class="line-btn" href="#/proposer" data-act="new-signal">${I.flag}<span>Signaler une soirée manquante</span>${I.chevron}</a>
-      <a class="line-btn" href="#/mes-propositions">${I.doc}<span>Mes signalements</span>${I.chevron}</a>
+      ${isAdmin() ? `<a class="line-btn" href="#/proposer" data-act="admin-new">${I.calendar}<span>Ajouter une soirée<span class="muted tiny block">Pour un organisateur existant ou nouveau</span></span>${I.chevron}</a>`
+        : `<a class="line-btn" href="#/proposer" data-act="new-signal">${I.flag}<span>Signaler une soirée manquante</span>${I.chevron}</a>
+      <a class="line-btn" href="#/mes-propositions">${I.doc}<span>Mes signalements</span>${I.chevron}</a>`}
       ${isAdmin() ? `<a class="line-btn" href="#/admin">${I.lock}<span>Espace admin</span>${adminCount() ? `<span class="count-pill">${adminCount()}</span>` : ''}${I.chevron}</a>` : ''}
     </div>` : ''}
     <a class="line-btn rounded" href="#/parametres">${I.gear}<span>Paramètres, confidentialité et informations</span>${I.chevron}</a>
@@ -625,12 +626,12 @@ function viewSubmit() {
     : 'Une soirée manque dans l’appli ? Indique-la : l’équipe EuroKink la vérifie avant de la publier. Tu l’organises ? <a class="accent" href="#/devenir-organisateur">Deviens organisateur</a>.';
   const canUpload = isAdmin() || !!org;
   const newOrg = draft.organizer_id === '__new';
-  const orgChoices = [...myOrgs().map((o) => [o.id, esc(o.name)]), ...(isAdmin() ? [['__new', '+ Nouvel organisateur']] : [])];
+  const orgChoices = [...(isAdmin() ? [['__new', '+ Nouvel organisateur (pas encore dans l’appli)']] : []), ...myOrgs().map((o) => [o.id, esc(o.name)])];
   const orgSection = orgMode
     ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${orgChoices.length > 1 && !draft.id
         ? `<label class="field">Organisation${selectField('organizer_id', orgChoices, draft.organizer_id)}</label>`
         : `<div class="line-btn static">${I.users}<span>${esc(org ? org.name : 'Ton organisation')}</span></div>`}
-      ${newOrg ? `<label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" autocomplete="off"></label>
+      ${newOrg ? `<p class="hint">L’organisateur sera créé avec la soirée. Tu pourras ensuite ajouter son logo dans Espace organisateur.</p><label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" autocomplete="off"></label>
         <label class="field">C’est…${selectField('organizer_kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), draft.organizer_kind || 'association')}</label>
         <label class="field">Site internet<input name="organizer_website" type="url" inputmode="url" value="${dv('organizer_website')}" placeholder="https://" autocomplete="off"></label>` : ''}</div>`
     : null;
@@ -1496,6 +1497,7 @@ document.addEventListener('click', (ev) => {
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
     case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
+    case 'admin-new': if (draft.id || !draft.organizer_id) { draft = { organizer_id: '__new' }; saveDraft(); } break;
     case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;
     case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
     case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
