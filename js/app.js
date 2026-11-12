@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.26.0';
+const VERSION = '0.26.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -152,6 +152,7 @@ const I = {
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
   plus: ic('<path d="M12 5v14M5 12h14"/>'),
   star: ic('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
+  globe: ic('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>'),
   chat: ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
   send: ic('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>'),
   dots: ic('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
@@ -1090,60 +1091,73 @@ function viewSettings() {
   const opt = (pairs, cur) => pairs.map(([v, l]) => `<option value="${v}" ${String(v) === String(cur) ? 'selected' : ''}>${l}</option>`).join('');
   const sw = (name, on, label, help) => `<label class="toggle-line"><span>${label}${help ? `<span class="muted tiny block">${help}</span>` : ''}</span><input type="checkbox" class="switch" name="${name}" ${on ? 'checked' : ''}></label>`;
   const info = (slug, label) => `<a class="line-btn" href="#/infos/${slug}">${I.doc}<span>${label}</span>${I.chevron}</a>`;
+  const group = (icon, title) => `<h2 class="group-title with-ic">${icon}<span>${title}</span></h2>`;
+  const sub = (title) => `<div class="set-sub">${title}</div>`;
+  if (!loggedIn()) {
+    return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/" aria-label="Retour">${I.back}</a><h1 class="page-title">Paramètres</h1></div>
+      <a class="line-btn rounded" href="#/compte/connexion">${I.user}<span>Me connecter ou créer un compte</span>${I.chevron}</a></section>`;
+  }
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour au profil">${I.back}</a><h1 class="page-title">Paramètres</h1></div>
-    ${loggedIn() ? `<h2 class="group-title">Mon compte</h2>
-    <div class="practical">
-      <div class="line-btn static">${I.mail}<span>${esc(sb.currentUser()?.email || '')}<span class="muted tiny block">Adresse de connexion</span></span></div>
-      <button class="line-btn" data-act="logout">${I.user}<span>Me déconnecter</span>${I.chevron}</button>
-      <button class="line-btn danger" data-act="delete-account">${I.trash}<span>Supprimer mon compte</span>${I.chevron}</button>
-    </div>` : `<a class="line-btn rounded" href="#/compte/connexion">${I.user}<span>Me connecter ou créer un compte</span>${I.chevron}</a>`}
     <form id="settingsForm" class="settings-groups">
-      <h2 class="group-title">Langue</h2>
+      ${group(I.user, 'Mon profil')}
       <div class="card settings">
-        <label class="field" data-no-i18n>Langue · Language · Sprache<select id="langSel">${LANGS.map(([v, l]) => `<option value="${v}" ${v === LANG ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-      </div>
-      <h2 class="group-title">Mon profil</h2>
-      <div class="card settings">
-        ${loggedIn() ? `<label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>` : ''}
+        <label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>
         ${cityField('Ma ville', 'Pour les soirées proches de chez toi et la carte des membres. Seule la ville est utilisée, jamais ton adresse.')}
         <label class="field">Rayon de recherche par défaut<select name="defaultRadius">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']], state.defaultRadius)}</select></label>
+        <a class="line-btn inset" href="#/membre/${profile.id}">${I.user}<span>Ma fiche membre<span class="muted tiny block">Présentation et centres d’intérêt</span></span>${I.chevron}</a>
       </div>
-      <h2 class="group-title">Confidentialité</h2>
+
+      ${group(I.bell, 'Notifications')}
       <div class="card settings">
-        <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
-        ${sw('invisible', state.invisible, 'Profil invisible', 'Tu n’apparais plus sur la carte des membres ni dans la communauté')}
-        ${loggedIn() ? sw('showOnline', profile.show_online !== false, 'Afficher quand je suis en ligne', 'Point vert et « Vu à… ». Si tu le désactives, tu ne vois plus non plus celui des autres.') : ''}
-        <p class="tiny muted">Tes sorties (« J’y vais ») apparaissent dans « Qui y va ? » sur chaque soirée et sur ta fiche membre. « Les membres que je suis » : seuls ceux que tu suis les voient.</p>
-      </div>
-      <h2 class="group-title">Notifications</h2>
-      <div class="card settings">
+        ${sub('Sur ce téléphone')}
+        ${pushBlock()}
+        ${sub('Me prévenir pour')}
+        ${sw('messagesOn', state.messagesOn !== false, 'Messages', 'Nouveaux messages et demandes de message')}
         ${sw('remindersOn', state.remindersOn, 'Rappels de soirée')}
-        ${sw('calAsk', state.calAsk !== 'never', 'Proposer l’ajout au calendrier', 'Après « J’y vais », une question te propose d’ajouter la soirée à ton calendrier')}
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
         ${sw('followsOn', state.followsOn !== false, 'Organisateurs suivis', 'Quand ils annoncent une nouvelle soirée')}
-        ${sw('messagesOn', state.messagesOn !== false, 'Messages', 'Nouveaux messages et demandes de message')}
         ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
+        ${sub('Discrétion')}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
-        ${pushBlock()}
+        ${sw('calAsk', state.calAsk !== 'never', 'Proposer l’ajout au calendrier', 'Après « J’y vais », une question te propose d’ajouter la soirée à ton calendrier')}
       </div>
-      <h2 class="group-title">Passeport</h2>
-      <div class="card settings">${loggedIn() ? '<p class="tiny muted">Connecté, ta présence est vérifiée par le serveur avec ta position : le mode test n’est disponible que sans compte.</p>' : sw('testMode', state.testMode, 'Mode test', 'Valider une présence sans GPS, pour essayer les badges')}</div>
+
+      ${group(I.lock, 'Confidentialité')}
+      <div class="card settings">
+        <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
+        <p class="tiny muted">Tes sorties (« J’y vais ») apparaissent dans « Qui y va ? » sur chaque soirée et sur ta fiche membre. « Les membres que je suis » : seuls ceux que tu suis les voient.</p>
+        ${sw('showOnline', profile.show_online !== false, 'Afficher quand je suis en ligne', 'Point vert et « Vu à… ». Si tu le désactives, tu ne vois plus non plus celui des autres.')}
+        ${sw('invisible', state.invisible, 'Profil invisible', 'Tu n’apparais plus sur la carte des membres ni dans la communauté')}
+      </div>
+
+      ${group(I.globe, 'Langue')}
+      <div class="card settings">
+        <label class="field" data-no-i18n>Langue · Language · Sprache<select id="langSel">${LANGS.map(([v, l]) => `<option value="${v}" ${v === LANG ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
     </form>
-    <h2 class="group-title">Informations</h2>
+
+    ${group(I.mail, 'Mon compte')}
     <div class="practical">
+      <div class="line-btn static">${I.mail}<span>${esc(sb.currentUser()?.email || '')}<span class="muted tiny block">Adresse de connexion</span></span></div>
+      <button class="line-btn" data-act="export">${I.download}<span>Exporter mes données</span>${I.chevron}</button>
+      <button class="line-btn" data-act="logout">${I.user}<span>Me déconnecter</span>${I.chevron}</button>
+    </div>
+
+    ${group(I.doc, 'Aide et informations')}
+    <div class="practical">
+      ${CONTACT_EMAIL ? `<a class="line-btn" href="mailto:${CONTACT_EMAIL}">${I.mail}<span>Nous contacter<span class="muted tiny block">${esc(CONTACT_EMAIL)}</span></span>${I.chevron}</a>` : ''}
       ${info('charte', 'Charte de la communauté')}
       ${info('cgu', 'Conditions générales d’utilisation')}
       ${info('confidentialite', 'Confidentialité')}
       ${info('mentions', 'Mentions légales')}
-      ${CONTACT_EMAIL ? `<a class="line-btn" href="mailto:${CONTACT_EMAIL}">${I.mail}<span>Nous contacter</span>${I.chevron}</a>` : `<div class="line-btn static">${I.mail}<span>Nous contacter<span class="muted tiny block">Adresse bientôt disponible</span></span></div>`}
     </div>
-    <h2 class="group-title">Mes données</h2>
-    <div class="practical">
-      <button class="line-btn" data-act="export">${I.download}<span>Exporter mes données</span>${I.chevron}</button>
-      <button class="line-btn danger" data-act="reset">${I.trash}<span>Effacer mes données sur cet appareil</span>${I.chevron}</button>
+
+    <div class="danger-zone">
+      <button class="line-btn rounded" data-act="reset">${I.trash}<span>Effacer mes données sur cet appareil<span class="muted tiny block">Ton compte et tes données en ligne sont conservés</span></span>${I.chevron}</button>
+      <button class="line-btn rounded danger" data-act="delete-account">${I.trash}<span>Supprimer mon compte</span>${I.chevron}</button>
     </div>
-    <div class="about-foot tiny muted center"><p>${BRAND} · version ${VERSION}</p><p>© ${COPYRIGHT_YEAR} ${BRAND} · Tous droits réservés</p><p>Phase de test · soirées fictives</p></div>
+    <div class="about-foot tiny muted center"><p>${BRAND} · version ${VERSION}</p><p>© ${COPYRIGHT_YEAR} ${BRAND} · Tous droits réservés</p></div>
   </section>`;
 }
 

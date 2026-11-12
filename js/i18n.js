@@ -658,6 +658,9 @@ const T = {
   'En ligne': ['Online', 'Online'], 'Afficher quand je suis en ligne': ['Show when I’m online', 'Anzeigen, wenn ich online bin'],
   'Point vert et « Vu à… ». Si tu le désactives, tu ne vois plus non plus celui des autres.': ['Green dot and “Seen at…”. If you turn it off, you won’t see other people’s either.', 'Grüner Punkt und „Gesehen um…“. Wenn du es deaktivierst, siehst du es auch bei anderen nicht mehr.'],
   'Envoyé': ['Sent', 'Gesendet'], 'Distribué': ['Delivered', 'Zugestellt'], 'Lu': ['Read', 'Gelesen'],
+  'Sur ce téléphone': ['On this phone', 'Auf diesem Telefon'], 'Me prévenir pour': ['Notify me about', 'Benachrichtige mich bei'], 'Discrétion': ['Discretion', 'Diskretion'],
+  'Aide et informations': ['Help and information', 'Hilfe und Informationen'], 'Ton compte et tes données en ligne sont conservés': ['Your account and online data are kept', 'Dein Konto und deine Online-Daten bleiben erhalten'],
+  'Me connecter ou créer un compte': ['Log in or create an account', 'Anmelden oder Konto erstellen'],
   // Villes au nom différent
   'Andorre-la-Vieille': ['Andorra la Vella', 'Andorra la Vella'], 'Anvers': ['Antwerp', 'Antwerpen'], 'Athènes': ['Athens', 'Athen'],
   'Barcelone': ['Barcelona', 'Barcelona'], 'Bologne': ['Bologna', 'Bologna'], 'Bruxelles': ['Brussels', 'Brüssel'], 'Bucarest': ['Bucharest', 'Bukarest'],
