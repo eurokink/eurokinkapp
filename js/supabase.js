@@ -128,4 +128,5 @@ export const update = (table, filter, patch) => request(`/rest/v1/${table}?${fil
 export const remove = (table, filter) => request(`/rest/v1/${table}?${filter}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
 export const uploadImage = (bucket, path, blob) => request(`/storage/v1/object/${bucket}/${path}`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type || 'image/jpeg', 'x-upsert': 'true' } });
 export const publicUrl = (bucket, path) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`;
+export const invoke = (fn, body = {}) => request(`/functions/v1/${fn}`, { method: 'POST', body });
 export const rpc = (fn, args = {}) => request(`/rest/v1/rpc/${fn}`, { method: 'POST', body: args });

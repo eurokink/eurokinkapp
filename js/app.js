@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.6';
+const VERSION = '0.10.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -848,6 +848,88 @@ function adminReportCard(r) {
   </article>`;
 }
 
+// --- Robot d'import (onglet admin) ---
+let robotSources = null, robotForm = false, robotBusy = false, srcTypes = ['multi'];
+const KIND_LABEL = { ical: 'Agenda iCal', jsonld: 'Page web (données structurées)', tribe: 'WordPress (The Events Calendar)' };
+async function loadRobot() {
+  try { robotSources = await sb.select('import_sources', 'select=*,organizer:organizers(name)&order=name.asc'); } catch (err) { robotSources = []; toast(err.message); }
+  if (location.hash.startsWith('#/admin')) render();
+}
+function robotCard(s) {
+  const when = s.last_read_at ? `${fDate.format(new Date(s.last_read_at))} à ${timeLabel(s.last_read_at)}` : 'jamais';
+  const status = s.last_error ? `<p class="tiny form-error robot-err">${esc(s.last_error)}</p>`
+    : s.last_read_at ? `<p class="tiny muted">${s.last_found ?? 0} soirée(s) à venir trouvée(s), ${s.last_added ?? 0} ajoutée(s) à la file</p>` : '';
+  return `<article class="card adm-card${s.is_active ? '' : ' off'}">
+    <div class="sub-head"><strong>${esc(s.name)}</strong><span class="pill-grey">${s.is_active ? 'Active' : 'En pause'}</span></div>
+    <div class="adm-facts">
+      <div>${I.doc}<span class="break">${esc(s.url)}</span><a class="link" href="${esc(s.url)}" target="_blank" rel="noopener">Ouvrir</a></div>
+      <div>${I.users}<span>${esc(s.organizer ? s.organizer.name : 'Organisateur lu sur la page')} · ${KIND_LABEL[s.kind] || s.kind}</span></div>
+      <div>${I.calendar}<span>Dernier passage : ${when} · types ${esc((s.default_types || []).map(typeName).join(', '))}</span></div>
+    </div>
+    ${status}
+    <div class="org-actions"><button class="mini-btn" data-act="src-run" data-id="${s.id}">Lancer</button>
+      <button class="mini-btn" data-act="src-toggle" data-id="${s.id}" data-on="${s.is_active ? '' : '1'}">${s.is_active ? 'Mettre en pause' : 'Réactiver'}</button>
+      <button class="mini-btn danger" data-act="src-del" data-id="${s.id}">Supprimer</button></div>
+  </article>`;
+}
+function viewRobot() {
+  if (robotSources === null) { loadRobot(); return '<div class="loading"><div class="spinner" aria-hidden="true"></div></div>'; }
+  const form = robotForm ? `<form id="sourceForm" class="card settings">
+      <label class="field">Nom de la source *<input name="name" maxlength="80" placeholder="Ex. Ouest Fetish (agenda)" autocomplete="off"></label>
+      <label class="field">Adresse (lien) *<input name="url" type="url" inputmode="url" placeholder="https://…" autocomplete="off"></label>
+      <label class="field">Format${selectField('kind', Object.entries(KIND_LABEL), 'ical')}<span class="hint">Agenda iCal : lien qui finit souvent par .ics ou ?ical=1. Page web : page d’événement ou de billetterie (Shotgun, Billetweb…).</span></label>
+      <label class="field">Organisateur${selectField('organizer_id', [['', 'Lu sur la page (ou nom de la source)'], ...myOrgs().map((o) => [o.id, esc(o.name)])], '')}</label>
+      <div class="field">Types par défaut<div class="chips wrap">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${srcTypes.includes(t.slug) ? 'on' : ''}" data-act="src-type" data-slug="${t.slug}">${esc(t.name)}</button>`).join('')}</div></div>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <div class="adm-actions"><button class="btn btn-red" type="submit">Ajouter</button><button class="btn btn-ghost" type="button" data-act="src-form">Annuler</button></div>
+    </form>` : '<button class="btn btn-ghost btn-block" data-act="src-form">+ Ajouter une source</button>';
+  return `<div class="card robot-head"><p class="tiny muted">Le robot lit ces sources chaque matin vers 6 h et envoie les nouvelles soirées dans l’onglet « Soirées » pour que tu les valides. Il ne publie jamais rien seul.</p>
+      <button class="btn btn-red btn-block" data-act="src-run" ${robotBusy ? 'disabled' : ''}>${robotBusy ? 'Le robot travaille…' : 'Lancer le robot maintenant'}</button></div>
+    ${form}
+    ${robotSources.map(robotCard).join('') || empty('Aucune source pour le moment.')}`;
+}
+async function robotAct(act) {
+  const id = act.dataset.id;
+  switch (act.dataset.act) {
+    case 'src-form': robotForm = !robotForm; srcTypes = ['multi']; render(); break;
+    case 'src-type': {
+      const t = act.dataset.slug;
+      srcTypes = srcTypes.includes(t) ? srcTypes.filter((x) => x !== t) : [...srcTypes, t];
+      if (!srcTypes.length) srcTypes = ['multi'];
+      act.classList.toggle('on', srcTypes.includes(t));
+      break;
+    }
+    case 'src-run': {
+      if (robotBusy) return;
+      robotBusy = true; render();
+      try {
+        const r = await sb.invoke('import-events', id ? { source_id: id } : {});
+        const added = (r.report || []).reduce((n, x) => n + (x.added || 0), 0);
+        toast(added ? `${added} nouvelle(s) soirée(s) à valider` : 'Aucune nouvelle soirée');
+      } catch (err) { toast(err.message); }
+      robotBusy = false; robotSources = null; adminData = null; render();
+      break;
+    }
+    case 'src-toggle':
+      try { await sb.update('import_sources', `id=eq.${id}`, { is_active: !!act.dataset.on }); robotSources = null; render(); } catch (err) { toast(err.message); }
+      break;
+    case 'src-del':
+      if (!confirm('Supprimer cette source ? Les soirées déjà importées restent.')) return;
+      try { await sb.remove('import_sources', `id=eq.${id}`); robotSources = null; render(); } catch (err) { toast(err.message); }
+      break;
+    default: break;
+  }
+}
+async function saveSource(form) {
+  const f = new FormData(form);
+  const row = { name: String(f.get('name') || '').trim(), url: String(f.get('url') || '').trim(), kind: f.get('kind'),
+    organizer_id: f.get('organizer_id') || null, default_types: srcTypes };
+  if (row.name.length < 2) return formError(form, 'Donne un nom à la source.');
+  if (!/^https:\/\/\S+$/i.test(row.url)) return formError(form, 'Le lien doit commencer par https://');
+  try { await sb.insert('import_sources', row); robotForm = false; robotSources = null; toast('Source ajoutée : appuie sur « Lancer » pour l’essayer'); render(); }
+  catch (err) { formError(form, /duplicate|unique/i.test(err.message) ? 'Cette adresse est déjà dans la liste.' : err.message); }
+}
+
 function viewAdmin() {
   if (!isAdmin()) return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}${empty('Réservé à l’administrateur.')}</section>`;
   if (adminData === null) { loadAdmin(); return loadingScreen('Espace admin', '#/profil'); }
@@ -857,9 +939,10 @@ function viewAdmin() {
   const body = adminTab === 'pending'
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
+    : adminTab === 'robot' ? viewRobot()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
-    <div class="seg seg-btn">${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}</div>
+    <div class="seg seg-btn">${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}${tab('robot', 'Robot', 0)}</div>
     ${body}</section>`;
 }
 
@@ -1431,6 +1514,9 @@ document.addEventListener('submit', (ev) => {
   } else if (form.id === 'orgRequestForm') {
     ev.preventDefault();
     submitOrgRequest(form);
+  } else if (form.id === 'sourceForm') {
+    ev.preventDefault();
+    saveSource(form);
   } else if (form.id === 'orgPageForm') {
     ev.preventDefault();
     saveOrgPage(form);
@@ -1496,6 +1582,7 @@ document.addEventListener('click', (ev) => {
     case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
+    case 'src-form': case 'src-type': case 'src-run': case 'src-toggle': case 'src-del': robotAct(act); break;
     case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
     case 'admin-new': if (draft.id || draft.lockOrg || !draft.organizer_id) { draft = { organizer_id: '__new' }; saveDraft(); } break;
     case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;

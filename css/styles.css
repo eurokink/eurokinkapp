@@ -402,3 +402,11 @@ img.org-logo.xl { padding: 14px; }
 .viewer { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.94); display: flex; align-items: center; justify-content: center; padding: calc(var(--safe-top) + 56px) 12px 24px; }
 .viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
 .viewer-close { position: absolute; top: calc(var(--safe-top) + 12px); right: 14px; background: rgba(40, 40, 40, 0.9); }
+
+/* Robot d'import (0.10.0) */
+.robot-head { display: flex; flex-direction: column; gap: 12px; }
+.robot-head p { margin: 0; }
+.robot-err { margin: 0; }
+.adm-card.off { opacity: 0.6; }
+.break { word-break: break-all; }
+.seg-btn button { padding: 8px 4px; font-size: 12.5px; }
