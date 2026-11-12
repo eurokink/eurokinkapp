@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.23.0';
+const VERSION = '0.24.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -352,7 +352,7 @@ function viewEvent(id) {
       ${showCheckin ? `<div class="checkin card"><div><strong>Tu es à la soirée ?</strong><div class="muted">Valide ta présence pour ton passeport.${state.testMode && !loggedIn() ? ' (mode test : sans GPS)' : ''}</div></div><button class="btn btn-red" data-act="checkin">${I.locate} Je suis sur place</button></div>` : ''}
       ${checked ? `<div class="checkin card done">${I.check}<div><strong>Présence validée</strong><div class="muted">Elle compte dans ton passeport.</div></div></div>` : ''}
       <div class="info-grid">${infos.map(([l, v]) => `<div class="info"><span>${l}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
-      ${e.dressCodeDetails ? `<p class="dress muted">Dress code : ${esc(e.dressCodeDetails)}</p>` : ''}
+      ${e.dressCodeDetails ? `<p class="dress muted">Dress code : ${ut(e.dressCodeDetails)}</p>` : ''}
       <div class="actions">
         ${actionBtn('fav', fav, I.heart, 'Favori')}
         ${actionBtn('reminder', rem, I.bell, 'Rappel')}
@@ -361,7 +361,7 @@ function viewEvent(id) {
       </div>
       ${whoCardHtml(e)}
       <h2 class="section-title">À propos</h2>
-      <p class="about">${esc(e.description)}</p>
+      <p class="about">${ut(e.description)}</p>
       <h2 class="section-title">Pratique</h2>
       <div class="practical">
         <a class="line-btn" href="${mapsUrl(e)}" target="_blank" rel="noopener">${I.route}<span>Itinéraire jusqu’au lieu</span>${I.chevron}</a>
@@ -631,6 +631,48 @@ async function inviteRevoke(btn) {
   try { await sb.rpc('revoke_organizer_invite', { p_id: btn.dataset.id }); toast('Invitation supprimée'); loadTeam(btn.dataset.org); } catch (err) { toast(err.message); }
 }
 
+// Traduction automatique des textes écrits par les membres (descriptions, dress code, présentations).
+// Le texte d'origine s'affiche d'abord, puis la traduction ; toucher le texte bascule vers l'original.
+const UT_KEY = 'ek.ut.v1';
+const utCache = (() => { try { return JSON.parse(localStorage.getItem(UT_KEY) || '{}'); } catch (e) { return {}; } })();
+const utKey = (txt) => `${LANG}|${txt}`;
+const ut = (txt) => `<span class="ut" data-ut="${esc(txt)}" data-no-i18n>${esc(utCache[utKey(txt)] ?? txt)}</span>`;
+let utTimer = null; const utPending = new Set(); const utAsked = new Set();
+function utScan() {
+  if (!loggedIn()) return;
+  document.querySelectorAll('[data-ut]').forEach((el) => {
+    const src = el.dataset.ut; const k = utKey(src);
+    if (utCache[k] != null) { if (!el.dataset.orig && el.textContent !== utCache[k]) el.textContent = utCache[k]; markUt(el, src); }
+    else if (!utAsked.has(k)) utPending.add(src);
+  });
+  if (utPending.size && !utTimer) utTimer = setTimeout(utFlush, 150);
+}
+function markUt(el, src) {
+  if (utCache[utKey(src)] === src || el.dataset.marked) return;
+  el.dataset.marked = '1';
+  el.classList.add('ut-done');
+  el.title = { fr: 'Traduit automatiquement · toucher pour voir l’original', en: 'Automatically translated · tap to see the original', de: 'Automatisch übersetzt · tippen für das Original' }[LANG];
+}
+async function utFlush() {
+  utTimer = null;
+  const batch = [...utPending].slice(0, 30); batch.forEach((x) => { utPending.delete(x); utAsked.add(utKey(x)); });
+  if (!batch.length) return;
+  try {
+    const r = await sb.invoke('translate', { target: LANG, texts: batch });
+    Object.entries((r && r.translations) || {}).forEach(([src, tr]) => { utCache[utKey(src)] = tr; });
+    const keys = Object.keys(utCache); if (keys.length > 400) keys.slice(0, keys.length - 400).forEach((k) => delete utCache[k]);
+    try { localStorage.setItem(UT_KEY, JSON.stringify(utCache)); } catch (e) { /* stockage plein */ }
+    utScan();
+  } catch (e) { /* service indisponible : on garde l'original */ }
+  if (utPending.size) utTimer = setTimeout(utFlush, 150);
+}
+document.addEventListener('click', (ev) => {
+  const el = ev.target.closest('.ut-done'); if (!el) return;
+  const src = el.dataset.ut;
+  if (el.dataset.orig) { delete el.dataset.orig; el.textContent = utCache[utKey(src)] ?? src; } else { el.dataset.orig = '1'; el.textContent = src; }
+});
+new MutationObserver(() => { if (document.querySelector('[data-ut]:not(.ut-done)')) utScan(); }).observe(document.body, { childList: true, subtree: true });
+
 // Fiche d'un membre
 const memberCache = new Map();
 const fMonth = fmt({ month: 'long', year: 'numeric' });
@@ -654,7 +696,7 @@ function viewMember(id) {
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
-    <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${esc(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
+    <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
     ${(() => {
       if (!outingsCache.has(m.id)) { loadOutings(m.id); return ''; }
@@ -1910,7 +1952,7 @@ function viewOrganizerPage(id) {
       <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
       ${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site officiel</a>` : ''}
     </div>
-    ${o.description ? `<p class="about">${esc(o.description)}</p>` : ''}
+    ${o.description ? `<p class="about">${ut(o.description)}</p>` : ''}
     ${o.manager ? `<a class="line-btn rounded" href="#/orga/${o.id}">${I.gear}<span>Gérer dans mon espace organisateur</span>${I.chevron}</a>` : ''}
     <h2 class="group-title">Prochaines soirées</h2>
     <div class="list">${list.map(eventRow).join('') || empty('Aucune soirée annoncée pour le moment.')}</div>
@@ -2649,6 +2691,7 @@ async function loadUser() {
   profile = rows[0];
   state.adult = true;
   state.pseudo = profile.pseudo;
+  if (profile.lang !== LANG) sb.update('profiles', `id=eq.${uid}`, { lang: LANG }).then((r) => { if (r && r[0]) profile = r[0]; }).catch(() => {});
   if (profile.city) setCity({ name: profile.city, postal: profile.postal_code, lat: profile.latitude, lon: profile.longitude, country: profile.country });
   state.visibility = profile.attendance_visibility;
   state.invisible = profile.is_invisible;
