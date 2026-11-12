@@ -383,13 +383,8 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .mm-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* 0.9.1 : fond sombre et logo entier (logos blancs ou transparents) */
 .org-logo, .mm-logo, .hero-logo { background: #141414; }
-img.org-logo, .mm-logo img, .hero-logo { object-fit: contain; box-sizing: border-box; }
-img.org-logo { padding: 6px; }
-img.org-logo.xs { padding: 2px; }
-img.org-logo.lg { padding: 9px; }
-img.org-logo.xl { padding: 14px; }
-.mm-logo img { padding: 6px; }
-.hero-logo { padding: 22px; }
+/* 0.14.0 : logos en plein rond (le cadrage se choisit à l'import) */
+img.org-logo, .mm-logo img, .hero-logo { object-fit: cover; box-sizing: border-box; padding: 0; }
 .img-preview .img-error { display: none; margin: 0; }
 .img-preview.broken img { display: none; }
 .img-preview.broken .img-error { display: block; }
@@ -439,3 +434,12 @@ img.org-logo.xl { padding: 14px; }
 .avatar-btn img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .avatar-cam { position: absolute; right: -4px; bottom: -4px; width: 28px; height: 28px; border-radius: 50%; background: var(--red); border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; color: #fff; }
 .avatar-cam .ic { width: 14px; height: 14px; }
+
+/* Outil de cadrage en rond (0.14.0) */
+.cropper .sheet-card { gap: 16px; align-items: center; }
+.crop-stage { position: relative; width: 280px; height: 280px; max-width: 78vw; max-height: 78vw; border-radius: 16px; overflow: hidden; background: #141414; touch-action: none; cursor: grab; user-select: none; }
+.crop-stage img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; pointer-events: none; -webkit-user-drag: none; }
+.crop-stage::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.62); border: 2px solid rgba(255, 255, 255, 0.85); pointer-events: none; }
+.crop-zoom { width: 100%; display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.crop-zoom input { flex: 1; accent-color: var(--red); }
+.cropper .adm-actions { width: 100%; }

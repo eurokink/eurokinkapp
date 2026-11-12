@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1252,9 +1252,12 @@ async function handleLogoFile(input) {
   const file = input.files && input.files[0];
   if (!file || uploading || !isUuid(currentOrgId)) return;
   if (!/^image\//.test(file.type)) { toast('Choisis une image'); return; }
-  uploading = true; toast('Envoi du logo…');
+  uploading = true;
   try {
-    const blob = await shrinkImage(file, 512, 'image/png');
+    const blob = await cropCircle(file, { size: 512, type: 'image/png', title: 'Cadrer le logo' });
+    input.value = '';
+    if (!blob) { uploading = false; return; }
+    toast('Envoi du logo…');
     const path = `${currentOrgId}/logo-${Date.now().toString(36)}.png`;
     await sb.uploadImage('event-images', path, blob);
     await setOrgLogo(path);
@@ -1557,7 +1560,7 @@ function navigate(hash) {
 
 // Bloque le zoom par pincement et double toucher (Safari iOS ignore l'interdiction du viewport)
 ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (ev) => ev.preventDefault(), { passive: false }));
-document.addEventListener('touchmove', (ev) => { if (ev.touches.length > 1 && !ev.target.closest('#map')) ev.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', (ev) => { if (ev.touches.length > 1 && !ev.target.closest('#map, .crop-stage')) ev.preventDefault(); }, { passive: false });
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (ev) => {
   const now = Date.now();
@@ -1869,19 +1872,60 @@ function maybeOnboard() {
   draw();
 }
 
-// Photo de profil : recadrée en carré au centre, 480 px, envoyée dans le dossier du membre
-function squareImage(file, size = 480) {
+// Cadrage en rond, comme Instagram : on déplace au doigt, on zoome (pincement ou curseur), on valide.
+// Renvoie une image carrée (affichée en rond) ; null si annulé.
+function cropCircle(file, { size = 512, type = 'image/jpeg', title = 'Cadrer la photo', fill = '#141414' } = {}) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      const side = Math.min(img.width, img.height);
-      const c = document.createElement('canvas'); c.width = size; c.height = size;
-      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
-      URL.revokeObjectURL(url);
-      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Image illisible'))), 'image/jpeg', 0.85);
-    };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible : essaie un JPEG ou un PNG')); };
+    img.onload = () => {
+      let result = null;
+      const el = sheet(`<h2>${title}</h2>
+        <div class="crop-stage" id="cropStage"></div>
+        <div class="crop-zoom"><span>−</span><input type="range" id="cropZoom" min="0" max="1000" value="0" aria-label="Zoom"><span>+</span></div>
+        <p class="tiny muted">Déplace l’image avec le doigt, pince ou utilise le curseur pour zoomer.</p>
+        <div class="adm-actions"><button class="btn btn-ghost" data-sheet-close>Annuler</button><button class="btn btn-red" data-crop-ok>Valider</button></div>`,
+      () => { URL.revokeObjectURL(url); resolve(result); });
+      el.classList.add('cropper');
+      const stage = el.querySelector('#cropStage'), zoom = el.querySelector('#cropZoom');
+      img.draggable = false; stage.appendChild(img);
+      const D = stage.clientWidth, nw = img.naturalWidth, nh = img.naturalHeight;
+      const cover = Math.max(D / nw, D / nh);
+      const minS = Math.min(cover, D / Math.hypot(nw, nh)); // assez petit pour voir tout le logo dans le rond
+      const maxS = cover * 4;
+      let sc = cover, tx = (D - nw * sc) / 2, ty = (D - nh * sc) / 2;
+      const toSlider = () => { zoom.value = Math.round(((Math.log(sc) - Math.log(minS)) / (Math.log(maxS) - Math.log(minS))) * 1000); };
+      const clamp = () => {
+        const w = nw * sc, h = nh * sc;
+        tx = w >= D ? Math.min(0, Math.max(D - w, tx)) : Math.max(0, Math.min(D - w, tx));
+        ty = h >= D ? Math.min(0, Math.max(D - h, ty)) : Math.max(0, Math.min(D - h, ty));
+      };
+      const draw = () => { clamp(); img.style.transform = `translate(${tx}px, ${ty}px) scale(${sc})`; img.style.width = `${nw}px`; img.style.height = `${nh}px`; };
+      const zoomAt = (ns, cx, cy) => { ns = Math.max(minS, Math.min(maxS, ns)); tx = cx - ((cx - tx) * ns) / sc; ty = cy - ((cy - ty) * ns) / sc; sc = ns; draw(); };
+      zoom.addEventListener('input', () => zoomAt(minS * Math.exp((zoom.value / 1000) * (Math.log(maxS) - Math.log(minS))), D / 2, D / 2));
+      const pts = new Map(); let last = null;
+      const rel = (ev) => { const r = stage.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+      const pinch = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+      stage.addEventListener('pointerdown', (ev) => { stage.setPointerCapture(ev.pointerId); pts.set(ev.pointerId, rel(ev)); last = pts.size === 2 ? pinch() : rel(ev); });
+      stage.addEventListener('pointermove', (ev) => {
+        if (!pts.has(ev.pointerId)) return;
+        pts.set(ev.pointerId, rel(ev));
+        if (pts.size === 2) { const p = pinch(); if (last && last.d) { zoomAt(sc * (p.d / last.d), p.x, p.y); tx += p.x - last.x; ty += p.y - last.y; draw(); toSlider(); } last = p; }
+        else { const p = rel(ev); tx += p.x - last.x; ty += p.y - last.y; last = p; draw(); }
+      });
+      const up = (ev) => { pts.delete(ev.pointerId); last = pts.size ? [...pts.values()][0] : null; };
+      stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+      stage.addEventListener('wheel', (ev) => { ev.preventDefault(); const p = rel(ev); zoomAt(sc * (ev.deltaY < 0 ? 1.1 : 0.9), p.x, p.y); toSlider(); }, { passive: false });
+      el.querySelector('[data-crop-ok]').addEventListener('click', () => {
+        const c = document.createElement('canvas'); c.width = size; c.height = size;
+        const ctx = c.getContext('2d'); const k = size / D;
+        if (type === 'image/jpeg') { ctx.fillStyle = fill; ctx.fillRect(0, 0, size, size); }
+        ctx.drawImage(img, tx * k, ty * k, nw * sc * k, nh * sc * k);
+        c.toBlob((b) => { result = b; closeOverlay(); }, type, 0.88);
+      });
+      draw(); toSlider();
+    };
     img.src = url;
   });
 }
@@ -1901,9 +1945,12 @@ function avatarMenu() {
   el.querySelector('#avatarFile').addEventListener('change', async (ev) => {
     const file = ev.target.files && ev.target.files[0];
     if (!file) return;
-    closeOverlay(); toast('Envoi de la photo…');
+    closeOverlay();
     try {
-      const blob = await squareImage(file);
+      await new Promise((r) => setTimeout(r, 250));
+      const blob = await cropCircle(file, { size: 480, type: 'image/jpeg', title: 'Cadrer ta photo' });
+      if (!blob) return;
+      toast('Envoi de la photo…');
       const path = `${profile.id}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
       await sb.uploadImage('avatars', path, blob);
       await setAvatar(path);
