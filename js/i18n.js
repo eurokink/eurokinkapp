@@ -654,6 +654,7 @@ const T = {
   'Ce membre n’a pas accepté ta demande de message': ['This member hasn’t accepted your message request', 'Dieses Mitglied hat deine Nachrichtenanfrage nicht angenommen'],
   'Attends que ce membre accepte ta demande avant d’envoyer d’autres messages': ['Wait until this member accepts your request before sending more messages', 'Warte, bis dieses Mitglied deine Anfrage annimmt, bevor du weitere Nachrichten sendest'],
   'Message vide ou trop long (2 000 caractères maximum)': ['Empty or too long message (2,000 characters max)', 'Leere oder zu lange Nachricht (höchstens 2.000 Zeichen)'],
+  'Discute avec les membres qui vont aux mêmes soirées que toi': ['Chat with members going to the same events as you', 'Chatte mit Mitgliedern, die auf dieselben Partys gehen'],
   // Villes au nom différent
   'Andorre-la-Vieille': ['Andorra la Vella', 'Andorra la Vella'], 'Anvers': ['Antwerp', 'Antwerpen'], 'Athènes': ['Athens', 'Athen'],
   'Barcelone': ['Barcelona', 'Barcelona'], 'Bologne': ['Bologna', 'Bologna'], 'Bruxelles': ['Brussels', 'Brüssel'], 'Bucarest': ['Bucharest', 'Bukarest'],
@@ -707,6 +708,8 @@ const R = [
   [/^Crée ton compte \(ou connecte-toi\) pour gérer la page de (.+) et publier vos soirées\.$/, (m) => [`Create your account (or log in) to manage ${m[1]}’s page and publish your events.`, `Erstelle ein Konto (oder melde dich an), um die Seite von ${m[1]} zu verwalten und eure Partys zu veröffentlichen.`]],
   [/^Tu es invité à rejoindre la gestion de (.+) sur EuroKink\.$/, (m) => [`You’re invited to help manage ${m[1]} on EuroKink.`, `Du bist eingeladen, ${m[1]} auf EuroKink mitzuverwalten.`]],
   [/^Ta demande pour « (.+) » a bien été reçue le (.+?)\. (.+)$/, (m) => [`Your request for “${m[1]}” was received on ${m[2]}. ${tr(m[3]) || m[3]}`, `Deine Anfrage für „${m[1]}“ ist am ${m[2]} eingegangen. ${tr(m[3]) || m[3]}`]],
+  [/^(\d+) nouveaux? messages?$/, (m) => [`${m[1]} new ${P(m[1], 'message', 'messages')}`, `${m[1]} neue ${P(m[1], 'Nachricht', 'Nachrichten')}`]],
+  [/^(\d+) demandes? de message ·$/, (m) => [`${m[1]} message ${P(m[1], 'request', 'requests')} ·`, `${m[1]} ${P(m[1], 'Nachrichtenanfrage', 'Nachrichtenanfragen')} ·`]],
   [/^Version (.+)$/, (m) => [`Version ${m[1]}`, `Version ${m[1]}`]],
   [/^(.+) · version (.+)$/, (m) => [`${m[1]} · version ${m[2]}`, `${m[1]} · Version ${m[2]}`]],
   [/^© (\d+) (.+) · Tous droits réservés$/, (m) => [`© ${m[1]} ${m[2]} · All rights reserved`, `© ${m[1]} ${m[2]} · Alle Rechte vorbehalten`]],

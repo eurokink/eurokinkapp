@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.25.0';
+const VERSION = '0.25.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -238,9 +238,10 @@ function viewHome() {
   const chips = [['weekend', 'Ce week-end'], ['free', 'Gratuit'], ...EVENT_TYPES.slice(0, 6).map((t) => [`type:${t.slug}`, t.name])];
   return `<section class="screen">
     <header class="topbar"><div class="brand">${LOGO_MARK}${WORDMARK}</div>
-      <div class="top-actions"><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
+      <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}</p></div>
+    ${homeMsgCard()}
     <form class="search-row" id="homeSearch">
       <label class="search"><span>${I.search}</span><input name="q" type="search" placeholder="Ville, soirée, organisateur…" aria-label="Rechercher"></label>
       <a class="filter-btn" href="#/explorer" aria-label="Filtres">${I.sliders}</a>
@@ -692,8 +693,10 @@ async function loadConvs() {
 }
 async function refreshUnread() {
   if (!loggedIn()) return;
+  const before = unreadMsgs;
   try { unreadMsgs = await sb.rpc('unread_messages'); } catch (e) { return; }
   updateMsgBadges();
+  if (unreadMsgs !== before && ((location.hash || '#/') === '#/' || location.hash === '#/messages')) { convsAt = 0; loadConvs().then(render); }
 }
 function updateMsgBadges() {
   document.querySelectorAll('[data-msg-badge]').forEach((b) => { b.textContent = unreadMsgs > 9 ? '9+' : String(unreadMsgs); b.hidden = !unreadMsgs; });
@@ -701,6 +704,25 @@ function updateMsgBadges() {
 const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
 setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
+
+// Encart « Messages » de l'accueil : bien visible quand il y a du nouveau
+function homeMsgCard() {
+  if (!loggedIn()) return '';
+  if (!convs || Date.now() - convsAt > 30000) loadConvs().then(() => { if ((location.hash || '#/') === '#/' || location.hash === '') render(); });
+  const fresh = (convs || []).filter((c) => Number(c.unread) > 0 && !c.blocked && c.status !== 'declined');
+  if (!fresh.length) {
+    return `<a class="card msg-card" href="#/messages"><span class="msg-card-ic">${I.chat}</span>
+      <div class="mr-main"><strong>Messages</strong><div class="muted tiny">Discute avec les membres qui vont aux mêmes soirées que toi</div></div>${I.chevron}</a>`;
+  }
+  const n = fresh.reduce((k, c) => k + Number(c.unread), 0);
+  const c0 = fresh[0];
+  const req = fresh.filter((c) => c.status === 'request' && !c.mine).length;
+  const href = fresh.length === 1 ? `#/messages/${c0.id}` : '#/messages';
+  return `<a class="card msg-card hot" href="${href}">
+    <span class="av-stack">${fresh.slice(0, 3).map((c) => memberAv(c.other)).join('')}</span>
+    <div class="mr-main"><strong>${n} nouveau${n > 1 ? 'x' : ''} message${n > 1 ? 's' : ''}</strong>
+      <div class="tiny">${req ? `${req} demande${req > 1 ? 's' : ''} de message · ` : ''}<span data-no-i18n>${esc(c0.other.pseudo)}</span> : <span data-no-i18n>${esc((c0.last_preview || '').slice(0, 60))}</span></div></div>${I.chevron}</a>`;
+}
 
 function viewMessages() {
   const top = `<div class="sub-top"><a class="icon-btn" href="#/communaute" aria-label="Retour">${I.back}</a><h1 class="page-title small">Messages</h1></div>`;
@@ -853,9 +875,9 @@ function viewMember(id) {
     })()}
     ${mine ? `<a class="btn btn-red btn-block" href="#/ma-fiche">Modifier ma fiche</a>
       <p class="tiny muted center">${state.invisible ? 'Ton profil est invisible : personne d’autre ne voit cette fiche.' : 'Cette fiche est visible des membres connectés.'}</p>`
-      : `<button class="btn ${following.has(m.id) ? 'btn-ghost' : 'btn-red'} btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
+      : `<a class="btn btn-red btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
+        <button class="btn btn-ghost btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
-        <a class="btn btn-ghost btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
   </section>`;
 }
