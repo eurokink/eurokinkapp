@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.0';
+const VERSION = '0.28.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1405,7 +1405,9 @@ let addrResults = [];
 let mySubs = null;          // mes propositions (null = à charger)
 let adminData = null;       // { pending, reports } (null = à charger)
 let adminTab = 'pending';
-let adminStats = null;      // statistiques (null = à charger)
+let adminStats = null;
+let adminMembers = null;    // liste complète des inscrits (null = à charger)
+let admMemberQ = '';      // statistiques (null = à charger)
 let loadingSubs = false, loadingAdmin = false, submitting = false;
 const isAdmin = () => loggedIn() && profile.role === 'admin';
 const dv = (k) => esc(draft[k] ?? '');
@@ -1824,9 +1826,10 @@ function viewAdmin() {
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : adminTab === 'robot' ? viewRobot()
     : adminTab === 'stats' ? viewStats()
+    : adminTab === 'members' ? viewAdmMembers()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
-    <div class="seg seg-btn adm-seg">${tab('stats', 'Stats', 0)}${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}${tab('robot', 'Robot', 0)}</div>
+    <div class="seg seg-btn adm-seg">${tab('stats', 'Stats', 0)}${tab('members', 'Membres', 0)}${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}${tab('robot', 'Robot', 0)}</div>
     ${body}</section>`;
 }
 
@@ -1834,6 +1837,42 @@ function loadStats() {
   adminStats = { loading: true };
   sb.rpc('admin_stats').then((r) => { adminStats = r; }).catch((err) => { adminStats = { error: err.message }; })
     .then(() => { if ((location.hash || '').startsWith('#/admin')) render(); });
+}
+function loadAdmMembers() {
+  adminMembers = { loading: true };
+  sb.rpc('admin_members').then((r) => { adminMembers = r || []; }).catch((err) => { adminMembers = { error: err.message }; })
+    .then(() => { if ((location.hash || '').startsWith('#/admin')) render(); });
+}
+function admMemberRows() {
+  const q = admMemberQ.trim().toLowerCase();
+  const list = adminMembers.filter((m) => !q || [m.pseudo, m.city, m.manages].some((x) => String(x || '').toLowerCase().includes(q)));
+  if (!list.length) return empty('Aucun membre ne correspond.');
+  const df = fmt({ day: 'numeric', month: 'short', year: 'numeric' });
+  const seen = (m) => {
+    if (!m.last_seen_at) return 'pas encore revenu';
+    const mins = Math.round((Date.now() - new Date(m.last_seen_at)) / 60000);
+    return mins < 3 ? 'en ligne' : mins < 60 ? `vu il y a ${mins} min` : mins < 1440 ? `vu il y a ${Math.round(mins / 60)} h` : `vu le ${fShort.format(new Date(m.last_seen_at))}`;
+  };
+  return list.map((m) => {
+    const av = memberAv({ pseudo: m.pseudo, avatar_path: m.avatar, last_seen_at: m.last_seen_at });
+    const tags = [m.role === 'admin' ? '<span class="tag tag-red">ADMIN</span>' : '', m.invisible ? '<span class="tag tag-dark">INVISIBLE</span>' : '', m.manages ? `<span class="tag tag-dark">ORGA</span>` : ''].join('');
+    const inner = `${av}<div class="mr-main"><strong>${esc(m.pseudo)}</strong> <span class="muted tiny">n° ${m.number}</span> ${tags}
+      <div class="muted tiny">${esc(m.city || 'Ville non renseignée')}${m.country ? ` · ${esc(COUNTRY_NAMES[String(m.country).trim()] || String(m.country).trim())}` : ''} · appli en ${(m.lang || 'fr').toUpperCase()}</div>
+      <div class="muted tiny">Inscrit le ${df.format(new Date(m.created_at))} · ${seen(m)}${m.push ? ' · notifs ✓' : ''}${m.going ? ` · ${m.going} sortie${m.going > 1 ? 's' : ''}` : ''}</div>
+      ${m.manages ? `<div class="muted tiny">Gère : ${esc(m.manages)}</div>` : ''}</div>`;
+    return m.invisible ? `<div class="member-row card">${inner}</div>` : `<a class="member-row card" href="#/membre/${m.id}">${inner}${I.chevron}</a>`;
+  }).join('');
+}
+function viewAdmMembers() {
+  const s = adminMembers;
+  if (!s) { loadAdmMembers(); return '<div class="loading"><div class="spinner" aria-hidden="true"></div></div>'; }
+  if (s.loading) return '<div class="loading"><div class="spinner" aria-hidden="true"></div></div>';
+  if (s.error) return empty(esc(s.error));
+  const inv = s.filter((m) => m.invisible).length;
+  return `<label class="search"><span>${I.search}</span><input id="admMQ" type="search" placeholder="Pseudo, ville, organisation…" value="${esc(admMemberQ)}" aria-label="Rechercher un inscrit" autocomplete="off"></label>
+    <p class="muted tiny">${s.length} inscrit${s.length > 1 ? 's' : ''} dont ${inv} invisible${inv > 1 ? 's' : ''} · du plus récent au plus ancien</p>
+    <div id="admMList" class="list">${admMemberRows()}</div>
+    <p class="tiny muted center">Les profils invisibles n’apparaissent qu’ici : ils restent cachés des autres membres.</p>`;
 }
 function viewStats() {
   const s = adminStats;
@@ -1881,7 +1920,7 @@ function adminAct(act) {
   const id = act.dataset.id;
   switch (act.dataset.act) {
     case 'adm-tab': adminTab = act.dataset.tab; render(); break;
-    case 'adm-stats-refresh': adminStats = null; render(); break;
+    case 'adm-stats-refresh': adminStats = null; adminMembers = null; render(); break;
     case 'adm-publish': adminRun(act, () => sb.rpc('moderate_event', { p_event: id, p_publish: true }), 'Soirée publiée'); break;
     case 'adm-trust':
       adminRun(act, async () => {
@@ -2650,6 +2689,7 @@ document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'fBudget') { filters.budget = Number(t.value); $('#budgetLabel').textContent = budgetLabel(); renderResults(); }
   if (t.id === 'fQ') { filters.q = t.value; renderResults(); }
+  if (t.id === 'admMQ') { admMemberQ = t.value; const box = $('#admMList'); if (box) box.innerHTML = admMemberRows(); }
   if (t.id === 'mQ') { memberQ = t.value; const box = $('#memberList'); if (box) box.innerHTML = memberListHtml(); }
   if (t.name === 'bio' && t.form && t.form.id === 'memberForm') { const c = $('#bioCount'); if (c) c.textContent = t.value.length; }
   if (t.matches && t.matches('[data-city-input]')) { cityGeocode(t); return; }

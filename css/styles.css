@@ -580,7 +580,7 @@ a.member-row { color: inherit; text-decoration: none; }
 /* Espace admin : statistiques */
 .adm-seg { overflow-x: auto; scrollbar-width: none; }
 .adm-seg::-webkit-scrollbar { display: none; }
-.adm-seg button { flex: 1 0 auto; }
+.adm-seg button { flex: 1 0 auto; padding-left: 12px; padding-right: 12px; }
 .stats + .stats { margin-top: 8px; }
 .st-chart { padding: 14px 12px 10px; }
 .st-bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; }
