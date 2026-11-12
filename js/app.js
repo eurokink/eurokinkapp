@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.18.1';
+const VERSION = '0.18.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1384,10 +1384,12 @@ function urlB64ToBytes(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); cons
 async function pushAct(act) {
   const kind = act.dataset.act;
   try {
+    // Sur iPhone, la demande d'autorisation doit partir directement du toucher : avant toute attente
+    const permAsk = kind === 'push-on' ? Notification.requestPermission() : null;
     const reg = await navigator.serviceWorker.ready;
     if (kind === 'push-on') {
       pushState = 'busy'; render();
-      const perm = await Notification.requestPermission();
+      const perm = await permAsk;
       if (perm !== 'granted') { pushState = perm === 'denied' ? 'denied' : 'off'; render(); return; }
       const key = await sb.rpc('push_public_key');
       if (!key) throw new Error('Service de notifications indisponible, réessaie dans quelques minutes');
@@ -2281,12 +2283,35 @@ const ONBOARD = [
   [I.bell, 'Ne rate plus rien', 'Mets une soirée en favori, active un rappel ou une alerte billetterie, et suis tes organisateurs préférés pour être prévenu de leurs nouvelles dates.'],
   [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
 ];
+// Proposition d'activer les notifications dès la première connexion (puis au plus 2 rappels, espacés de 3 jours)
+async function maybeAskPush() {
+  if (!loggedIn() || overlayClose || pendingInvite() || (location.hash || '').startsWith('#/invitation')) return;
+  if (pushState === 'unknown') await checkPush();
+  if (overlayClose || !['off', 'ios-install'].includes(pushState)) return;
+  if (pushState === 'off' && Notification.permission !== 'default') return;
+  const key = `ek.pushAsk.${profile.id}`;
+  let seen = { n: 0, at: 0 };
+  try { seen = JSON.parse(localStorage.getItem(key) || '{"n":0,"at":0}'); } catch (err) { return; }
+  if (seen.n >= 3 || Date.now() - seen.at < 3 * 86400000) return;
+  try { localStorage.setItem(key, JSON.stringify({ n: seen.n + 1, at: Date.now() })); } catch (err) { return; }
+  const what = ['Rappels avant tes soirées', 'Ouverture des billetteries et places libérées', 'Nouvelles dates de tes organisateurs suivis'];
+  const el = sheet(`<div class="onb-icon">${I.bell}</div><h2>Active les notifications</h2>
+    <p class="muted">${pushState === 'ios-install' ? 'Sur iPhone, elles ne marchent que dans l’appli installée : dans Safari, touche Partager puis « Sur l’écran d’accueil », et ouvre EuroKink depuis son icône.' : 'Pour ne rien rater de tes sorties :'}</p>
+    <ul class="soon-list">${what.map((x) => `<li>${I.check}<span>${x}</span></li>`).join('')}</ul>
+    <p class="tiny muted">Discrètes par défaut : titre « EuroKink » et texte neutre. Tout se règle dans Paramètres.</p>
+    ${pushState === 'off' ? '<button class="btn btn-red btn-block" data-ask-yes>Activer</button>' : ''}
+    <button class="${pushState === 'off' ? 'link onb-skip' : 'btn btn-red btn-block'}" data-sheet-close>${pushState === 'off' ? 'Plus tard' : 'Compris'}</button>`);
+  el.classList.add('onboard');
+  const yes = el.querySelector('[data-ask-yes]');
+  if (yes) yes.addEventListener('click', () => { pushAct({ dataset: { act: 'push-on' } }); closeOverlay(); });
+}
+
 function maybeOnboard() {
   if (!loggedIn() || overlayClose || pendingInvite() || (location.hash || '').startsWith('#/invitation')) return;
   const key = `ek.onboarded.${profile.id}`;
-  try { if (localStorage.getItem(key)) return; } catch (err) { return; }
+  try { if (localStorage.getItem(key)) { maybeAskPush(); return; } } catch (err) { return; }
   let i = 0;
-  const done = () => { try { localStorage.setItem(key, '1'); } catch (err) { /* stockage indisponible */ } };
+  const done = () => { try { localStorage.setItem(key, '1'); } catch (err) { /* stockage indisponible */ } setTimeout(maybeAskPush, 450); };
   const el = sheet('', done);
   el.classList.add('onboard');
   const draw = () => {
@@ -2295,13 +2320,11 @@ function maybeOnboard() {
     el.querySelector('.sheet-card').innerHTML = `
       <div class="onb-icon">${icon}</div><h2>${title}</h2><p class="muted">${text}</p>
       <div class="onb-dots">${ONBOARD.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</div>
-      ${last && pushState === 'off' ? '<button class="btn btn-ghost btn-block" data-onb-push>Activer les notifications</button>' : ''}
       <button class="btn btn-red btn-block" data-onb-next>${last ? 'C’est parti !' : 'Suivant'}</button>
       ${last ? '' : '<button class="link onb-skip" data-sheet-close>Passer</button>'}`;
   };
   el.addEventListener('click', (ev) => {
     if (ev.target.closest('[data-onb-next]')) { if (i < ONBOARD.length - 1) { i += 1; draw(); } else closeOverlay(); }
-    if (ev.target.closest('[data-onb-push]')) { closeOverlay(); setTimeout(() => pushAct({ dataset: { act: 'push-on' } }), 300); }
   });
   draw();
 }
