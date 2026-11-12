@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.26.3';
+const VERSION = '0.27.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1867,6 +1867,7 @@ let orgStatus = null;        // { organizations, request } (null = à charger)
 const orgDash = {};          // tableau de bord par organisation
 const orgPublic = {};        // pages publiques déjà chargées
 let orgEditing = false;
+let orgCreating = false;
 let loadingOrg = false;
 const viewed = new Set();
 const myOrgs = () => (orgStatus && orgStatus.organizations) || [];
@@ -2098,8 +2099,37 @@ function orgEventCard(ev, past) {
 }
 
 let currentOrgId = null;
+function viewOrgCreate() {
+  const countries = Object.entries(COUNTRY_NAMES).sort((x, y) => x[1].localeCompare(y[1], LOCALE));
+  return `<section class="screen"><div class="sub-top"><button class="icon-btn" data-act="org-create-cancel" aria-label="Retour">${I.back}</button><h1 class="page-title small">Nouvelle organisation</h1></div>
+    <form id="orgCreateForm" class="card settings">
+      <label class="field">Nom *<input name="name" required minlength="2" maxlength="80" autocomplete="off" placeholder="Ex. Rubber Ouest"></label>
+      <label class="field">Type<select name="kind">${Object.entries(ORG_KIND).map(([k, l]) => `<option value="${k}"${k === 'association' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="field">Ville<input name="city" maxlength="80" autocomplete="off"></label>
+      <label class="field">Pays<select name="country">${countries.map(([c, n]) => `<option value="${c}"${c === 'FR' ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <label class="field">Site internet<input name="website" type="url" inputmode="url" placeholder="https://"></label>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <button class="btn btn-red btn-block" type="submit">Créer l’organisation</button>
+      <p class="tiny muted">Tu pourras ensuite lui ajouter des soirées, compléter sa page et inviter ses gérants depuis l’espace organisateur.</p>
+    </form></section>`;
+}
+
+async function createOrganizer(form) {
+  const f = new FormData(form);
+  const p = { name: String(f.get('name') || '').trim(), kind: f.get('kind'), city: String(f.get('city') || '').trim(), country: f.get('country'), website: String(f.get('website') || '').trim() };
+  if (p.name.length < 2) return formError(form, 'Indique le nom de l’organisation.');
+  if (p.website && !/^https?:\/\/\S+$/i.test(p.website)) return formError(form, 'Le site doit commencer par https://');
+  const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+  try {
+    const id = await sb.rpc('admin_create_organizer', { p });
+    orgCreating = false; orgStatus = null; currentOrgId = id;
+    toast('Organisation créée'); navigate(`#/orga/${id}`); render();
+  } catch (err) { btn.disabled = false; formError(form, err.message); }
+}
+
 function viewOrga(param) {
   if (orgStatus === null) { loadOrgStatus(); return loadingScreen('Espace organisateur', '#/profil'); }
+  if (orgCreating && isAdmin()) return viewOrgCreate();
   const orgs = myOrgs();
   if (!orgs.length) return viewBecomeOrganizer();
   const id = orgs.some((o) => o.id === param) ? param : (orgs.some((o) => o.id === currentOrgId) ? currentOrgId : orgs[0].id);
@@ -2126,7 +2156,8 @@ function viewOrga(param) {
       <p class="form-error" id="formError" role="alert" hidden></p>
       <div class="adm-actions"><button class="btn btn-red" type="submit">Enregistrer</button><button class="btn btn-ghost" type="button" data-act="org-page-cancel">Annuler</button></div>
       <p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p></form>` : '';
-  return `<section class="screen">${accountTopRaw('Espace organisateur', '#/profil')}
+  const top = isAdmin() ? `<div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour">${I.back}</a><h1 class="page-title small">Espace organisateur</h1><button class="icon-btn top-plus" data-act="org-create" aria-label="Ajouter une organisation">${I.plus}</button></div>` : accountTopRaw('Espace organisateur', '#/profil');
+  return `<section class="screen">${top}
     ${switcher}
     <div class="card org-head"><div class="org-head-top">${orgLogo(o, 'lg')}<div><div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
       <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div></div>
@@ -2395,6 +2426,9 @@ document.addEventListener('submit', (ev) => {
   } else if (form.id === 'sourceForm') {
     ev.preventDefault();
     saveSource(form);
+  } else if (form.id === 'orgCreateForm') {
+    ev.preventDefault();
+    createOrganizer(form);
   } else if (form.id === 'orgPageForm') {
     ev.preventDefault();
     saveOrgPage(form);
@@ -2464,6 +2498,8 @@ document.addEventListener('click', (ev) => {
     case 'adm-withdraw': adminWithdraw(e); break;
     case 'adm-tab': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report':
     case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
+    case 'org-create': orgCreating = true; render(); window.scrollTo(0, 0); break;
+    case 'org-create-cancel': orgCreating = false; render(); break;
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
     case 'push-on': case 'push-off': case 'push-test': pushAct(act); break;
