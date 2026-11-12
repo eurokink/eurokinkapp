@@ -2,9 +2,9 @@
 import { EVENT_TYPES, CITIES, BADGES } from './data.js';
 import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
-import { mountMap } from './map.js';
+import { mountMap, setEnabledCountries } from './map.js';
 
-const VERSION = '0.21.0';
+const VERSION = '0.22.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -85,7 +85,11 @@ const dayLabel = (iso) => cap(fDayLong.format(new Date(iso)));
 const shortDay = (iso) => fDayShort.format(new Date(iso)).replace('.', '').toUpperCase();
 const dayNum = (iso) => new Date(iso).getDate();
 const timeLabel = (iso) => fTime.format(new Date(iso));
-const priceLabel = (p, cur = 'EUR') => (p === 0 ? 'Gratuit' : `${Number(p).toLocaleString('fr-FR')} ${cur === 'CHF' ? 'CHF' : '€'}`);
+const priceLabel = (p, cur = 'EUR') => {
+  if (p === 0) return 'Gratuit';
+  const sym = { EUR: '€', GBP: '£' }[cur];
+  return `${Number(p).toLocaleString('fr-FR')} ${sym || cur || '€'}`;
+};
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const REMINDER_TIMINGS = { eve18: 'la veille à 18 h', day14: 'le jour même à 14 h', h2: '2 heures avant' };
@@ -209,7 +213,7 @@ const empty = (msg) => `<div class="empty">${msg}</div>`;
 function viewWelcome() {
   return `<section class="gate">
     <div class="gate-logo">${LOGO_MARK}${WORDMARK}</div>
-    <p class="gate-tag">Toutes les soirées fetish, en France puis en Europe.</p>
+    <p class="gate-tag">Toutes les soirées fetish, partout en Europe.</p>
     ${inviteBanner()}
     <div class="card gate-card">
       <h1>Réservé aux adultes</h1>
@@ -262,7 +266,7 @@ function filtered({ ignoreRadius = false } = {}) {
     if (horizon && s - now > horizon * 86400000) return false;
     if (!ignoreRadius && filters.radius) { const c = aroundObj(); if (distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon) > filters.radius) return false; }
     if (filters.types.length && !e.types.some((t) => filters.types.includes(t))) return false;
-    if (filters.budget < 100 && e.price > filters.budget) return false;
+    if (filters.budget < 100 && inEuros(e) > filters.budget) return false;
     if (filters.noBooking && e.booking !== 'door_only') return false;
     if (filters.cloakroom && !e.hasCloakroom) return false;
     if (q && ![e.title, e.organizer.name, e.venue.city, e.venue.name].some((x) => x.toLowerCase().includes(q))) return false;
@@ -272,8 +276,12 @@ function filtered({ ignoreRadius = false } = {}) {
 const budgetLabel = () => (filters.budget >= 100 ? 'Tous budgets' : filters.budget === 0 ? 'Gratuit uniquement' : `Jusqu’à ${filters.budget} €`);
 
 function viewExplorer() {
+  const byCountry = new Map();
+  CITIES.filter((c) => c.name !== state.city).forEach((c) => { const k = c.country || 'FR'; if (!byCountry.has(k)) byCountry.set(k, []); byCountry.get(k).push(c); });
+  const cname = (k) => COUNTRY_NAMES[k] || k;
   const cityOpts = `<option value="" ${filters.around ? '' : 'selected'}>${esc(state.city)} (ma ville)</option>`
-    + CITIES.filter((c) => c.name !== state.city).map((c) => `<option ${c.name === filters.around ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+    + [...byCountry.keys()].sort((a, b) => (a === 'FR' ? -1 : b === 'FR' ? 1 : cname(a).localeCompare(cname(b), 'fr')))
+      .map((k) => `<optgroup label="${esc(cname(k))}">${byCountry.get(k).map((c) => `<option ${c.name === filters.around ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
   const radii = [[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']];
   const periods = [['weekend', 'Ce week-end'], ['week', '7 jours'], ['month', '30 jours'], ['all', 'Toutes les dates']];
   return `<section class="screen">
@@ -889,13 +897,22 @@ async function swissSearch(q, kind) {
 // Pays ouverts : lus dans la base (table countries) ; la France et la Suisse ont leur propre service de recherche
 const PHOTON_COUNTRIES = { BE: 'Belgique', DE: 'Allemagne' };
 const COUNTRY_CURRENCY = { CH: 'CHF' };
-sb.select('countries', 'select=code,name_fr,currency&enabled=eq.true').then((rows) => {
+const COUNTRY_NAMES = { FR: 'France', BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne' };
+const EUR_RATE = { EUR: 1, CHF: 1.07 };
+sb.select('countries', 'select=code,name_fr,currency,eur_rate&enabled=eq.true').then((rows) => {
   (rows || []).forEach((c) => {
     const code = String(c.code).trim();
+    COUNTRY_NAMES[code] = c.name_fr;
     if (code !== 'FR' && code !== 'CH') PHOTON_COUNTRIES[code] = c.name_fr;
     if (c.currency && c.currency !== 'EUR') COUNTRY_CURRENCY[code] = c.currency;
+    if (c.currency) EUR_RATE[c.currency] = Number(c.eur_rate) || 1;
   });
+  if (rows && rows.length) {
+    setEnabledCountries(rows.map((c) => String(c.code).trim()));
+    if (/^#\/(carte|communaute)/.test(location.hash)) render();
+  }
 }).catch(() => {});
+const inEuros = (e) => e.price * (EUR_RATE[e.currency] || 1);
 async function photonSearch(q, kind) {
   try {
     const tag = kind === 'city' ? '&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&osm_tag=place:municipality' : '';
@@ -966,7 +983,7 @@ function cityGeocode(input) {
     if (!cityResults.length) {
       const ql = q.toLowerCase();
       cityResults = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
-        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: { BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne' }[c.country] || '' }));
+        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: c.country && c.country !== 'FR' ? (COUNTRY_NAMES[c.country] || c.country) : '' }));
     }
     box.innerHTML = cityResults.length
       ? cityResults.map((c, i) => `<button type="button" class="addr-opt" data-act="city-pick" data-i="${i}"><strong>${esc(cityLabel(c))}</strong>${c.dept ? `<span class="muted tiny block">${esc(c.dept)}</span>` : ''}</button>`).join('')
@@ -1131,9 +1148,9 @@ function viewSubmit() {
       </div>`}
       <h2 class="group-title">Entrée et dress code</h2>
       <div class="card settings">
-        <label class="field">Devise<select name="currency">${[['EUR', 'Euro (€)'], ['CHF', 'Franc suisse (CHF)']].map(([v, l]) => `<option value="${v}" ${(draft.currency || 'EUR') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <label class="field">Prix d’entrée (${draft.currency === 'CHF' ? 'CHF' : '€'}) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
-        <label class="field">Prix en prévente (${draft.currency === 'CHF' ? 'CHF' : '€'})<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>
+        <label class="field">Devise<select name="currency">${[...new Set(['EUR', 'CHF', ...Object.values(COUNTRY_CURRENCY), draft.currency || 'EUR'])].map((v) => [v, { EUR: 'Euro (€)', CHF: 'Franc suisse (CHF)', GBP: 'Livre sterling (£)' }[v] || v]).map(([v, l]) => `<option value="${v}" ${(draft.currency || 'EUR') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="field">Prix d’entrée (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')}) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="0 si gratuit"></label>
+        <label class="field">Prix en prévente (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')})<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>
         <label class="field">Réservation${selectField('booking', Object.entries({ door_only: 'Sur place, sans réservation', recommended: 'Conseillée', required: 'Obligatoire' }), draft.booking || 'door_only')}</label>
         <label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
         <label class="field">Ouverture de la billetterie<input name="sales_open_at" type="datetime-local" value="${dv('sales_open_at')}"><span class="hint">Si les places ne sont pas encore en vente : les membres seront alertés.</span></label>
@@ -2343,7 +2360,7 @@ function askCalendar(e) {
 
 // Écran de bienvenue (une seule fois par compte et par téléphone)
 const ONBOARD = [
-  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte : France, Belgique, Suisse et Allemagne.'],
+  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte, partout en Europe.'],
   [I.bell, 'Ne rate plus rien', 'Mets une soirée en favori, active un rappel ou une alerte billetterie, et suis tes organisateurs préférés pour être prévenu de leurs nouvelles dates.'],
   [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
 ];
