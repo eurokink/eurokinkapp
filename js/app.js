@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.5';
+const VERSION = '0.9.6';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -628,7 +628,7 @@ function viewSubmit() {
   const newOrg = draft.organizer_id === '__new';
   const orgChoices = [...(isAdmin() ? [['__new', '+ Nouvel organisateur (pas encore dans l’appli)']] : []), ...myOrgs().map((o) => [o.id, esc(o.name)])];
   const orgSection = orgMode
-    ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${orgChoices.length > 1 && !draft.id
+    ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${orgChoices.length > 1 && !draft.id && !draft.lockOrg
         ? `<label class="field">Organisation${selectField('organizer_id', orgChoices, draft.organizer_id)}</label>`
         : `<div class="line-btn static">${I.users}<span>${esc(org ? org.name : 'Ton organisation')}</span></div>`}
       ${newOrg ? `<p class="hint">L’organisateur sera créé avec la soirée. Tu pourras ensuite ajouter son logo dans Espace organisateur.</p><label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" autocomplete="off"></label>
@@ -1195,7 +1195,7 @@ async function orgAct(act) {
   const d = orgDash[currentOrgId];
   const ev = d && d.events && d.events.find((x) => x.id === act.dataset.id);
   switch (act.dataset.act) {
-    case 'org-new': draft = { organizer_id: act.dataset.id }; saveDraft(); navigate('#/proposer'); break;
+    case 'org-new': draft = { organizer_id: act.dataset.id, lockOrg: true, returnTo: '#/orga' }; saveDraft(); navigate('#/proposer'); break;
     case 'org-edit': openEditor(act.dataset.id, { returnTo: '#/orga' }); break;
     case 'org-copy': openEditor(act.dataset.id, { copy: true, returnTo: '#/orga' }); break;
     case 'org-page-edit': orgEditing = true; render(); break;
@@ -1497,7 +1497,7 @@ document.addEventListener('click', (ev) => {
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
     case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
-    case 'admin-new': if (draft.id || !draft.organizer_id) { draft = { organizer_id: '__new' }; saveDraft(); } break;
+    case 'admin-new': if (draft.id || draft.lockOrg || !draft.organizer_id) { draft = { organizer_id: '__new' }; saveDraft(); } break;
     case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;
     case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
     case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
