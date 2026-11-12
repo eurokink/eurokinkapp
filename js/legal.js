@@ -40,9 +40,12 @@ export const PAGES = {
         <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta ville, tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
-        <li>aucun outil de statistiques, de publicité ou de suivi, et aucune ressource chargée depuis un service tiers ;</li>
+        <li>aucun outil de statistiques, de publicité ou de suivi ;</li>
+        <li>quelques services techniques sont utilisés, uniquement pour faire fonctionner l’appli : Brevo pour les e-mails de compte, la Géoplateforme de l’IGN pour la recherche d’adresse (seul le texte tapé lui est envoyé), et le service de notification de ton téléphone (Apple, Google ou Mozilla), qui ne reçoit que des messages chiffrés ; les images de soirées ajoutées par lien sont affichées depuis le site d’origine ;</li>
         <li>tu peux exporter tes données et <strong>supprimer définitivement ton compte</strong> à tout moment depuis Paramètres.</li>
       </ul>
+      <h2>Responsable du traitement</h2>
+      <p>Le responsable du traitement est l’éditeur d’EuroKink (particulier, à titre non professionnel), joignable à ${contactLine()}. Tu peux aussi introduire une réclamation auprès de la CNIL (cnil.fr).</p>
       <h2>Localisation</h2>
       <p>La position GPS sert uniquement à vérifier ta présence à une soirée (« Je suis sur place »). Elle est utilisée pour ce calcul puis oubliée : elle n’est <strong>jamais enregistrée</strong>.</p>
       <h2>Tes droits</h2>
@@ -66,13 +69,15 @@ export const PAGES = {
   },
   mentions: {
     title: 'Mentions légales',
-    html: () => `${draft}
+    html: () => `
       <h2>Éditeur</h2>
-      <p>[À COMPLÉTER : nom ou raison sociale, statut, numéro SIRET, adresse.]</p>
-      <h2>Directeur de la publication</h2>
-      <p>[À COMPLÉTER]</p>
-      <h2>Hébergement</h2>
-      <p>Application hébergée par GitHub Pages (GitHub, Inc., San Francisco, États-Unis). Lors de l’ouverture des comptes, les données des membres seront hébergées dans l’Union européenne.</p>
+      <p>EuroKink est édité par un particulier, à titre non professionnel et sans but lucratif. Conformément à l’article 1-1, II de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l’économie numérique (LCEN), l’éditeur a choisi de préserver son anonymat : ses éléments d’identification ont été communiqués à l’hébergeur, tenu au secret professionnel.</p>
+      <p>Contact de l’éditeur et de la publication : ${contactLine()}.</p>
+      <h2>Hébergeurs</h2>
+      <p><strong>Application</strong> : GitHub, Inc. (service GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.</p>
+      <p><strong>Comptes et données des membres</strong> : Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513. Les données sont stockées dans un centre de données situé à <strong>Paris</strong> (Union européenne).</p>
+      <h2>Prestataires</h2>
+      <p>E-mails de compte (confirmation, mot de passe) : Brevo (Sendinblue SAS, France). Recherche d’adresse : Géoplateforme de l’IGN (France). Notifications : services de notification d’Apple, Google ou Mozilla selon ton téléphone.</p>
       <h2>Propriété intellectuelle</h2>
       <p>© 2026 EuroKink™ · Tous droits réservés. Le nom, le logo et l’interface d’EuroKink ne peuvent être reproduits sans autorisation.</p>
       <h2>Contact</h2>
