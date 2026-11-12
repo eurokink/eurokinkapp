@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.24.1';
+const VERSION = '0.25.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -151,6 +151,9 @@ const I = {
   share: ic('<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>'),
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
   plus: ic('<path d="M12 5v14M5 12h14"/>'),
+  chat: ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
+  send: ic('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>'),
+  dots: ic('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
   lock: ic('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
   gear: ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   doc: ic('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'),
@@ -433,7 +436,7 @@ const interestChips = (list, max = 8) => (list || []).slice(0, max).map((t) => `
 let memberQ = '';
 
 function viewCommunity(mode) {
-  const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1>${commSeg(mode)}</div>`;
+  const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a>${commSeg(mode)}</div></div>`;
   if (!membersError && (!members || Date.now() - membersAt > 120000)) {
     members = null;
     loadMembers().then(() => { if ((location.hash || '').startsWith('#/communaute')) render(); });
@@ -673,6 +676,151 @@ document.addEventListener('click', (ev) => {
 });
 new MutationObserver(() => { if (document.querySelector('[data-ut]:not(.ut-done)')) utScan(); }).observe(document.body, { childList: true, subtree: true });
 
+// ---------------------------------------------------------------------------
+// Messagerie privée (texte uniquement ; le premier message est une demande à accepter)
+// ---------------------------------------------------------------------------
+let convs = null; let convsAt = 0; let unreadMsgs = 0; let msgTab = 'chats';
+const threads = {};           // id de conversation -> { msgs: [], lastId }
+let msgPoll = null;
+const fShort = fmt({ day: 'numeric', month: 'short' });
+const msgWhen = (iso) => { const d = new Date(iso); const today = new Date(); return d.toDateString() === today.toDateString() ? fTime.format(d) : fShort.format(d); };
+
+async function loadConvs() {
+  try { convs = await sb.rpc('my_conversations'); convsAt = Date.now(); } catch (e) { convs = convs || []; }
+  unreadMsgs = (convs || []).filter((c) => c.status !== 'declined' && !c.blocked).reduce((n, c) => n + Number(c.unread || 0), 0);
+  updateMsgBadges();
+}
+async function refreshUnread() {
+  if (!loggedIn()) return;
+  try { unreadMsgs = await sb.rpc('unread_messages'); } catch (e) { return; }
+  updateMsgBadges();
+}
+function updateMsgBadges() {
+  document.querySelectorAll('[data-msg-badge]').forEach((b) => { b.textContent = unreadMsgs > 9 ? '9+' : String(unreadMsgs); b.hidden = !unreadMsgs; });
+}
+const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
+setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
+
+function viewMessages() {
+  const top = `<div class="sub-top"><a class="icon-btn" href="#/communaute" aria-label="Retour">${I.back}</a><h1 class="page-title small">Messages</h1></div>`;
+  if (!convs || Date.now() - convsAt > 15000) {
+    loadConvs().then(() => { if (location.hash === '#/messages') render(); });
+    if (!convs) return `<section class="screen">${top}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
+  }
+  const requests = convs.filter((c) => c.status === 'request' && !c.mine && !c.blocked);
+  const chats = convs.filter((c) => !requests.includes(c));
+  const list = msgTab === 'requests' ? requests : chats;
+  const row = (c) => `<a class="conv-row card" href="#/messages/${c.id}">${memberAv(c.other)}
+    <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
+      <div class="conv-prev ${c.unread ? 'unread' : ''}">${c.last_from_me ? '<span class="muted">Toi : </span>' : ''}<span data-no-i18n>${esc(c.last_preview || '')}</span></div>
+      ${c.status === 'request' && c.mine ? '<div class="muted tiny">En attente d’acceptation</div>' : ''}${c.blocked ? '<div class="muted tiny">Bloqué</div>' : ''}</div>
+    ${c.unread ? `<span class="count-pill">${c.unread}</span>` : ''}</a>`;
+  return `<section class="screen">${top}
+    <div class="seg seg-btn"><button class="${msgTab === 'chats' ? 'on' : ''}" data-act="msg-tab" data-tab="chats">Discussions</button><button class="${msgTab === 'requests' ? 'on' : ''}" data-act="msg-tab" data-tab="requests">Demandes${requests.length ? ` <span class="count-pill">${requests.length}</span>` : ''}</button></div>
+    <div class="conv-list">${list.map(row).join('') || empty(msgTab === 'requests' ? 'Aucune demande de message.' : 'Aucune discussion pour le moment. Écris à un membre depuis sa fiche.')}</div>
+    <p class="tiny muted center">Messages texte uniquement. Le premier message à un membre est une demande : il choisit de l’accepter ou non.</p>
+  </section>`;
+}
+
+// Fil d'une conversation. param = id de conversation, ou « u-<id membre> » pour écrire à quelqu'un
+function viewThread(param) {
+  const back = `<button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button>`;
+  if (!convs) { loadConvs().then(() => { if ((location.hash || '').startsWith('#/messages/')) render(); }); return `<section class="screen">${accountTopRaw('Messages', '#/messages')}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`; }
+  let c = null; let other = null;
+  if (param.startsWith('u-')) {
+    const uid = param.slice(2);
+    c = convs.find((x) => x.other.id === uid) || null;
+    if (c) { setTimeout(() => location.replace(`#/messages/${c.id}`), 0); return ''; }
+    other = memberCache.get(uid) || (members || []).find((m) => m.id === uid);
+    if (other === undefined) { viewMember(uid); return `<section class="screen">${accountTopRaw('Messages', '#/messages')}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`; }
+    if (!other) return `<section class="screen">${accountTopRaw('Messages', '#/messages')}${empty('Ce profil est introuvable ou masqué.')}</section>`;
+  } else {
+    c = convs.find((x) => x.id === param);
+    if (!c) { convsAt = 0; loadConvs().then(() => { if (convs.find((x) => x.id === param)) render(); }); return `<section class="screen">${accountTopRaw('Messages', '#/messages')}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`; }
+    other = c.other;
+  }
+  const th = c ? (threads[c.id] = threads[c.id] || { msgs: [], lastId: 0, loaded: false }) : { msgs: [], loaded: true };
+  if (c && !th.loaded) loadThread(c.id);
+  const incomingRequest = c && c.status === 'request' && !c.mine;
+  const pending = c && c.status === 'request' && c.mine;
+  const declined = c && c.status === 'declined';
+  let lastDay = '';
+  const bubbles = th.msgs.map((m) => {
+    const day = fDayLong.format(new Date(m.created_at));
+    const sep = day !== lastDay ? `<div class="msg-day">${esc(cap(day))}</div>` : ''; lastDay = day;
+    return `${sep}<div class="msg ${m.sender_id === profile.id ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(m.body)}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}</span></div>`;
+  }).join('');
+  const composer = declined || (c && c.blocked) ? '' : incomingRequest ? `<div class="msg-request card">
+      <p><strong>${esc(other.pseudo)}</strong> souhaite discuter avec toi.</p>
+      <div class="adm-actions"><button class="btn btn-red" data-act="msg-accept" data-id="${c.id}">Accepter</button><button class="btn btn-ghost" data-act="msg-decline" data-id="${c.id}">Refuser</button></div>
+      <button class="link center" data-act="msg-block" data-user="${other.id}">Bloquer ce membre</button></div>`
+    : `<form id="msgForm" class="msg-compose" data-to="${other.id}"><textarea name="body" rows="1" maxlength="2000" placeholder="Écris ton message…" aria-label="Message"></textarea><button class="icon-btn send" type="submit" aria-label="Envoyer">${I.send}</button></form>`;
+  return `<section class="screen thread">
+    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<strong>${esc(other.pseudo)}</strong></a>
+      <button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button></div>
+    <div class="msg-list" id="msgList">${bubbles || `<p class="muted center tiny">${c ? '' : 'Ton premier message sera envoyé comme une demande.'}</p>`}
+      ${pending ? '<p class="muted center tiny">En attente d’acceptation : tu peux envoyer jusqu’à 3 messages.</p>' : ''}
+      ${declined ? '<p class="muted center tiny">Ce membre n’a pas accepté ta demande.</p>' : ''}${c && c.blocked ? '<p class="muted center tiny">Tu as bloqué ce membre.</p>' : ''}</div>
+    ${composer}
+  </section>`;
+}
+async function loadThread(id) {
+  const th = threads[id] = threads[id] || { msgs: [], lastId: 0, loaded: false };
+  try {
+    const rows = await sb.select('messages', `conversation_id=eq.${id}&id=gt.${th.lastId}&select=id,sender_id,body,created_at&order=id.asc&limit=500`);
+    const first = !th.loaded; th.loaded = true;
+    if (rows.length) {
+      th.msgs.push(...rows); th.lastId = rows[rows.length - 1].id;
+      if (rows.some((m) => m.sender_id !== profile.id)) sb.rpc('mark_conversation_read', { p_conv: id }).then(() => { const c = convs && convs.find((x) => x.id === id); if (c) c.unread = 0; refreshUnread(); }).catch(() => {});
+    }
+    if ((first || rows.length) && location.hash === `#/messages/${id}`) { const draftTxt = $('#msgForm textarea') ? $('#msgForm textarea').value : ''; render(); if (draftTxt && $('#msgForm textarea')) $('#msgForm textarea').value = draftTxt; scrollThread(); }
+  } catch (e) { th.loaded = true; }
+}
+function scrollThread() { const l = $('#msgList'); if (l) l.scrollTop = l.scrollHeight; window.scrollTo(0, document.body.scrollHeight); }
+function startMsgPoll(id) {
+  clearInterval(msgPoll);
+  msgPoll = setInterval(() => {
+    if (location.hash !== `#/messages/${id}`) { clearInterval(msgPoll); return; }
+    if (document.visibilityState === 'visible') loadThread(id);
+  }, 4000);
+}
+async function sendMessage(form) {
+  const ta = form.querySelector('textarea'); const body = ta.value.trim();
+  if (!body) return;
+  const btn = form.querySelector('button'); btn.disabled = true;
+  try {
+    const id = await sb.rpc('send_message', { p_to: form.dataset.to, p_body: body });
+    ta.value = '';
+    convsAt = 0; await loadConvs();
+    if (location.hash !== `#/messages/${id}`) location.replace(`#/messages/${id}`);
+    await loadThread(id);
+    render(); scrollThread();
+  } catch (err) { toast(err.message); }
+  btn.disabled = false;
+}
+function msgMenu(userId, convId) {
+  const c = convs && convs.find((x) => x.id === convId);
+  const el = sheet(`<h2>Options</h2>
+    <div class="practical flat">
+      <a class="line-btn" href="#/membre/${userId}" data-go>${I.user}<span>Voir le profil</span>${I.chevron}</a>
+      <button class="line-btn" data-m="block">${I.lock}<span>${c && c.blocked ? 'Débloquer ce membre' : 'Bloquer ce membre'}</span>${I.chevron}</button>
+      <button class="line-btn" data-m="report">${I.flag}<span>Signaler ce membre</span>${I.chevron}</button>
+      ${convId ? `<button class="line-btn danger" data-m="hide">${I.trash}<span>Supprimer la conversation</span>${I.chevron}</button>` : ''}
+    </div><button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>`);
+  el.addEventListener('click', async (ev) => {
+    const go = ev.target.closest('[data-go]'); if (go) { ev.preventDefault(); closeOverlay(); setTimeout(() => navigate(go.getAttribute('href')), 120); return; }
+    const b = ev.target.closest('[data-m]'); if (!b) return;
+    const what = b.dataset.m;
+    if (what === 'report') { closeOverlay(); setTimeout(() => reportMember(userId), 150); return; }
+    try {
+      if (what === 'block') { const on = !(c && c.blocked); await sb.rpc('block_member', { p_user: userId, p_block: on }); toast(on ? 'Membre bloqué' : 'Membre débloqué'); }
+      if (what === 'hide') { if (!confirm(t('Supprimer cette conversation de ta liste ?'))) return; await sb.rpc('hide_conversation', { p_conv: convId }); toast('Conversation supprimée'); }
+      closeOverlay(); convsAt = 0; await loadConvs(); setTimeout(() => navigate('#/messages'), 120);
+    } catch (err) { toast(err.message); }
+  });
+}
+
 // Fiche d'un membre
 const memberCache = new Map();
 const fMonth = fmt({ month: 'long', year: 'numeric' });
@@ -707,6 +855,7 @@ function viewMember(id) {
       <p class="tiny muted center">${state.invisible ? 'Ton profil est invisible : personne d’autre ne voit cette fiche.' : 'Cette fiche est visible des membres connectés.'}</p>`
       : `<button class="btn ${following.has(m.id) ? 'btn-ghost' : 'btn-red'} btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
+        <a class="btn btn-ghost btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
   </section>`;
 }
@@ -886,6 +1035,7 @@ function viewSettings() {
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
         ${sw('followsOn', state.followsOn !== false, 'Organisateurs suivis', 'Quand ils annoncent une nouvelle soirée')}
+        ${sw('messagesOn', state.messagesOn !== false, 'Messages', 'Nouveaux messages et demandes de message')}
         ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
         ${pushBlock()}
@@ -2072,6 +2222,7 @@ function render() {
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(param === 'liste' ? 'list' : 'map'); active = '#/communaute'; break;
     case 'membre': html = viewMember(param); active = '#/communaute'; break;
+    case 'messages': html = param ? viewThread(param) : viewMessages(); active = param ? null : '#/communaute'; break;
     case 'invitation': html = viewInvitation(param); active = null; break;
     case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
     case 'profil': html = viewProfile(); active = '#/profil'; break;
@@ -2088,9 +2239,10 @@ function render() {
   if (mapCleanup) { mapCleanup(); mapCleanup = null; }
   view.innerHTML = html;
   nav.hidden = active === null || !loggedIn();
-  nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span></a>`).join('');
+  nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${href === '#/communaute' ? msgBadge('nav-badge') : ''}</a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
+  if (route === 'messages' && param && !param.startsWith('u-')) { startMsgPoll(param); setTimeout(scrollThread, 30); }
   if (route === 'soiree' && isUuid(param) && loggedIn()) loadWho(param);
   if (route === 'communaute' && param !== 'liste' && $('#map')) initMembersMap();
 }
@@ -2145,6 +2297,9 @@ document.addEventListener('submit', (ev) => {
   } else if (form.id === 'orgPageForm') {
     ev.preventDefault();
     saveOrgPage(form);
+  } else if (form.id === 'msgForm') {
+    ev.preventDefault();
+    sendMessage(form);
   } else if (form.id === 'memberForm') {
     ev.preventDefault();
     saveMemberForm(form);
@@ -2250,6 +2405,17 @@ document.addEventListener('click', (ev) => {
     case 'invite-share': inviteShare(act.dataset.org, act.dataset.token); break;
     case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
+    case 'msg-tab': msgTab = act.dataset.tab; render(); break;
+    case 'msg-menu': msgMenu(act.dataset.user, act.dataset.conv); break;
+    case 'msg-accept': case 'msg-decline':
+      sb.rpc('respond_request', { p_conv: act.dataset.id, p_accept: act.dataset.act === 'msg-accept' })
+        .then(async () => { toast(act.dataset.act === 'msg-accept' ? 'Demande acceptée' : 'Demande refusée'); convsAt = 0; await loadConvs(); navigate(act.dataset.act === 'msg-accept' ? `#/messages/${act.dataset.id}` : '#/messages'); render(); })
+        .catch((err) => toast(err.message));
+      break;
+    case 'msg-block':
+      if (!confirm(t('Bloquer ce membre ? Il ne pourra plus t’écrire.'))) break;
+      sb.rpc('block_member', { p_user: act.dataset.user, p_block: true }).then(async () => { toast('Membre bloqué'); convsAt = 0; await loadConvs(); navigate('#/messages'); }).catch((err) => toast(err.message));
+      break;
     case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
@@ -2266,6 +2432,12 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey) && ev.target.closest && ev.target.closest('#msgForm')) { ev.preventDefault(); sendMessage(ev.target.closest('#msgForm')); return; }
+});
+document.addEventListener('input', (ev) => {
+  if (ev.target.closest && ev.target.closest('#msgForm') && ev.target.tagName === 'TEXTAREA') { ev.target.style.height = 'auto'; ev.target.style.height = `${Math.min(140, ev.target.scrollHeight)}px`; }
+});
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter' || !ev.target.matches || !ev.target.matches('[data-city-input]')) return;
   ev.preventDefault();
@@ -2318,6 +2490,7 @@ document.addEventListener('change', (ev) => {
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
     if (f.followsOn) state.followsOn = f.followsOn.checked;
+    if (f.messagesOn) state.messagesOn = f.messagesOn.checked;
     if (f.calAsk) state.calAsk = f.calAsk.checked ? 'ask' : 'never';
     if (f.adminNotifs) state.adminNotifs = f.adminNotifs.checked;
     if (f.testMode) state.testMode = f.testMode.checked;
@@ -2329,7 +2502,7 @@ document.addEventListener('change', (ev) => {
       if (cityKey() !== before.city) Object.assign(patch, { city: state.city, postal_code: state.postal || null, latitude: state.cityLat, longitude: state.cityLon, country: state.country || 'FR' });
       if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
-      const np = { notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
+      const np = { notif_messages: state.messagesOn !== false, notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
         notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false };
       Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
       if (Object.keys(patch).length) {
@@ -2698,6 +2871,7 @@ async function loadUser() {
   if (profile.notif_reminders !== undefined) {
     state.remindersOn = profile.notif_reminders; state.ticketAlertsOn = profile.notif_tickets;
     state.followsOn = profile.notif_follows; state.neutralNotifs = profile.notif_neutral; state.adminNotifs = profile.notif_admin;
+    if (profile.notif_messages !== undefined) state.messagesOn = profile.notif_messages;
   }
   checkPush();
 
@@ -2709,6 +2883,7 @@ async function loadUser() {
   [state.favorites, state.reminders, state.alerts, state.attending] = await Promise.all(
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
+  refreshUnread();
   following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
   save();
   if (profile.role === 'admin') loadAdmin();

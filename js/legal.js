@@ -43,6 +43,7 @@ export const PAGES = {
         <li>ton pseudo, ta photo et ta ville sont visibles des membres connectés, notamment sur la carte de la communauté ; l’option « Profil invisible » des paramètres te retire de la carte à tout moment ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
+        <li>tes messages privés sont conservés pour que tu retrouves tes conversations ; seuls toi et ton interlocuteur y avez accès, l’équipe EuroKink ne les consulte qu’en cas de signalement, et ils sont effacés avec ton compte ;</li>
         <li>aucun outil de statistiques, de publicité ou de suivi ;</li>
         <li>quelques services techniques sont utilisés, uniquement pour faire fonctionner l’appli : Brevo pour les e-mails de compte, la Géoplateforme de l’IGN (France), swisstopo (Suisse) et Photon de Komoot, basé sur OpenStreetMap (autres pays d’Europe), pour la recherche d’adresse et de ville (seul le texte tapé leur est envoyé), MyMemory (Translated srl, Italie) pour traduire automatiquement les descriptions et présentations publiques (seul le texte publié lui est envoyé, sans ton identité), Have I Been Pwned pour vérifier qu’un nouveau mot de passe n’a pas fuité (seul un fragment de son empreinte chiffrée est envoyé, jamais le mot de passe), et le service de notification de ton téléphone (Apple, Google ou Mozilla), qui ne reçoit que des messages chiffrés ; les images de soirées ajoutées par lien sont affichées depuis le site d’origine ;</li>
         <li>tu peux exporter tes données et <strong>supprimer définitivement ton compte</strong> à tout moment depuis Paramètres.</li>
@@ -63,6 +64,7 @@ export const PAGES = {
         <li><strong>Pas de photo de nudité</strong> ni de contenu sexuellement explicite : une tenue fetish, oui ; un acte ou une nudité, non.</li>
         <li><strong>Pas de sollicitation sexuelle</strong> dans les profils, descriptions et messages.</li>
         <li><strong>Zéro tolérance</strong> pour le harcèlement, les discriminations et l’outing : ce qui se passe sur EuroKink reste sur EuroKink.</li>
+        <li><strong>Messagerie</strong> : un refus ou une absence de réponse se respecte ; pas de relance insistante, pas de messages en masse ni de publicité. Tu peux bloquer ou signaler un membre à tout moment.</li>
         <li><strong>18 ans minimum.</strong></li>
       </ul>
       <h2>Les soirées acceptées</h2>
