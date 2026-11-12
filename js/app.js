@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.20.0';
+const VERSION = '0.21.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -886,11 +886,20 @@ async function swissSearch(q, kind) {
 }
 
 // Belgique et Allemagne : Photon (OpenStreetMap, gratuit, sans clé), limité à ces deux pays
+// Pays ouverts : lus dans la base (table countries) ; la France et la Suisse ont leur propre service de recherche
 const PHOTON_COUNTRIES = { BE: 'Belgique', DE: 'Allemagne' };
+const COUNTRY_CURRENCY = { CH: 'CHF' };
+sb.select('countries', 'select=code,name_fr,currency&enabled=eq.true').then((rows) => {
+  (rows || []).forEach((c) => {
+    const code = String(c.code).trim();
+    if (code !== 'FR' && code !== 'CH') PHOTON_COUNTRIES[code] = c.name_fr;
+    if (c.currency && c.currency !== 'EUR') COUNTRY_CURRENCY[code] = c.currency;
+  });
+}).catch(() => {});
 async function photonSearch(q, kind) {
   try {
     const tag = kind === 'city' ? '&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&osm_tag=place:municipality' : '';
-    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=10&lang=fr&bbox=2.5,47.2,15.1,55.1${tag}`);
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=15&lang=fr${tag}`);
     if (!r.ok) return [];
     return ((await r.json()).features || []).filter((f) => f.geometry && f.geometry.coordinates && PHOTON_COUNTRIES[(f.properties || {}).countrycode]).map((f) => {
       const p = f.properties; const [lon, lat] = f.geometry.coordinates;
@@ -2154,7 +2163,7 @@ document.addEventListener('click', (ev) => {
       const a = addrResults[Number(act.dataset.i)];
       if (!a) break;
       Object.assign(draft, { address: a.address, postal_code: a.postal_code, city: a.city, latitude: a.lat, longitude: a.lon, addrLabel: a.label, country: a.country || 'FR' });
-      if (a.country === 'CH' && !draft.currency) draft.currency = 'CHF';
+      if (COUNTRY_CURRENCY[a.country] && !draft.currency) draft.currency = COUNTRY_CURRENCY[a.country];
       saveDraft(); render();
       break;
     }

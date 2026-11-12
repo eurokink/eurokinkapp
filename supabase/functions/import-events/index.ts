@@ -1,6 +1,7 @@
 // EuroKink — robot d'import gratuit
 // Lit chaque source active (agenda iCal, données structurées schema.org, WordPress « The Events Calendar »),
-// géolocalise les lieux (service gratuit de l'IGN) et envoie les soirées trouvées dans la file de validation.
+// géolocalise les lieux (IGN pour la France, Photon/OpenStreetMap partout ailleurs) et envoie les soirées trouvées
+// dans la file de validation. Pays acceptés : ceux activés dans la table « countries » (ajouter un pays = ajouter une ligne).
 // Lancement : chaque jour (planification Postgres) ou par l'admin depuis l'appli.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -20,10 +21,11 @@ const clean = (s: unknown) => String(s ?? "").replace(/<br\s*\/?>/gi, "\n").repl
   .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&#0?39;|&rsquo;/g, "’").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">")
   .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n))).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 
-// Heure locale de Paris -> ISO UTC
-function parisToIso(y: number, mo: number, d: number, h = 0, mi = 0, s = 0): string {
+// Heure locale d'un fuseau (Paris par défaut) -> ISO UTC
+function parisToIso(y: number, mo: number, d: number, h = 0, mi = 0, s = 0, tz = "Europe/Paris"): string {
   const guess = Date.UTC(y, mo - 1, d, h, mi, s);
-  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  let zone = tz; try { new Intl.DateTimeFormat("en-GB", { timeZone: zone }); } catch { zone = "Europe/Paris"; }
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
     .formatToParts(new Date(guess)).reduce((a: Record<string, string>, p) => { a[p.type] = p.value; return a; }, {});
   const asParis = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
   return new Date(guess - (asParis - guess)).toISOString();
@@ -50,7 +52,8 @@ function parseIcal(text: string): Ev[] {
           const e = cur![k]; if (!e) return undefined;
           const m = e.v.match(/^(\d{4})(\d\d)(\d\d)(?:T(\d\d)(\d\d)(\d\d)?(Z)?)?/); if (!m) return undefined;
           if (m[7]) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] ?? 0))).toISOString();
-          return parisToIso(+m[1], +m[2], +m[3], +(m[4] ?? 20), +(m[5] ?? 0), +(m[6] ?? 0));
+          const tz = (e.p.match(/TZID=("?)([^;:"]+)\1/i) || [])[2];
+          return parisToIso(+m[1], +m[2], +m[3], +(m[4] ?? 20), +(m[5] ?? 0), +(m[6] ?? 0), tz || "Europe/Paris");
         };
         const geo = g("GEO").split(/[;,]/).map(Number);
         const start = dt("DTSTART");
@@ -126,32 +129,67 @@ async function readTribe(base: string): Promise<Ev[]> {
   });
 }
 
-// ---- Géolocalisation gratuite (Géoplateforme IGN) -------------------------------
+// ---- Pays et géolocalisation ------------------------------------------------------
+let COUNTRIES: Record<string, { name: string }> = { FR: { name: "France" } };
+async function loadCountries() {
+  const { data } = await sb.from("countries").select("code, name_fr, enabled").eq("enabled", true);
+  if (data?.length) COUNTRIES = Object.fromEntries(data.map((c: any) => [c.code.trim(), { name: c.name_fr }]));
+}
+// Nom de pays écrit dans une annonce -> code ISO (indice seulement : le géocodeur décide)
+const COUNTRY_WORDS: [RegExp, string][] = [
+  [/^(fr|fra|france)$/i, "FR"], [/^(be|bel|belgi(que|um|ë|en)|belgie)$/i, "BE"], [/^(ch|che|suisse|schweiz|svizzera|switzerland)$/i, "CH"],
+  [/^(de|deu|allemagne|deutschland|germany)$/i, "DE"], [/^(nl|nld|pays-bas|nederland|netherlands)$/i, "NL"], [/^(lu|lux|luxembourg|luxemburg)$/i, "LU"],
+  [/^(es|esp|espagne|españa|espana|spain)$/i, "ES"], [/^(it|ita|italie|italia|italy)$/i, "IT"], [/^(uk|gb|gbr|royaume-uni|united kingdom|england)$/i, "GB"],
+  [/^(at|aut|autriche|österreich|austria)$/i, "AT"], [/^(pt|prt|portugal)$/i, "PT"], [/^(dk|dnk|danemark|danmark|denmark)$/i, "DK"],
+];
+const countryCode = (txt?: string) => { const t = (txt || "").trim(); for (const [re, c] of COUNTRY_WORDS) if (re.test(t)) return c; return ""; };
+
 const geoCache = new Map<string, any>();
-async function geocode(q: string) {
-  const key = q.toLowerCase().trim();
-  if (!key) return null;
-  if (geoCache.has(key)) return geoCache.get(key);
-  let res = null;
+async function ign(q: string) {
   try {
     const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=1`, { headers: { "User-Agent": UA } });
-    if (r.ok) {
-      const f = (await r.json()).features?.[0];
-      if (f && (f.properties?.score ?? 0) > 0.4) {
-        const p = f.properties; const [lon, lat] = f.geometry.coordinates;
-        res = { lat, lon, city: p.city || p.name, postal_code: p.postcode, address: p.type === "municipality" ? "" : p.name };
-      }
+    const f = r.ok ? (await r.json()).features?.[0] : null;
+    if (f && (f.properties?.score ?? 0) > 0.5) {
+      const p = f.properties; const [lon, lat] = f.geometry.coordinates;
+      return { lat, lon, city: p.city || p.name, postal_code: p.postcode, address: p.type === "municipality" ? "" : p.name, country: "FR" };
     }
   } catch { /* service indisponible */ }
+  return null;
+}
+const fromPhoton = (f: any) => {
+  if (!f?.geometry?.coordinates) return null;
+  const p = f.properties || {}; const [lon, lat] = f.geometry.coordinates;
+  const street = p.street ? `${p.street}${p.housenumber ? ` ${p.housenumber}` : ""}` : "";
+  return { lat, lon, city: p.osm_key === "place" ? p.name : (p.city || p.town || p.village || p.county || p.name), postal_code: (p.postcode || "").split(/[;,]/)[0],
+    address: street, country: String(p.countrycode || "").toUpperCase() };
+};
+async function photon(q: string) {
+  try {
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lang=fr`, { headers: { "User-Agent": UA } });
+    return r.ok ? fromPhoton((await r.json()).features?.[0]) : null;
+  } catch { return null; }
+}
+async function geocode(q: string, hint = "") {
+  const key = `${hint}|${q.toLowerCase().trim()}`;
+  if (!q.trim()) return null;
+  if (geoCache.has(key)) return geoCache.get(key);
+  // France : l'IGN est plus précis ; ailleurs (ou si l'IGN ne trouve rien) : Photon
+  let res = hint === "" || hint === "FR" ? await ign(q) : null;
+  if (!res) res = await photon(hint && COUNTRIES[hint] ? `${q}, ${COUNTRIES[hint].name}` : q);
   geoCache.set(key, res);
   return res;
 }
 
 async function reverse(lat: number, lon: number) {
   try {
+    const r = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}&limit=1&lang=fr`, { headers: { "User-Agent": UA } });
+    const g = r.ok ? fromPhoton((await r.json()).features?.[0]) : null;
+    if (g) return g;
+  } catch { /* service indisponible */ }
+  try {
     const r = await fetch(`https://data.geopf.fr/geocodage/reverse?lat=${lat}&lon=${lon}&limit=1`, { headers: { "User-Agent": UA } });
     const f = r.ok ? (await r.json()).features?.[0] : null;
-    return f ? { city: f.properties.city, postal_code: f.properties.postcode } : null;
+    return f ? { city: f.properties.city, postal_code: f.properties.postcode, country: "FR" } : null;
   } catch { return null; }
 }
 
@@ -163,24 +201,28 @@ function tidyTitle(title: string, venue?: string): string {
 }
 
 async function locate(e: Ev, fallbackCity?: string): Promise<Ev | null> {
-  if (e.country && !/^(fr|fra|france)$/i.test(e.country.trim())) return null;
   const parts = (e.location_text || "").split(",").map((x) => x.trim()).filter(Boolean);
-  if (!e.venue_name && parts.length) e.venue_name = parts[0];
-  if (!e.postal_code) { const m = (e.location_text || "").match(/\b\d{5}\b/); if (m) e.postal_code = m[0]; }
-  if (parts.length && parts.some((x) => /^(belgi|belgium|deutschland|germany|espa|spain|nederland|netherlands|uk|united kingdom|suisse|switzerland)/i.test(x))) return null;
+  const hint = countryCode(e.country) || parts.map(countryCode).find(Boolean) || "";
+  if (hint && !COUNTRIES[hint]) return null;                       // pays pas encore ouvert dans l'appli
+  const places = parts.filter((x) => !countryCode(x));
+  if (!e.venue_name && places.length) e.venue_name = places[0];
+  if (!e.postal_code) { const m = (e.location_text || "").match(/\b\d{4,5}\b/); if (m) e.postal_code = m[0]; }
   e.title = tidyTitle(e.title, e.venue_name);
   if (e.latitude != null && e.longitude != null && !isNaN(e.latitude) && !isNaN(e.longitude)) {
-    if (!e.city) { const g = await reverse(e.latitude, e.longitude); if (g) { e.city = g.city; e.postal_code ||= g.postal_code; } }
-    if (!e.city) e.city = (parts.length > 2 ? parts[2] : "") || fallbackCity || "";
-    if (!e.address && parts.length > 1) e.address = parts[1];
-    return e.city ? e : null;
+    const g = await reverse(e.latitude, e.longitude);
+    const country = g?.country || hint;
+    if (!country || !COUNTRIES[country]) return null;
+    if (!e.city && g) { e.city = g.city; e.postal_code ||= g.postal_code; }
+    if (!e.city) e.city = (places.length > 2 ? places[2] : "") || fallbackCity || "";
+    if (!e.address && places.length > 1) e.address = places[1];
+    return e.city ? { ...e, country } : null;
   }
-  const q = [e.address, e.postal_code, e.city].filter(Boolean).join(" ") || e.location_text || "";
-  const g = (q ? await geocode(q) : null) ?? (e.city ? await geocode(e.city) : null)
-    ?? (fallbackCity ? await geocode(fallbackCity) : null);
-  if (!g) return null;
-  return { ...e, latitude: g.lat, longitude: g.lon, city: e.city || g.city, postal_code: e.postal_code || g.postal_code,
-    address: e.address || g.address, venue_name: e.venue_name || (e.location_text ? e.location_text.split(",")[0] : g.city) };
+  const q = [e.address, e.postal_code, e.city].filter(Boolean).join(" ") || places.join(", ");
+  const g = (q ? await geocode(q, hint) : null) ?? (e.city ? await geocode(e.city, hint) : null)
+    ?? (fallbackCity ? await geocode(fallbackCity, hint) : null);
+  if (!g || !COUNTRIES[g.country]) return null;
+  return { ...e, latitude: g.lat, longitude: g.lon, city: e.city || g.city, postal_code: e.postal_code || g.postal_code, country: g.country,
+    address: e.address || g.address, venue_name: e.venue_name || (places.length ? places[0] : g.city) };
 }
 
 async function readSource(src: any): Promise<Ev[]> {
@@ -211,6 +253,7 @@ Deno.serve(async (req) => {
   let q = sb.from("import_sources").select("*, organizer:organizers(city)").eq("is_active", true);
   if (body?.source_id) q = q.eq("id", body.source_id);
   const { data: sources } = await q;
+  await loadCountries();
   const report: unknown[] = [];
   for (const src of sources ?? []) {
     let found = 0, added = 0; const reasons: Record<string, number> = {}; let error = ""; const samples: unknown[] = [];
@@ -223,7 +266,7 @@ Deno.serve(async (req) => {
         const before = { title: raw.title, lieu: raw.location_text || [raw.venue_name, raw.address, raw.city].filter(Boolean).join(", "), lat: raw.latitude, lon: raw.longitude };
         const e = await locate({ ...raw }, src.organizer?.city || undefined);
         if (samples.length < 3) samples.push({ ...before, ville: e?.city ?? null });
-        let r = "hors France ou lieu introuvable";
+        let r = "pays non ouvert ou lieu introuvable";
         if (e) {
           const { data, error: err } = await sb.rpc("import_event", { p_source: src.id, p: e });
           r = err ? `erreur : ${err.message}` : String(data);
