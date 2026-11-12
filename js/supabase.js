@@ -4,7 +4,8 @@
 
 export const SUPABASE_URL = 'https://odaruyzivqmuvxosvqfd.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_iH127Whv4WmfpXthHRWkSw_27KT1DIn';
-export const SITE_URL = 'https://eurokink.github.io/eurokinkapp/';
+// Adresse de l'appli (eurokink.eu en production) : sert aux liens des e-mails de compte
+export const SITE_URL = typeof location !== 'undefined' && /^https:/.test(location.origin) ? location.origin + location.pathname.replace(/[^/]*$/, '') : 'https://eurokink.eu/';
 const SESSION_KEY = 'ek.session.v1';
 
 let session = readSession();

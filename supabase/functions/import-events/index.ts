@@ -6,7 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
-const UA = "EuroKinkBot/1.0 (+https://eurokink.github.io/eurokinkapp/; contact@eurokink.eu)";
+const UA = "EuroKinkBot/1.0 (+https://eurokink.eu/; contact@eurokink.eu)";
 const COOLDOWN_H = 5;
 
 type Ev = {
