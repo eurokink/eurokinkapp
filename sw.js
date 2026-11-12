@@ -1,5 +1,5 @@
 // EuroKink — service worker : appli disponible hors ligne, mises à jour récupérées en priorité
-const CACHE = 'eurokink-v0.28.6';
+const CACHE = 'eurokink-v0.28.7';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/europe.js', './js/i18n.js', './js/supabase.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff', './fonts/InterDisplay-Black.woff',

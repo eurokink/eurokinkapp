@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.6';
+const VERSION = '0.28.7';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -895,7 +895,16 @@ async function loadThreadOnce(id, th) {
     if ((first || rows.length) && location.hash === `#/messages/${id}`) { const draftTxt = $('#msgForm textarea') ? $('#msgForm textarea').value : ''; render(); if (draftTxt && $('#msgForm textarea')) $('#msgForm textarea').value = draftTxt; scrollThread(); }
   } catch (e) { th.loaded = true; }
 }
-function scrollThread() { const l = $('#msgList'); if (l) l.scrollTop = l.scrollHeight; window.scrollTo(0, document.body.scrollHeight); }
+function scrollThread() { const l = $('#msgList'); if (l) l.scrollTop = l.scrollHeight; }
+// Fil de discussion en plein écran, ajusté à la zone visible : le clavier iOS réduit la zone, l'en-tête reste en haut
+function vvSync() {
+  const v = window.visualViewport; if (!v) return;
+  const st = document.documentElement.style;
+  st.setProperty('--vv-h', `${Math.round(v.height)}px`); st.setProperty('--vv-top', `${Math.round(v.offsetTop)}px`);
+  const kb = v.height < window.innerHeight - 120;
+  if (kb !== document.body.classList.contains('kb')) { document.body.classList.toggle('kb', kb); if (kb) setTimeout(scrollThread, 50); }
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync); }
 function startMsgPoll(id) {
   clearInterval(msgPoll);
   msgPoll = setInterval(() => {
@@ -2520,6 +2529,8 @@ function render() {
   nav.innerHTML = NAV.map(([href, label, icon]) => `<a href="${href}" class="${href === active ? 'active' : ''}" ${href === active ? 'aria-current="page"' : ''}>${icon}<span>${label}</span>${href === '#/communaute' ? msgBadge('nav-badge') : ''}</a>`).join('');
   if (route === 'explorer') renderResults();
   if (route === 'carte') initMap();
+  document.body.classList.toggle('in-thread', route === 'messages' && !!param);
+  if (route === 'messages' && param) vvSync();
   if (route === 'messages' && param && !param.startsWith('u-')) { startMsgPoll(param); setTimeout(scrollThread, 30); }
   if (route === 'soiree' && isUuid(param) && loggedIn()) loadWho(param);
   if (route === 'communaute' && param !== 'liste' && $('#map')) initMembersMap();
