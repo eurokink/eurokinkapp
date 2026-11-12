@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.7';
+const VERSION = '0.28.8';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -897,11 +897,15 @@ async function loadThreadOnce(id, th) {
 }
 function scrollThread() { const l = $('#msgList'); if (l) l.scrollTop = l.scrollHeight; }
 // Fil de discussion en plein écran, ajusté à la zone visible : le clavier iOS réduit la zone, l'en-tête reste en haut
+let vvFull = 0;
+window.addEventListener('orientationchange', () => { vvFull = 0; setTimeout(vvSync, 400); });
 function vvSync() {
   const v = window.visualViewport; if (!v) return;
   const st = document.documentElement.style;
   st.setProperty('--vv-h', `${Math.round(v.height)}px`); st.setProperty('--vv-top', `${Math.round(v.offsetTop)}px`);
-  const kb = v.height < window.innerHeight - 120;
+  // Hauteur max observée = écran sans clavier (sur iOS, innerHeight rétrécit aussi avec le clavier)
+  vvFull = Math.max(vvFull, v.height, document.activeElement && document.activeElement.matches('input,textarea') ? 0 : window.innerHeight);
+  const kb = v.height < vvFull - 120;
   if (kb !== document.body.classList.contains('kb')) { document.body.classList.toggle('kb', kb); if (kb) setTimeout(scrollThread, 50); }
 }
 if (window.visualViewport) { visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync); }
