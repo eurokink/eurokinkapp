@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.19.0';
+const VERSION = '0.20.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -885,6 +885,23 @@ async function swissSearch(q, kind) {
   } catch (e) { return []; }
 }
 
+// Belgique et Allemagne : Photon (OpenStreetMap, gratuit, sans clé), limité à ces deux pays
+const PHOTON_COUNTRIES = { BE: 'Belgique', DE: 'Allemagne' };
+async function photonSearch(q, kind) {
+  try {
+    const tag = kind === 'city' ? '&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village&osm_tag=place:municipality' : '';
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=10&lang=fr&bbox=2.5,47.2,15.1,55.1${tag}`);
+    if (!r.ok) return [];
+    return ((await r.json()).features || []).filter((f) => f.geometry && f.geometry.coordinates && PHOTON_COUNTRIES[(f.properties || {}).countrycode]).map((f) => {
+      const p = f.properties; const [lon, lat] = f.geometry.coordinates;
+      const street = p.street ? `${p.street}${p.housenumber ? ` ${p.housenumber}` : ''}` : (p.osm_key === 'place' ? '' : p.name || '');
+      const postal = p.osm_key === 'place' && !/^\d{4,5}$/.test(q.trim()) ? '' : (p.postcode || '').split(/[;,]/)[0];
+      return { name: p.osm_key === 'place' ? p.name : (p.city || p.name), postal, address: street, lat, lon,
+        country: p.countrycode, region: p.state || '' };
+    });
+  } catch (e) { return []; }
+}
+
 // Ville du membre : code postal ou commune, choisie dans les propositions du géocodeur public (IGN)
 const cityLabel = (c) => (c.postal ? `${c.name} (${c.postal})` : c.name);
 const cityKey = () => `${state.city}|${state.postal || ''}|${state.cityLat}|${state.country || 'FR'}`;
@@ -917,6 +934,7 @@ function cityGeocode(input) {
     let feats = [], failed = false;
     const wantFr = !/^\d{4}$/.test(q); const wantCh = !/^\d{5}$/.test(q);
     const ch = wantCh ? swissSearch(q, 'city') : Promise.resolve([]);
+    const eu = photonSearch(q, 'city');
     try {
       if (wantFr) {
         const pc = /^\d{5}$/.test(q) ? `&postcode=${q}` : '';
@@ -925,20 +943,21 @@ function cityGeocode(input) {
         feats = (await r.json()).features || [];
       }
     } catch (e) { failed = true; }
-    const chList = await ch;
+    const chList = await ch; const euList = await eu;
     if (seq !== citySeq || !box.isConnected) return;
     const seen = new Set();
     cityResults = feats.filter((f) => f.geometry && f.geometry.coordinates).map((f) => {
       const p = f.properties || {};
       const [lon, lat] = f.geometry.coordinates;
       return { name: p.city || p.name, postal: p.postcode || '', lat, lon, country: 'FR', dept: String(p.context || '').split(',')[1]?.trim() || '' };
-    }).slice(0, 5).concat(chList.slice(0, 3).map((c) => ({ ...c, country: 'CH', dept: `Suisse${c.canton ? ` · ${c.canton}` : ''}` })))
+    }).slice(0, 5).concat(chList.slice(0, 3).map((c) => ({ ...c, country: 'CH', dept: `Suisse${c.canton ? ` · ${c.canton}` : ''}` })),
+      euList.slice(0, 3).map((c) => ({ ...c, dept: `${PHOTON_COUNTRIES[c.country]}${c.region ? ` · ${c.region}` : ''}` })))
       .filter((c) => { const k = cityLabel(c); if (seen.has(k)) return false; seen.add(k); return true; });
-    if (chList.length) failed = false;
+    if (chList.length || euList.length) failed = false;
     if (!cityResults.length) {
       const ql = q.toLowerCase();
       cityResults = CITIES.filter((c) => c.name.toLowerCase().startsWith(ql) || ql.includes(c.name.toLowerCase())).slice(0, 4)
-        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: { BE: 'Belgique', CH: 'Suisse' }[c.country] || '' }));
+        .map((c) => ({ name: c.name, postal: '', lat: c.lat, lon: c.lon, country: c.country || 'FR', dept: { BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne' }[c.country] || '' }));
     }
     box.innerHTML = cityResults.length
       ? cityResults.map((c, i) => `<button type="button" class="addr-opt" data-act="city-pick" data-i="${i}"><strong>${esc(cityLabel(c))}</strong>${c.dept ? `<span class="muted tiny block">${esc(c.dept)}</span>` : ''}</button>`).join('')
@@ -1132,12 +1151,13 @@ function geocode(q) {
     const seq = ++geoSeq;
     let feats = [], failed = false;
     const ch = swissSearch(q, draft.secret ? 'city' : 'address');
+    const eu = photonSearch(q, draft.secret ? 'city' : 'address');
     try {
       const r = await fetch(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=5&autocomplete=1${draft.secret ? '&type=municipality' : ''}`);
       if (!r.ok) throw new Error(String(r.status));
       feats = (await r.json()).features || [];
     } catch (e) { failed = true; }
-    const chList = await ch;
+    const chList = await ch; const euList = await eu;
     const box = $('#addrList');
     if (seq !== geoSeq || !box) return;
     addrResults = feats.filter((f) => f.geometry && f.geometry.coordinates && (f.properties || {}).score !== 0).map((f) => {
@@ -1146,8 +1166,10 @@ function geocode(q) {
       const town = p.type === 'municipality';
       return { label: p.label || p.name, address: town ? '' : (p.name || ''), postal_code: p.postcode || '', city: p.city || p.name || '', lat, lon, country: 'FR' };
     }).slice(0, 4).concat(chList.slice(0, 3).map((c) => ({ label: `${[c.address, c.postal, c.name].filter(Boolean).join(' ')} · Suisse`,
-      address: draft.secret ? '' : c.address, postal_code: c.postal, city: c.name, lat: c.lat, lon: c.lon, country: 'CH' })));
-    if (chList.length) failed = false;
+      address: draft.secret ? '' : c.address, postal_code: c.postal, city: c.name, lat: c.lat, lon: c.lon, country: 'CH' })),
+    euList.slice(0, 3).map((c) => ({ label: `${[c.address, c.postal, c.name].filter(Boolean).join(' ')} · ${PHOTON_COUNTRIES[c.country]}`,
+      address: draft.secret ? '' : c.address, postal_code: c.postal, city: c.name, lat: c.lat, lon: c.lon, country: c.country })));
+    if (chList.length || euList.length) failed = false;
     if (!addrResults.length) {
       // Secours : centre d'une grande ville connue
       const ql = q.trim().toLowerCase();
@@ -2312,7 +2334,7 @@ function askCalendar(e) {
 
 // Écran de bienvenue (une seule fois par compte et par téléphone)
 const ONBOARD = [
-  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte, en France et en Suisse.'],
+  [I.map, 'Toutes les soirées au même endroit', 'Cuir, rubber, sportswear, pup… Explore par ville, date, type et budget, en liste ou sur la carte : France, Belgique, Suisse et Allemagne.'],
   [I.bell, 'Ne rate plus rien', 'Mets une soirée en favori, active un rappel ou une alerte billetterie, et suis tes organisateurs préférés pour être prévenu de leurs nouvelles dates.'],
   [I.check, 'Ton passeport fetish', 'Indique « J’y vais », valide ta présence sur place et collectionne les badges. Tu choisis qui voit tes sorties : tout le monde, tes contacts ou personne.']
 ];

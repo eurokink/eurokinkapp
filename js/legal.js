@@ -36,13 +36,13 @@ export const PAGES = {
       <p>Utiliser EuroKink peut révéler l’orientation sexuelle de ses membres, une donnée sensible au sens de l’article 9 du RGPD. C’est pourquoi :</p>
       <ul>
         <li>ton <strong>consentement explicite</strong> est demandé à l’inscription ;</li>
-        <li>les données sont hébergées par Supabase à <strong>Paris</strong> (Union européenne), ce qui vaut aussi pour les membres en Suisse, la Suisse reconnaissant le niveau de protection de l’Union européenne ;</li>
+        <li>les données sont hébergées par Supabase à <strong>Paris</strong> (Union européenne), ce qui vaut aussi pour les membres en Belgique, en Allemagne et en Suisse, la Suisse reconnaissant le niveau de protection de l’Union européenne ;</li>
         <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta photo de profil si tu en ajoutes une, ta ville (commune et code postal, avec les coordonnées du centre de la commune), tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
         <li>ton pseudo, ta photo et ta ville sont visibles des membres connectés, notamment sur la carte de la communauté ; l’option « Profil invisible » des paramètres te retire de la carte à tout moment ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
         <li>aucun outil de statistiques, de publicité ou de suivi ;</li>
-        <li>quelques services techniques sont utilisés, uniquement pour faire fonctionner l’appli : Brevo pour les e-mails de compte, la Géoplateforme de l’IGN (France) et swisstopo (Suisse) pour la recherche d’adresse et de ville (seul le texte tapé leur est envoyé), Have I Been Pwned pour vérifier qu’un nouveau mot de passe n’a pas fuité (seul un fragment de son empreinte chiffrée est envoyé, jamais le mot de passe), et le service de notification de ton téléphone (Apple, Google ou Mozilla), qui ne reçoit que des messages chiffrés ; les images de soirées ajoutées par lien sont affichées depuis le site d’origine ;</li>
+        <li>quelques services techniques sont utilisés, uniquement pour faire fonctionner l’appli : Brevo pour les e-mails de compte, la Géoplateforme de l’IGN (France), swisstopo (Suisse) et Photon de Komoot, basé sur OpenStreetMap (Belgique, Allemagne), pour la recherche d’adresse et de ville (seul le texte tapé leur est envoyé), Have I Been Pwned pour vérifier qu’un nouveau mot de passe n’a pas fuité (seul un fragment de son empreinte chiffrée est envoyé, jamais le mot de passe), et le service de notification de ton téléphone (Apple, Google ou Mozilla), qui ne reçoit que des messages chiffrés ; les images de soirées ajoutées par lien sont affichées depuis le site d’origine ;</li>
         <li>tu peux exporter tes données et <strong>supprimer définitivement ton compte</strong> à tout moment depuis Paramètres.</li>
       </ul>
       <h2>Responsable du traitement</h2>
@@ -78,7 +78,7 @@ export const PAGES = {
       <p><strong>Application</strong> : GitHub, Inc. (service GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.</p>
       <p><strong>Comptes et données des membres</strong> : Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513. Les données sont stockées dans un centre de données situé à <strong>Paris</strong> (Union européenne).</p>
       <h2>Prestataires</h2>
-      <p>E-mails de compte (confirmation, mot de passe) : Brevo (Sendinblue SAS, France). Recherche d’adresse : Géoplateforme de l’IGN (France) et swisstopo, Office fédéral de topographie (Suisse). Vérification des mots de passe : Have I Been Pwned (k-anonymat, aucun mot de passe transmis). Notifications : services de notification d’Apple, Google ou Mozilla selon ton téléphone.</p>
+      <p>E-mails de compte (confirmation, mot de passe) : Brevo (Sendinblue SAS, France). Recherche d’adresse : Géoplateforme de l’IGN (France) swisstopo, Office fédéral de topographie (Suisse) et Photon, Komoot GmbH, données OpenStreetMap (Belgique, Allemagne). Vérification des mots de passe : Have I Been Pwned (k-anonymat, aucun mot de passe transmis). Notifications : services de notification d’Apple, Google ou Mozilla selon ton téléphone.</p>
       <h2>Propriété intellectuelle</h2>
       <p>© 2026 EuroKink™ · Tous droits réservés. Le nom, le logo et l’interface d’EuroKink ne peuvent être reproduits sans autorisation.</p>
       <h2>Contact</h2>
