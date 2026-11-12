@@ -388,3 +388,6 @@ img.org-logo.lg { padding: 9px; }
 img.org-logo.xl { padding: 14px; }
 .mm-logo img { padding: 6px; }
 .hero-logo { padding: 22px; }
+.img-preview .img-error { display: none; margin: 0; }
+.img-preview.broken img { display: none; }
+.img-preview.broken .img-error { display: block; }

@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.1';
+const VERSION = '0.9.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -27,7 +27,7 @@ const imgSrc = (path) => (!path ? '' : /^https:\/\//i.test(path) ? path : sb.pub
 const orgLogo = (o, cls = '') => (o && o.logo
   ? `<img class="org-logo ${cls}" src="${esc(imgSrc(o.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
   : `<span class="org-logo org-initial ${cls}">${esc(((o && o.name) || '?').charAt(0).toUpperCase())}</span>`);
-const heroImg = (e) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
+const heroImg = (e) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
   adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
@@ -648,7 +648,7 @@ function viewSubmit() {
       </div>
       <h2 class="group-title">Visuel</h2>
       <div class="card settings">
-        ${draft.image_path ? `<div class="img-preview"><img src="${esc(imgSrc(draft.image_path))}" alt="" referrerpolicy="no-referrer"><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
+        ${draft.image_path ? `<div class="img-preview"><img src="${esc(imgSrc(draft.image_path))}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('broken')"><p class="form-error img-error">Ce lien ne mène pas à une image : il faut l’adresse de l’image elle-même (souvent terminée par .jpg ou .png), pas celle de la page. Le plus simple : enregistre l’image sur ton téléphone puis « Choisir une photo ».</p><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
         ${canUpload ? `<label class="btn btn-ghost btn-block file-btn">${I.image}<span>${draft.image_path ? 'Changer de photo' : 'Choisir une photo'}</span><input type="file" id="imgFile" accept="image/jpeg,image/png,image/webp"></label>` : ''}
         ${draft.image_path && !/^https:/i.test(draft.image_path) ? '' : `<label class="field">${canUpload ? 'Ou colle le lien d’une image' : 'Lien vers une image (affiche, photo)'}<input name="image_path" type="url" inputmode="url" value="${dv('image_path')}" placeholder="https://…" autocomplete="off"></label>`}
         <span class="hint">L’affiche ou une photo de la soirée, de préférence au format paysage.</span>
