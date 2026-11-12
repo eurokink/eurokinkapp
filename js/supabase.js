@@ -46,7 +46,8 @@ async function request(path, { method = 'GET', body, headers = {}, auth = true }
   if (auth && session) h.Authorization = `Bearer ${session.access_token}`;
   let res;
   try {
-    res = await fetch(SUPABASE_URL + path, { method, headers: h, body: body === undefined ? undefined : JSON.stringify(body) });
+    const raw = typeof Blob !== 'undefined' && body instanceof Blob;
+    res = await fetch(SUPABASE_URL + path, { method, headers: h, body: body === undefined ? undefined : raw ? body : JSON.stringify(body) });
   } catch (e) {
     const err = new Error(translate('failed to fetch'));
     err.network = true;
@@ -125,4 +126,6 @@ export const insert = (table, row, { ignoreDuplicates = false, onConflict = '', 
 );
 export const update = (table, filter, patch) => request(`/rest/v1/${table}?${filter}`, { method: 'PATCH', body: patch, headers: { Prefer: 'return=representation' } });
 export const remove = (table, filter) => request(`/rest/v1/${table}?${filter}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+export const uploadImage = (bucket, path, blob) => request(`/storage/v1/object/${bucket}/${path}`, { method: 'POST', body: blob, headers: { 'Content-Type': blob.type || 'image/jpeg', 'x-upsert': 'true' } });
+export const publicUrl = (bucket, path) => `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path.split('/').map(encodeURIComponent).join('/')}`;
 export const rpc = (fn, args = {}) => request(`/rest/v1/rpc/${fn}`, { method: 'POST', body: args });

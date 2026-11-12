@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -23,6 +23,8 @@ let serverPassport = null;  // progression des badges calculée par le serveur
 let checkinInfo = [];       // présences validées : { id, city, country }
 const EVENTS_CACHE = 'ek.events.v1';
 const isUuid = (x) => /^[0-9a-f-]{36}$/i.test(String(x));
+const imgSrc = (path) => (!path ? '' : /^https:\/\//i.test(path) ? path : sb.publicUrl('event-images', path));
+const heroImg = (e) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
   adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
@@ -115,6 +117,8 @@ function toast(msg) {
 // ---------------------------------------------------------------------------
 const ic = (d, extra = '') => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 const I = {
+  image: ic('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>'),
+  pencil: ic('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
   home: ic('<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>'),
   compass: ic('<circle cx="12" cy="12" r="10"/><polygon points="16.2 7.8 14.1 14.1 7.8 16.2 9.9 9.9"/>'),
   heart: ic('<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>'),
@@ -174,7 +178,7 @@ function eventRow(e) {
 
 function featuredCard(e) {
   return `<a class="feature-card" href="#/soiree/${e.id}">
-    <div class="feature-hero"><svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
+    <div class="feature-hero${e.image ? ' has-img' : ''}">${heroImg(e)}<svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <span class="tag tag-red">${esc(typeName(e.types[0]).toUpperCase())}</span>
       ${e.organizer.verified ? '<span class="tag tag-dark tag-right">Vérifié</span>' : ''}
       <div class="feature-title">${esc(e.title)}</div></div>
@@ -308,7 +312,7 @@ function viewEvent(id) {
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
   const showCheckin = !checked && (isLive(e) || (state.testMode && !loggedIn()));
   return `<section class="screen screen-event">
-    <div class="event-hero"><svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
+    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e)}<svg class="hero-studs" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
       <button class="icon-btn hero-btn hero-right" data-act="share" aria-label="Partager">${I.share}</button>
       <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
@@ -340,6 +344,7 @@ function viewEvent(id) {
         <button class="line-btn" data-act="ics">${I.calendar}<span>Ajouter à mon calendrier</span>${I.chevron}</button>
         <a class="line-btn" href="${bookingUrl(e)}" target="_blank" rel="noopener">${I.bed}<span>Trouver un hébergement à proximité</span>${I.chevron}</a>
         <button class="line-btn" data-act="report">${I.flag}<span>Signaler une erreur sur cette soirée</span>${I.chevron}</button>
+        ${isAdmin() || myOrgs().some((o) => o.id === e.organizer.id) ? `<button class="line-btn" data-act="ev-edit" data-id="${e.id}">${I.pencil}<span>Modifier cette soirée</span>${I.chevron}</button>` : ''}
         ${isAdmin() ? `<button class="line-btn danger" data-act="adm-withdraw">${I.trash}<span>Retirer cette soirée (admin)</span>${I.chevron}</button>` : ''}
       </div>
     </div>
@@ -418,7 +423,7 @@ function viewProfile() {
   const name = loggedIn() ? profile.pseudo : 'Invité';
   const pills = loggedIn() ? [profile.role === 'admin' ? '<span class="pill-red">ADMIN</span>' : '',
     pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
-    isOrganizer() ? '<span class="pill-red">ORGANISATEUR</span>' : '',
+    isOrganizer() && !(orgStatus && orgStatus.all) ? '<span class="pill-red">ORGANISATEUR</span>' : '',
     `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
   const account = loggedIn() ? '' : `<div class="card account-cta"><h2>Crée ton compte EuroKink</h2>
       <p class="muted">Retrouve tes favoris, rappels et sorties sur tous tes appareils, et fais valider tes badges.</p>
@@ -611,14 +616,21 @@ function viewSubmit() {
   if (orgMode && !org && !isAdmin()) { draft = {}; saveDraft(); return viewSubmit(); }
   const title = draft.id ? 'Modifier la soirée' : orgMode ? 'Nouvelle soirée' : 'Signaler une soirée';
   const intro = orgMode
-    ? (org && org.is_verified ? 'Organisateur vérifié : ta soirée est publiée tout de suite.' : 'Ta soirée est vérifiée par l’équipe EuroKink avant d’être publiée.')
+    ? (isAdmin() ? (draft.id ? 'Mode admin : tu peux corriger toutes les informations.' : 'Mode admin : ta soirée est publiée tout de suite.')
+      : org && org.is_verified ? 'Organisateur vérifié : ta soirée est publiée tout de suite.' : 'Ta soirée est vérifiée par l’équipe EuroKink avant d’être publiée.')
     : 'Une soirée manque dans l’appli ? Indique-la : l’équipe EuroKink la vérifie avant de la publier. Tu l’organises ? <a class="accent" href="#/devenir-organisateur">Deviens organisateur</a>.';
+  const canUpload = isAdmin() || !!org;
+  const newOrg = draft.organizer_id === '__new';
+  const orgChoices = [...myOrgs().map((o) => [o.id, esc(o.name)]), ...(isAdmin() ? [['__new', '+ Nouvel organisateur']] : [])];
   const orgSection = orgMode
-    ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${myOrgs().length > 1 && !draft.id
-        ? `<label class="field">Organisation${selectField('organizer_id', myOrgs().map((o) => [o.id, esc(o.name)]), draft.organizer_id)}</label>`
-        : `<div class="line-btn static">${I.users}<span>${esc(org ? org.name : 'Ton organisation')}</span></div>`}</div>`
+    ? `<h2 class="group-title">L’organisateur</h2><div class="card settings">${orgChoices.length > 1 && !draft.id
+        ? `<label class="field">Organisation${selectField('organizer_id', orgChoices, draft.organizer_id)}</label>`
+        : `<div class="line-btn static">${I.users}<span>${esc(org ? org.name : 'Ton organisation')}</span></div>`}
+      ${newOrg ? `<label class="field">Nom de l’organisateur *<input name="organizer_name" maxlength="80" value="${dv('organizer_name')}" autocomplete="off"></label>
+        <label class="field">C’est…${selectField('organizer_kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), draft.organizer_kind || 'association')}</label>
+        <label class="field">Site internet<input name="organizer_website" type="url" inputmode="url" value="${dv('organizer_website')}" placeholder="https://" autocomplete="off"></label>` : ''}</div>`
     : null;
-  return `<section class="screen">${accountTopRaw(title, orgMode ? '#/orga' : '#/profil')}
+  return `<section class="screen">${accountTopRaw(title, draft.returnTo || (orgMode ? '#/orga' : '#/profil'))}
     <p class="muted">${intro} Les champs marqués * sont obligatoires.</p>
     <form id="submitForm" class="settings-groups" novalidate>
       <h2 class="group-title">La soirée</h2>
@@ -630,6 +642,13 @@ function viewSubmit() {
         <label class="field">Fin *<input name="ends_at" type="datetime-local" value="${dv('ends_at')}"></label>
         <label class="field">Fréquence${selectField('frequency', Object.entries(FREQ), draft.frequency || 'once')}</label>
         <label class="field">Description<textarea name="description" rows="5" maxlength="4000" placeholder="Ambiance, programme, infos utiles…">${dv('description')}</textarea></label>
+      </div>
+      <h2 class="group-title">Visuel</h2>
+      <div class="card settings">
+        ${draft.image_path ? `<div class="img-preview"><img src="${esc(imgSrc(draft.image_path))}" alt="" referrerpolicy="no-referrer"><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
+        ${canUpload ? `<label class="btn btn-ghost btn-block file-btn">${I.image}<span>${draft.image_path ? 'Changer de photo' : 'Choisir une photo'}</span><input type="file" id="imgFile" accept="image/jpeg,image/png,image/webp"></label>` : ''}
+        ${draft.image_path && !/^https:/i.test(draft.image_path) ? '' : `<label class="field">${canUpload ? 'Ou colle le lien d’une image' : 'Lien vers une image (affiche, photo)'}<input name="image_path" type="url" inputmode="url" value="${dv('image_path')}" placeholder="https://…" autocomplete="off"></label>`}
+        <span class="hint">L’affiche ou une photo de la soirée, de préférence au format paysage.</span>
       </div>
       <h2 class="group-title">Le lieu</h2>
       <div class="card settings">
@@ -713,7 +732,8 @@ async function submitEvent(form) {
   if (new Date(d.ends_at) <= new Date(d.starts_at)) return fail('La fin doit être après le début.');
   if (String(d.venue_name || '').trim().length < 2) return fail('Indique le nom du lieu.');
   if (d.latitude == null) return fail(d.secret ? 'Choisis la ville dans la liste proposée.' : 'Choisis l’adresse dans la liste proposée.');
-  if (!d.id && !d.organizer_id && String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
+  if (!d.id && !isUuid(d.organizer_id) && String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
+  if (d.image_path && !/^https:\/\/\S+$/i.test(d.image_path) && !/^[0-9a-f-]{36}\/[\w.-]+$/i.test(d.image_path)) return fail('Le lien de l’image doit commencer par https://');
   const price = numOrNull(d.price), presale = numOrNull(d.presale_price);
   if (price === null || Number.isNaN(price) || price < 0) return fail('Indique le prix d’entrée (0 si gratuit).');
   if (presale !== null && (Number.isNaN(presale) || presale < 0)) return fail('Prix en prévente invalide.');
@@ -722,7 +742,7 @@ async function submitEvent(form) {
   }
   if (!d.certify) return fail('Coche la case de confirmation en bas du formulaire.');
   const p = {
-    id: d.id || null, organizer_id: d.id ? null : d.organizer_id || null,
+    id: d.id || null, organizer_id: d.id || !isUuid(d.organizer_id) ? null : d.organizer_id,
     title, types: d.types, starts_at: isoOrNull(d.starts_at), ends_at: isoOrNull(d.ends_at), frequency: d.frequency || 'once',
     description: d.description || '', venue_name: String(d.venue_name).trim(), address: d.secret ? '' : (d.address || ''),
     postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude,
@@ -735,6 +755,9 @@ async function submitEvent(form) {
   submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
   try {
     const r = await sb.rpc('submit_event', { p });
+    if (r && r.id && (d.image_path || '') !== (d._img || '')) {
+      try { await sb.rpc('set_event_image', { p_event: r.id, p_image: d.image_path || null }); } catch (err) { toast(`Soirée enregistrée, mais image refusée : ${err.message}`); }
+    }
     const orgMode = !!(d.id || d.organizer_id);
     draft = {}; saveDraft(); mySubs = null; adminData = null;
     Object.keys(orgDash).forEach((k) => delete orgDash[k]);
@@ -742,7 +765,7 @@ async function submitEvent(form) {
     toast(d.id ? (pub ? 'Modifications enregistrées' : 'Modifications enregistrées : elles seront vérifiées avant publication')
       : pub ? 'Soirée publiée !' : 'Merci ! La soirée sera vérifiée avant publication.');
     refreshEvents();
-    navigate(orgMode ? '#/orga' : '#/mes-propositions');
+    navigate(d.returnTo || (orgMode ? '#/orga' : '#/mes-propositions'));
   } catch (err) {
     fail(err.message);
   } finally {
@@ -802,7 +825,8 @@ function adminPendingCard(p) {
       <div>${I.check}<span>Dress code ${DRESS[p.dress_code].toLowerCase()}${p.dress_code_details ? ` : ${esc(p.dress_code_details)}` : ''} · ${cloak}</span></div>
     </div>
     ${p.description ? `<p class="adm-desc">${esc(p.description)}</p>` : ''}
-    <div class="adm-actions"><button class="btn btn-red" data-act="adm-publish" data-id="${p.id}">Publier</button><button class="btn btn-ghost" data-act="adm-reject" data-id="${p.id}">Refuser</button></div>
+    ${p.image_path ? `<img class="adm-img" src="${esc(imgSrc(p.image_path))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+    <div class="adm-actions"><button class="btn btn-red" data-act="adm-publish" data-id="${p.id}">Publier</button><button class="btn btn-ghost" data-act="adm-edit" data-id="${p.id}">Modifier</button><button class="btn btn-ghost" data-act="adm-reject" data-id="${p.id}">Refuser</button></div>
     ${o.is_verified ? '' : `<button class="link" data-act="adm-trust" data-id="${p.id}" data-org="${o.id}">Publier et faire confiance à « ${esc(o.name)} »</button>`}
   </article>`;
 }
@@ -909,6 +933,7 @@ async function loadOrgStatus() {
 function eventToDraft(ev, orgId, copy) {
   const v = ev.venue;
   return {
+    image_path: ev.image_path || '', _img: copy ? '' : ev.image_path || '',
     id: copy ? undefined : ev.id, organizer_id: orgId, title: ev.title, types: [...(ev.types || [])],
     starts_at: copy ? '' : toLocalInput(ev.starts_at), ends_at: copy ? '' : toLocalInput(ev.ends_at),
     frequency: ev.frequency, description: ev.description || '', venue_name: v.name, secret: !v.address,
@@ -946,6 +971,50 @@ function viewBecomeOrganizer() {
     </form></section>`;
 }
 
+async function openEditor(id, { copy = false, returnTo = '#/orga' } = {}) {
+  try {
+    const ev = await sb.rpc('event_for_edit', { p_event: id });
+    draft = eventToDraft(ev, ev.organizer_id, copy);
+    draft.returnTo = returnTo;
+    saveDraft();
+    if (copy) toast('Copie prête : indique les nouvelles dates');
+    navigate('#/proposer');
+  } catch (err) { toast(err.message); }
+}
+
+function shrinkImage(file, max = 1600) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Image illisible'))), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible : essaie un JPEG ou un PNG')); };
+    img.src = url;
+  });
+}
+
+let uploading = false;
+async function handleImageFile(input) {
+  const file = input.files && input.files[0];
+  if (!file || uploading) return;
+  if (!/^image\//.test(file.type)) { toast('Choisis une image'); return; }
+  uploading = true; toast('Envoi de l’image…');
+  try {
+    const blob = await shrinkImage(file);
+    const folder = isUuid(draft.organizer_id) ? draft.organizer_id : profile.id;
+    const path = `${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    await sb.uploadImage('event-images', path, blob);
+    draft.image_path = path; saveDraft(); render(); toast('Image ajoutée');
+  } catch (err) { toast(err.message); }
+  uploading = false;
+}
+
 async function submitOrgRequest(form) {
   const f = new FormData(form);
   const btn = form.querySelector('button[type=submit]');
@@ -963,7 +1032,7 @@ async function submitOrgRequest(form) {
 }
 
 async function loadOrgDash(id) {
-  try { orgDash[id] = await sb.rpc('org_dashboard', { p_org: id }); } catch (err) { orgDash[id] = { error: err.message }; }
+  try { orgDash[id] = (await sb.rpc('org_dashboard', { p_org: id })) || { error: 'Organisation introuvable' }; } catch (err) { orgDash[id] = { error: err.message }; }
   if (location.hash.startsWith('#/orga')) render();
 }
 
@@ -1004,7 +1073,8 @@ function viewOrga(param) {
   const upcoming = d.events.filter((e) => new Date(e.ends_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   const past = d.events.filter((e) => new Date(e.ends_at) < now);
   const sum = (k) => upcoming.reduce((n, e) => n + Number(e.stats[k] || 0), 0);
-  const switcher = orgs.length > 1 ? `<div class="chips wrap">${orgs.map((x) => `<a class="chip ${x.id === id ? 'on' : ''}" href="#/orga/${x.id}">${esc(x.name)}</a>`).join('')}</div>` : '';
+  const switcher = orgs.length > 3 ? `<label class="field">Organisation${`<select id="orgSwitch">${orgs.map((x) => `<option value="${x.id}" ${x.id === id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`}</label>`
+    : orgs.length > 1 ? `<div class="chips wrap">${orgs.map((x) => `<a class="chip ${x.id === id ? 'on' : ''}" href="#/orga/${x.id}">${esc(x.name)}</a>`).join('')}</div>` : '';
   const edit = orgEditing ? `<form id="orgPageForm" class="card settings">
       <label class="field">Présentation<textarea name="description" rows="5" maxlength="2000" placeholder="Qui vous êtes, l’esprit de vos soirées…">${esc(o.description || '')}</textarea></label>
       <label class="field">Site internet<input name="website" type="url" inputmode="url" value="${esc(o.website || '')}" placeholder="https://"></label>
@@ -1032,8 +1102,8 @@ async function orgAct(act) {
   const ev = d && d.events && d.events.find((x) => x.id === act.dataset.id);
   switch (act.dataset.act) {
     case 'org-new': draft = { organizer_id: act.dataset.id }; saveDraft(); navigate('#/proposer'); break;
-    case 'org-edit': if (ev) { draft = eventToDraft(ev, currentOrgId, false); saveDraft(); navigate('#/proposer'); } break;
-    case 'org-copy': if (ev) { draft = eventToDraft(ev, currentOrgId, true); saveDraft(); toast('Copie prête : indique les nouvelles dates'); navigate('#/proposer'); } break;
+    case 'org-edit': openEditor(act.dataset.id, { returnTo: '#/orga' }); break;
+    case 'org-copy': openEditor(act.dataset.id, { copy: true, returnTo: '#/orga' }); break;
     case 'org-page-edit': orgEditing = true; render(); break;
     case 'org-page-cancel': orgEditing = false; render(); break;
     case 'org-soldout': case 'org-cancel': {
@@ -1321,6 +1391,9 @@ document.addEventListener('click', (ev) => {
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
     case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
+    case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;
+    case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
+    case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
     case 'ptype': {
       const t = act.dataset.slug;
       const list = draft.types || [];
@@ -1369,6 +1442,9 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'fPeriod') { filters.period = t.value; renderResults(); }
   if (t.id === 'fNoBooking') { filters.noBooking = t.checked; renderResults(); }
   if (t.id === 'fCloak') { filters.cloakroom = t.checked; renderResults(); }
+  if (t.id === 'imgFile') { handleImageFile(t); return; }
+  if (t.id === 'orgSwitch') { navigate(`#/orga/${t.value}`); return; }
+  if (t.form && t.form.id === 'submitForm' && t.name === 'organizer_id') { draft.organizer_id = t.value; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name) {
     if (t.name === 'secret') { draft.secret = t.checked; ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); return; }
     draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
@@ -1476,14 +1552,14 @@ function downloadIcs(e) {
 // Données Supabase : soirées, compte, synchronisation
 // ---------------------------------------------------------------------------
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
-const EVENT_SELECT = ['id', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
+const EVENT_SELECT = ['id', 'image_path', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
   'booking', 'ticket_url', 'sales_open_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
   'organizer:organizers(id,name,kind,is_verified)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
 
 function mapEvent(r, counts) {
   return {
-    id: r.id, title: r.title, description: r.description || '',
+    id: r.id, title: r.title, description: r.description || '', image: r.image_path || null,
     startsAt: r.starts_at, endsAt: r.ends_at,
     organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified },
     venue: { name: r.venue.name, city: r.venue.city, lat: r.venue.latitude, lon: r.venue.longitude },

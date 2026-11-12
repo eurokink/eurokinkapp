@@ -351,3 +351,16 @@ input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:foc
 .stats.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .stats.four .stat strong { font-size: 20px; }
 .stats.four .stat span { font-size: 11px; }
+
+/* Visuels de soirée (0.8.0) */
+.hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.has-img .hero-studs { display: none; }
+.has-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.15) 55%, rgba(0, 0, 0, 0.35)); pointer-events: none; }
+.has-img > :not(.hero-img) { z-index: 1; }
+.has-img > .hero-btn, .has-img > .hero-tags, .has-img > .tag, .has-img > .feature-title { z-index: 2; }
+.img-preview { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.img-preview img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
+.file-btn { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; overflow: hidden; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.adm-img { width: 100%; max-height: 180px; object-fit: cover; border-radius: 12px; }
+.adm-actions .btn { padding-left: 8px; padding-right: 8px; }
