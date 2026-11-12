@@ -391,3 +391,14 @@ img.org-logo.xl { padding: 14px; }
 .img-preview .img-error { display: none; margin: 0; }
 .img-preview.broken img { display: none; }
 .img-preview.broken .img-error { display: block; }
+
+/* Cadrage et visionneuse (0.9.3) */
+.crop-frame { position: relative; width: 100%; aspect-ratio: 13 / 8; border-radius: 12px; overflow: hidden; background: var(--surface-2); touch-action: none; cursor: grab; border: 2px solid var(--border); }
+.crop-frame.dragging { cursor: grabbing; border-color: var(--red); }
+.crop-frame img { width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+.img-preview.broken .crop-frame, .img-preview.broken .crop-hint { display: none; }
+.hero-img[data-act] { cursor: zoom-in; }
+.hero-zoom { top: auto !important; bottom: 14px; right: 14px; }
+.viewer { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.94); display: flex; align-items: center; justify-content: center; padding: calc(var(--safe-top) + 56px) 12px 24px; }
+.viewer img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.viewer-close { position: absolute; top: calc(var(--safe-top) + 12px); right: 14px; background: rgba(40, 40, 40, 0.9); }

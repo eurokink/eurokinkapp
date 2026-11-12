@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.9.2';
+const VERSION = '0.9.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -27,7 +27,7 @@ const imgSrc = (path) => (!path ? '' : /^https:\/\//i.test(path) ? path : sb.pub
 const orgLogo = (o, cls = '') => (o && o.logo
   ? `<img class="org-logo ${cls}" src="${esc(imgSrc(o.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
   : `<span class="org-logo org-initial ${cls}">${esc(((o && o.name) || '?').charAt(0).toUpperCase())}</span>`);
-const heroImg = (e) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '');
+const heroImg = (e, zoom = false) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" style="object-position:${e.imageX}% ${e.imageY}%" alt="" loading="lazy" referrerpolicy="no-referrer"${zoom ? ` data-act="img-view" data-src="${esc(imgSrc(e.image))}"` : ''} onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
   adult: false, pseudo: '', city: 'Nantes', visibility: 'followed', invisible: false, neutralNotifs: true, testMode: false,
@@ -120,6 +120,7 @@ function toast(msg) {
 // ---------------------------------------------------------------------------
 const ic = (d, extra = '') => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
 const I = {
+  expand: ic('<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>'),
   image: ic('<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>'),
   pencil: ic('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
   home: ic('<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>'),
@@ -315,7 +316,7 @@ function viewEvent(id) {
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
   const showCheckin = !checked && (isLive(e) || (state.testMode && !loggedIn()));
   return `<section class="screen screen-event">
-    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e)}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
+    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e, true)}${e.image ? `<button class="icon-btn hero-btn hero-zoom" data-act="img-view" data-src="${esc(imgSrc(e.image))}" aria-label="Voir la photo en entier">${I.expand}</button>` : ''}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
       <button class="icon-btn hero-btn hero-right" data-act="share" aria-label="Partager">${I.share}</button>
       <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
@@ -648,7 +649,8 @@ function viewSubmit() {
       </div>
       <h2 class="group-title">Visuel</h2>
       <div class="card settings">
-        ${draft.image_path ? `<div class="img-preview"><img src="${esc(imgSrc(draft.image_path))}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('broken')"><p class="form-error img-error">Ce lien ne mène pas à une image : il faut l’adresse de l’image elle-même (souvent terminée par .jpg ou .png), pas celle de la page. Le plus simple : enregistre l’image sur ton téléphone puis « Choisir une photo ».</p><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
+        ${draft.image_path ? `<div class="img-preview"><div class="crop-frame" id="cropFrame"><img id="cropImg" src="${esc(imgSrc(draft.image_path))}" style="object-position:${draft.image_x ?? 50}% ${draft.image_y ?? 50}%" alt="" draggable="false" referrerpolicy="no-referrer" onerror="this.closest('.img-preview').classList.add('broken')"></div>
+          <span class="hint crop-hint">Fais glisser la photo pour choisir la partie visible en haut de la fiche.</span><p class="form-error img-error">Ce lien ne mène pas à une image : il faut l’adresse de l’image elle-même (souvent terminée par .jpg ou .png), pas celle de la page. Le plus simple : enregistre l’image sur ton téléphone puis « Choisir une photo ».</p><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
         ${canUpload ? `<label class="btn btn-ghost btn-block file-btn">${I.image}<span>${draft.image_path ? 'Changer de photo' : 'Choisir une photo'}</span><input type="file" id="imgFile" accept="image/jpeg,image/png,image/webp"></label>` : ''}
         ${draft.image_path && !/^https:/i.test(draft.image_path) ? '' : `<label class="field">${canUpload ? 'Ou colle le lien d’une image' : 'Lien vers une image (affiche, photo)'}<input name="image_path" type="url" inputmode="url" value="${dv('image_path')}" placeholder="https://…" autocomplete="off"></label>`}
         <span class="hint">L’affiche ou une photo de la soirée, de préférence au format paysage.</span>
@@ -758,8 +760,9 @@ async function submitEvent(form) {
   submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
   try {
     const r = await sb.rpc('submit_event', { p });
-    if (r && r.id && (d.image_path || '') !== (d._img || '')) {
-      try { await sb.rpc('set_event_image', { p_event: r.id, p_image: d.image_path || null }); } catch (err) { toast(`Soirée enregistrée, mais image refusée : ${err.message}`); }
+    const imgKey = d.image_path ? `${d.image_path}|${d.image_x ?? 50}|${d.image_y ?? 50}` : '';
+    if (r && r.id && imgKey !== ((d._img || '').startsWith('|') ? '' : d._img || '')) {
+      try { await sb.rpc('set_event_image', { p_event: r.id, p_image: d.image_path || null, p_x: Math.round(d.image_x ?? 50), p_y: Math.round(d.image_y ?? 50) }); } catch (err) { toast(`Soirée enregistrée, mais image refusée : ${err.message}`); }
     }
     const orgMode = !!(d.id || d.organizer_id);
     draft = {}; saveDraft(); mySubs = null; adminData = null;
@@ -936,7 +939,8 @@ async function loadOrgStatus() {
 function eventToDraft(ev, orgId, copy) {
   const v = ev.venue;
   return {
-    image_path: ev.image_path || '', _img: copy ? '' : ev.image_path || '',
+    image_path: ev.image_path || '', image_x: ev.image_x ?? 50, image_y: ev.image_y ?? 50,
+    _img: copy ? '' : `${ev.image_path || ''}|${ev.image_x ?? 50}|${ev.image_y ?? 50}`,
     id: copy ? undefined : ev.id, organizer_id: orgId, title: ev.title, types: [...(ev.types || [])],
     starts_at: copy ? '' : toLocalInput(ev.starts_at), ends_at: copy ? '' : toLocalInput(ev.ends_at),
     frequency: ev.frequency, description: ev.description || '', venue_name: v.name, secret: !v.address,
@@ -1013,10 +1017,52 @@ async function handleImageFile(input) {
     const folder = isUuid(draft.organizer_id) ? draft.organizer_id : profile.id;
     const path = `${folder}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.jpg`;
     await sb.uploadImage('event-images', path, blob);
-    draft.image_path = path; saveDraft(); render(); toast('Image ajoutée');
+    draft.image_path = path; draft.image_x = 50; draft.image_y = 50; saveDraft(); render(); toast('Image ajoutée');
   } catch (err) { toast(err.message); }
   uploading = false;
 }
+
+function openViewer(src) {
+  if (!src) return;
+  const v = document.createElement('div');
+  v.className = 'viewer';
+  v.innerHTML = `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer"><button class="icon-btn viewer-close" aria-label="Fermer">${I.close}</button>`;
+  const close = () => { v.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+  v.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(v);
+}
+
+// Cadrage : on fait glisser l'image dans le cadre (même proportions que le bandeau de la fiche)
+let crop = null;
+document.addEventListener('pointerdown', (ev) => {
+  const frame = ev.target.closest && ev.target.closest('#cropFrame');
+  const img = frame && frame.querySelector('img');
+  if (!img || !img.naturalWidth) return;
+  ev.preventDefault();
+  const fw = frame.clientWidth, fh = frame.clientHeight;
+  const k = Math.max(fw / img.naturalWidth, fh / img.naturalHeight);
+  crop = { img, id: ev.pointerId, sx: ev.clientX, sy: ev.clientY, x0: draft.image_x ?? 50, y0: draft.image_y ?? 50,
+    ox: img.naturalWidth * k - fw, oy: img.naturalHeight * k - fh };
+  frame.setPointerCapture(ev.pointerId);
+  frame.classList.add('dragging');
+});
+document.addEventListener('pointermove', (ev) => {
+  if (!crop || ev.pointerId !== crop.id) return;
+  const clamp = (n) => Math.max(0, Math.min(100, n));
+  if (crop.ox > 1) draft.image_x = clamp(crop.x0 - ((ev.clientX - crop.sx) / crop.ox) * 100);
+  if (crop.oy > 1) draft.image_y = clamp(crop.y0 - ((ev.clientY - crop.sy) / crop.oy) * 100);
+  crop.img.style.objectPosition = `${draft.image_x}% ${draft.image_y}%`;
+});
+const endCrop = (ev) => {
+  if (!crop || ev.pointerId !== crop.id) return;
+  const f = crop.img.parentNode; if (f) f.classList.remove('dragging');
+  draft.image_x = Math.round(draft.image_x ?? 50); draft.image_y = Math.round(draft.image_y ?? 50);
+  crop = null; saveDraft();
+};
+document.addEventListener('pointerup', endCrop);
+document.addEventListener('pointercancel', endCrop);
 
 async function setOrgLogo(value) {
   await sb.update('organizers', `id=eq.${currentOrgId}`, { logo_path: value });
@@ -1437,6 +1483,7 @@ document.addEventListener('click', (ev) => {
     case 'adm-edit': openEditor(act.dataset.id, { returnTo: '#/admin' }); break;
     case 'ev-edit': openEditor(act.dataset.id, { returnTo: `#/soiree/${act.dataset.id}` }); break;
     case 'img-clear': draft.image_path = ''; saveDraft(); render(); break;
+    case 'img-view': openViewer(act.dataset.src); break;
     case 'logo-clear': setOrgLogo(null).then(() => toast('Logo retiré')).catch((err) => toast(err.message)); break;
     case 'ptype': {
       const t = act.dataset.slug;
@@ -1489,6 +1536,7 @@ document.addEventListener('change', (ev) => {
   if (t.id === 'imgFile') { handleImageFile(t); return; }
   if (t.id === 'logoFile') { handleLogoFile(t); return; }
   if (t.id === 'orgSwitch') { navigate(`#/orga/${t.value}`); return; }
+  if (t.form && t.form.id === 'submitForm' && t.name === 'image_path') { draft.image_path = t.value.trim(); draft.image_x = 50; draft.image_y = 50; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name === 'organizer_id') { draft.organizer_id = t.value; saveDraft(); render(); return; }
   if (t.form && t.form.id === 'submitForm' && t.name) {
     if (t.name === 'secret') { draft.secret = t.checked; ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); return; }
@@ -1597,14 +1645,14 @@ function downloadIcs(e) {
 // Données Supabase : soirées, compte, synchronisation
 // ---------------------------------------------------------------------------
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
-const EVENT_SELECT = ['id', 'image_path', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
+const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'presale_price',
   'booking', 'ticket_url', 'sales_open_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
   'organizer:organizers(id,name,kind,is_verified,logo_path)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
 
 function mapEvent(r, counts) {
   return {
-    id: r.id, title: r.title, description: r.description || '', image: r.image_path || null,
+    id: r.id, title: r.title, description: r.description || '', image: r.image_path || null, imageX: r.image_x ?? 50, imageY: r.image_y ?? 50,
     startsAt: r.starts_at, endsAt: r.ends_at,
     organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified, logo: r.organizer.logo_path || null },
     venue: { name: r.venue.name, city: r.venue.city, lat: r.venue.latitude, lon: r.venue.longitude },
