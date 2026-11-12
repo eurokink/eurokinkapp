@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.27.1';
+const VERSION = '0.28.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -236,18 +236,19 @@ function viewHome() {
   const list = upcoming();
   const weekend = list.filter((e) => new Date(e.startsAt) < end && new Date(e.endsAt) > start && kmFromMe(e) <= 150);
   const featured = list.find((e) => e.featured) || list[0];
-  const later = list.filter((e) => !weekend.includes(e) && e !== featured).slice(0, 6);
+  const nearest = weekend.length ? [] : list.filter((e) => e !== featured).sort((x, y) => kmFromMe(x) - kmFromMe(y)).slice(0, 3);
+  const later = list.filter((e) => !weekend.includes(e) && !nearest.includes(e) && e !== featured).slice(0, 6);
   return `<section class="screen">
     <header class="topbar"><div class="brand">${LOGO_MARK}${WORDMARK}</div>
       <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
-      <p class="muted">${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}</p></div>
+      <p class="muted">${weekend.length ? `${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}` : `${list.length} soirée${list.length > 1 ? 's' : ''} à venir en Europe`}</p></div>
     ${homeMsgCard()}
     ${earlyCard()}
     ${newsCard()}
     ${featured ? `<div class="section-head"><h2>À la une</h2><a href="#/explorer" class="link">Tout voir</a></div>${featuredCard(featured)}` : ''}
-    <h2 class="section-title">Ce week-end près de toi</h2>
-    <div class="list">${weekend.length ? weekend.map(eventRow).join('') : empty('Rien ce week-end dans ton coin. Regarde les prochaines dates ci-dessous.')}</div>
+    ${weekend.length ? `<h2 class="section-title">Ce week-end près de toi</h2><div class="list">${weekend.map(eventRow).join('')}</div>`
+      : nearest.length ? `<h2 class="section-title">Les plus proches de toi</h2><div class="list">${nearest.map(eventRow).join('')}</div>` : ''}
     <h2 class="section-title">Prochainement</h2>
     <div class="list">${later.map(eventRow).join('')}</div>
     <a class="card propose-cta" href="#/${isOrganizer() ? 'orga' : 'devenir-organisateur'}"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Deviens organisateur : publie tes soirées et suis tes statistiques.</div></div>${I.chevron}</a>
@@ -722,6 +723,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.28', date: '2026-11-12',
+    fr: ['Nouvelle alerte : sois prévenu quand une soirée est publiée près de chez toi (Paramètres › Notifications)', 'Accueil : les soirées les plus proches de toi quand rien n’est prévu ce week-end', 'CGU, confidentialité et charte disponibles en anglais et en allemand'],
+    en: ['New alert: get notified when an event is published near you (Settings › Notifications)', 'Home: the events closest to you when nothing is on this weekend', 'Terms, privacy and guidelines now available in English and German'],
+    de: ['Neuer Hinweis: Lass dich benachrichtigen, wenn eine Party in deiner Nähe veröffentlicht wird (Einstellungen › Benachrichtigungen)', 'Startseite: die Partys, die dir am nächsten sind, wenn dieses Wochenende nichts los ist', 'Nutzungsbedingungen, Datenschutz und Richtlinien jetzt auf Englisch und Deutsch'] },
   { v: '0.26', date: '2026-11-12',
     fr: ['Point vert : vois qui est en ligne, et « Vu à… » dans les messages', 'Accusés de distribution et de lecture : ✓ envoyé, ✓✓ distribué, ✓✓ bleu lu', 'Tu peux te rendre discret : Paramètres › Afficher quand je suis en ligne'],
     en: ['Green dot: see who’s online, and “Seen at…” in messages', 'Delivery and read receipts: ✓ sent, ✓✓ delivered, blue ✓✓ read', 'Stay discreet if you like: Settings › Show when I’m online'],
@@ -1131,6 +1136,8 @@ function viewSettings() {
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
         ${sw('followsOn', state.followsOn !== false, 'Organisateurs suivis', 'Quand ils annoncent une nouvelle soirée')}
+        ${sw('nearbyOn', state.nearbyOn !== false, 'Soirées près de chez moi', 'Quand une nouvelle soirée est publiée autour de ta ville')}
+        <label class="field">Distance de l’alerte<select name="nearbyKm">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [500, '500 km']], state.nearbyKm || 100)}</select></label>
         ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
         ${sub('Discrétion')}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
@@ -1179,8 +1186,7 @@ function viewInfo(slug) {
   const page = PAGES[slug];
   if (!page) return `<section class="screen">${empty('Page introuvable.')}</section>`;
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="${loggedIn() ? '#/parametres' : '#/'}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
-    ${LANG === 'fr' ? '' : '<p class="tiny muted">Les documents juridiques sont pour l’instant disponibles en français uniquement.</p>'}
-    <article class="legal card" data-no-i18n>${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
+    <article class="legal card" data-no-i18n>${page.html()}<p class="tiny muted">${LEGAL_UPDATED}</p></article></section>`;
 }
 
 function viewLoading() {
@@ -1399,6 +1405,7 @@ let addrResults = [];
 let mySubs = null;          // mes propositions (null = à charger)
 let adminData = null;       // { pending, reports } (null = à charger)
 let adminTab = 'pending';
+let adminStats = null;      // statistiques (null = à charger)
 let loadingSubs = false, loadingAdmin = false, submitting = false;
 const isAdmin = () => loggedIn() && profile.role === 'admin';
 const dv = (k) => esc(draft[k] ?? '');
@@ -1816,10 +1823,49 @@ function viewAdmin() {
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : adminTab === 'robot' ? viewRobot()
+    : adminTab === 'stats' ? viewStats()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
-    <div class="seg seg-btn">${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}${tab('robot', 'Robot', 0)}</div>
+    <div class="seg seg-btn adm-seg">${tab('stats', 'Stats', 0)}${tab('pending', 'Soirées', pending.length)}${tab('requests', 'Organisateurs', requests.length)}${tab('reports', 'Signalements', reports.length)}${tab('robot', 'Robot', 0)}</div>
     ${body}</section>`;
+}
+
+function loadStats() {
+  adminStats = { loading: true };
+  sb.rpc('admin_stats').then((r) => { adminStats = r; }).catch((err) => { adminStats = { error: err.message }; })
+    .then(() => { if ((location.hash || '').startsWith('#/admin')) render(); });
+}
+function viewStats() {
+  const s = adminStats;
+  if (!s) { loadStats(); return '<div class="loading"><div class="spinner" aria-hidden="true"></div></div>'; }
+  if (s.loading) return '<div class="loading"><div class="spinner" aria-hidden="true"></div></div>';
+  if (s.error) return empty(esc(s.error));
+  const m = s.members, ev = s.events, g = s.engagement;
+  const tiles = (list) => `<div class="stats four">${list.map(([n, l]) => `<div class="stat"><strong>${Number(n || 0).toLocaleString(LOCALE)}</strong><span>${l.replace(/ (j|h)$/, '\u00a0$1')}</span></div>`).join('')}</div>`;
+  const max = Math.max(1, ...s.signups.map((x) => x.n));
+  const dshort = fmt({ day: 'numeric', month: 'short' });
+  const chart = `<div class="card st-chart"><div class="st-bars">${s.signups.map((x) => `<div class="st-bar" title="${dshort.format(new Date(x.d))} : ${x.n}"><span style="height:${Math.max(x.n ? 6 : 2, Math.round((x.n / max) * 100))}%" class="${x.n ? '' : 'zero'}"></span></div>`).join('')}</div>
+    <div class="st-axis"><span>${dshort.format(new Date(s.signups[0].d))}</span><span>max ${max} / jour</span><span>${dshort.format(new Date(s.signups[s.signups.length - 1].d))}</span></div></div>`;
+  const total = (list) => list.reduce((n, x) => n + x.n, 0) || 1;
+  const bars = (title, list, label) => list.length ? `<div class="card st-list"><strong>${title}</strong>${list.map((x) => `<div class="st-row"><span>${esc(label(x.k))}</span><div class="st-track"><i style="width:${Math.round((x.n / total(list)) * 100)}%"></i></div><b>${x.n}</b></div>`).join('')}</div>` : '';
+  const country = (k) => COUNTRY_NAMES[String(k).trim()] || k;
+  const langs = { fr: 'Français', en: 'English', de: 'Deutsch' };
+  const top = s.top_events.length ? `<div class="card st-list"><strong>Soirées à venir les plus suivies</strong>${s.top_events.map((e) => `<a class="st-top" href="#/soiree/${e.id}"><span>${esc(e.title)}</span><small class="muted">${e.views} vues · ${e.going} j’y vais · ${e.favs} favoris</small></a>`).join('')}</div>` : '';
+  return `<h2 class="group-title">Membres</h2>
+    ${tiles([[m.total, 'inscrits'], [m.new_1d, 'nouveaux 24 h'], [m.new_7d, 'nouveaux 7 j'], [m.new_30d, 'nouveaux 30 j']])}
+    ${tiles([[m.active_1d, 'actifs 24 h'], [m.active_7d, 'actifs 7 j'], [m.active_30d, 'actifs 30 j'], [s.push_users, 'notifs activées']])}
+    <h2 class="group-title">Inscriptions sur 30 jours</h2>${chart}
+    <h2 class="group-title">Soirées</h2>
+    ${tiles([[ev.upcoming, 'à venir'], [ev.new_7d, 'ajoutées 7 j'], [ev.pending, 'à valider'], [ev.past, 'passées']])}
+    ${tiles([[s.organizers.total, 'organisations'], [s.organizers.with_team, 'avec gérant'], [g.views_7d, 'vues 7 j'], [g.org_follows, 'abonnés orgas']])}
+    <h2 class="group-title">Activité</h2>
+    ${tiles([[g.going, 'j’y vais'], [g.favorites, 'favoris'], [g.reminders, 'rappels'], [g.checkins, 'présences']])}
+    ${tiles([[g.messages_7d, 'messages 7 j'], [g.conversations, 'discussions'], [g.member_follows, 'abonnements'], [m.nearby_on, 'alertes proximité']])}
+    ${top}
+    <h2 class="group-title">Répartition</h2>
+    ${bars('Pays des membres', s.countries, country)}${bars('Langue de l’appli', s.langs, (k) => langs[k] || k)}${bars('Villes', s.cities, (k) => k)}${bars('Soirées à venir par pays', s.event_countries, country)}
+    <p class="tiny muted center">Chiffres globaux calculés dans la base EuroKink, sans outil de suivi externe. Profils visibles : ${m.total - m.invisible} · avec photo : ${m.with_avatar} · avec ville : ${m.with_city}.</p>
+    <button class="btn btn-ghost btn-block" data-act="adm-stats-refresh">Actualiser</button>`;
 }
 
 async function adminRun(btn, fn, msg) {
@@ -1835,6 +1881,7 @@ function adminAct(act) {
   const id = act.dataset.id;
   switch (act.dataset.act) {
     case 'adm-tab': adminTab = act.dataset.tab; render(); break;
+    case 'adm-stats-refresh': adminStats = null; render(); break;
     case 'adm-publish': adminRun(act, () => sb.rpc('moderate_event', { p_event: id, p_publish: true }), 'Soirée publiée'); break;
     case 'adm-trust':
       adminRun(act, async () => {
@@ -2510,7 +2557,7 @@ document.addEventListener('click', (ev) => {
     case 'export': exportData(); break;
     case 'report': reportEvent(e); break;
     case 'adm-withdraw': adminWithdraw(e); break;
-    case 'adm-tab': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report':
+    case 'adm-tab': case 'adm-stats-refresh': case 'adm-publish': case 'adm-trust': case 'adm-reject': case 'adm-report':
     case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
     case 'org-create': orgCreating = true; render(); window.scrollTo(0, 0); break;
     case 'org-create-cancel': orgCreating = false; render(); break;
@@ -2644,6 +2691,8 @@ document.addEventListener('change', (ev) => {
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
     if (f.followsOn) state.followsOn = f.followsOn.checked;
+    if (f.nearbyOn) state.nearbyOn = f.nearbyOn.checked;
+    if (f.nearbyKm) state.nearbyKm = Number(f.nearbyKm.value);
     if (f.messagesOn) state.messagesOn = f.messagesOn.checked;
     if (f.calAsk) state.calAsk = f.calAsk.checked ? 'ask' : 'never';
     if (f.adminNotifs) state.adminNotifs = f.adminNotifs.checked;
@@ -2658,7 +2707,7 @@ document.addEventListener('change', (ev) => {
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
       if (f.showOnline && f.showOnline.checked !== (profile.show_online !== false)) { patch.show_online = f.showOnline.checked; if (!f.showOnline.checked) patch.last_seen_at = null; }
       const np = { notif_messages: state.messagesOn !== false, notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
-        notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false };
+        notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false, notif_nearby: state.nearbyOn !== false, nearby_km: state.nearbyKm || 100 };
       Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
       if (Object.keys(patch).length) {
         sb.update('profiles', `id=eq.${profile.id}`, patch)
@@ -3027,6 +3076,7 @@ async function loadUser() {
     state.remindersOn = profile.notif_reminders; state.ticketAlertsOn = profile.notif_tickets;
     state.followsOn = profile.notif_follows; state.neutralNotifs = profile.notif_neutral; state.adminNotifs = profile.notif_admin;
     if (profile.notif_messages !== undefined) state.messagesOn = profile.notif_messages;
+    if (profile.notif_nearby !== undefined) { state.nearbyOn = profile.notif_nearby; state.nearbyKm = profile.nearby_km; }
   }
   checkPush();
 
