@@ -410,3 +410,8 @@ img.org-logo.xl { padding: 14px; }
 .adm-card.off { opacity: 0.6; }
 .break { word-break: break-all; }
 .seg-btn button { padding: 8px 4px; font-size: 12.5px; }
+
+/* Notifications (0.11.0) */
+.push-on { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--red-tint); font-size: 14px; font-weight: 600; }
+.push-on .ic { color: var(--red-text); }
+.push-hint { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: #BDBDBD; line-height: 1.5; }

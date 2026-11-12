@@ -4,7 +4,7 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap } from './map.js';
 
-const VERSION = '0.10.1';
+const VERSION = '0.11.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -490,8 +490,10 @@ function viewSettings() {
         ${sw('remindersOn', state.remindersOn, 'Rappels de soirée')}
         <label class="field">Moment du rappel<select name="reminderTiming">${opt(Object.entries(REMINDER_TIMINGS).map(([k, v]) => [k, cap(v)]), state.reminderTiming)}</select></label>
         ${sw('ticketAlertsOn', state.ticketAlertsOn, 'Alertes billetterie', 'Ouverture des ventes et places libérées')}
-        ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Texte neutre, sans le mot « fetish »')}
-        <p class="tiny muted">L’envoi des notifications arrive à la prochaine étape : tes choix sont déjà enregistrés.</p>
+        ${sw('followsOn', state.followsOn !== false, 'Organisateurs suivis', 'Quand ils annoncent une nouvelle soirée')}
+        ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
+        ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
+        ${pushBlock()}
       </div>
       <h2 class="group-title">Passeport</h2>
       <div class="card settings">${loggedIn() ? '<p class="tiny muted">Connecté, ta présence est vérifiée par le serveur avec ta position : le mode test n’est disponible que sans compte.</p>' : sw('testMode', state.testMode, 'Mode test', 'Valider une présence sans GPS, pour essayer les badges')}</div>
@@ -938,6 +940,70 @@ async function saveSource(form) {
   if (!/^https:\/\/\S+$/i.test(row.url)) return formError(form, 'Le lien doit commencer par https://');
   try { await sb.insert('import_sources', row); robotForm = false; robotSources = null; toast('Source ajoutée : appuie sur « Lancer » pour l’essayer'); render(); }
   catch (err) { formError(form, /duplicate|unique/i.test(err.message) ? 'Cette adresse est déjà dans la liste.' : err.message); }
+}
+
+// --- Notifications sur le téléphone (Web Push) ---
+let pushState = 'unknown';   // unsupported | ios-install | denied | off | on | busy
+const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+async function checkPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    pushState = isIos() && !isStandalone() ? 'ios-install' : 'unsupported';
+  } else if (Notification.permission === 'denied') pushState = 'denied';
+  else {
+    try {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, no) => setTimeout(() => no(new Error('sw')), 4000))]);
+      const sub = await reg.pushManager.getSubscription();
+      pushState = sub ? 'on' : 'off';
+      if (sub && loggedIn()) saveSubscription(sub).catch(() => {});
+    } catch (err) { pushState = 'off'; }
+  }
+  if (location.hash.startsWith('#/parametres')) render();
+}
+function saveSubscription(sub) {
+  const j = sub.toJSON();
+  return sb.insert('push_subscriptions', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 300) },
+    { onConflict: 'endpoint' });
+}
+function pushBlock() {
+  if (!loggedIn()) return '';
+  const msg = {
+    unknown: '', busy: '<p class="tiny muted">Un instant…</p>',
+    'ios-install': '<p class="tiny push-hint">Sur iPhone, les notifications ne marchent que dans l’appli installée : dans Safari, touche Partager puis « Sur l’écran d’accueil », et ouvre EuroKink depuis son icône (iOS 16.4 ou plus récent).</p>',
+    unsupported: '<p class="tiny muted">Ce navigateur ne permet pas les notifications.</p>',
+    denied: '<p class="tiny push-hint">Les notifications sont bloquées pour EuroKink dans les réglages du téléphone. Autorise-les puis reviens ici.</p>',
+    off: '<button type="button" class="btn btn-red btn-block" data-act="push-on">Activer les notifications sur ce téléphone</button>',
+    on: `<div class="push-on">${I.check}<span>Notifications activées sur ce téléphone</span></div>
+      <div class="adm-actions"><button type="button" class="btn btn-ghost" data-act="push-test">Envoyer un test</button><button type="button" class="btn btn-ghost" data-act="push-off">Désactiver</button></div>`
+  };
+  return msg[pushState] || '';
+}
+function urlB64ToBytes(s) { const p = '='.repeat((4 - (s.length % 4)) % 4); const b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, (c) => c.charCodeAt(0)); }
+async function pushAct(act) {
+  const kind = act.dataset.act;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    if (kind === 'push-on') {
+      pushState = 'busy'; render();
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { pushState = perm === 'denied' ? 'denied' : 'off'; render(); return; }
+      const key = await sb.rpc('push_public_key');
+      if (!key) throw new Error('Service de notifications indisponible, réessaie dans quelques minutes');
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(key) });
+      await saveSubscription(sub);
+      pushState = 'on'; toast('Notifications activées'); render();
+    } else if (kind === 'push-off') {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { await sb.remove('push_subscriptions', `endpoint=eq.${encodeURIComponent(sub.endpoint)}`).catch(() => {}); await sub.unsubscribe(); }
+      pushState = 'off'; toast('Notifications désactivées sur ce téléphone'); render();
+    } else if (kind === 'push-test') {
+      act.disabled = true;
+      await sb.rpc('push_test');
+      await sb.invoke('send-push', {});
+      toast('Notification de test envoyée');
+      act.disabled = false;
+    }
+  } catch (err) { toast(err.message || 'Impossible d’activer les notifications'); checkPush(); }
 }
 
 function viewAdmin() {
@@ -1593,6 +1659,7 @@ document.addEventListener('click', (ev) => {
     case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
     case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
+    case 'push-on': case 'push-off': case 'push-test': pushAct(act); break;
     case 'src-form': case 'src-type': case 'src-run': case 'src-toggle': case 'src-del': robotAct(act); break;
     case 'new-signal': if (draft.id || draft.organizer_id) { draft = {}; saveDraft(); } break;
     case 'admin-new': if (draft.id || draft.lockOrg || !draft.organizer_id) { draft = { organizer_id: '__new' }; saveDraft(); } break;
@@ -1671,6 +1738,8 @@ document.addEventListener('change', (ev) => {
     state.reminderTiming = f.reminderTiming.value;
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
+    if (f.followsOn) state.followsOn = f.followsOn.checked;
+    if (f.adminNotifs) state.adminNotifs = f.adminNotifs.checked;
     if (f.testMode) state.testMode = f.testMode.checked;
     save();
     if (loggedIn()) {
@@ -1680,6 +1749,9 @@ document.addEventListener('change', (ev) => {
       if (state.city !== before.city) patch.city = state.city;
       if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
+      const np = { notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
+        notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false };
+      Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
       if (Object.keys(patch).length) {
         sb.update('profiles', `id=eq.${profile.id}`, patch)
           .then((rows) => { if (rows && rows[0]) { profile = rows[0]; state.pseudo = profile.pseudo; save(); } toast('Réglages enregistrés'); })
@@ -1876,6 +1948,11 @@ async function loadUser() {
   if (profile.city) state.city = profile.city;
   state.visibility = profile.attendance_visibility;
   state.invisible = profile.is_invisible;
+  if (profile.notif_reminders !== undefined) {
+    state.remindersOn = profile.notif_reminders; state.ticketAlertsOn = profile.notif_tickets;
+    state.followsOn = profile.notif_follows; state.neutralNotifs = profile.notif_neutral; state.adminNotifs = profile.notif_admin;
+  }
+  checkPush();
 
   // Ce que l'invité avait mis de côté sur ce téléphone rejoint son compte
   const pending = Object.keys(TABLE_OF).flatMap((list) => state[list].map((id) => [list, id]));
@@ -2044,7 +2121,7 @@ if (sessionStorage.getItem('ek.updated')) {
   sessionStorage.removeItem('ek.updated');
   setTimeout(() => toast(`Nouvelle version installée (${VERSION})`), 400);
 }
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   // Mise à jour automatique : on vérifie à chaque ouverture et à chaque retour dans l'appli,
   // puis on recharge une seule fois quand la nouvelle version a pris le relais.
   const hadController = !!navigator.serviceWorker.controller;
@@ -2055,6 +2132,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
     sessionStorage.setItem('ek.updated', '1');
     location.reload();
   });
+  navigator.serviceWorker.addEventListener('message', (ev) => { if (ev.data && ev.data.ekNavigate) navigate(ev.data.ekNavigate); });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
       reg.update().catch(() => {});
