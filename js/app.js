@@ -3,8 +3,9 @@ import { EVENT_TYPES, CITIES, BADGES } from './data.js';
 import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
+import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.22.0';
+const VERSION = '0.23.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -75,7 +76,7 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 }
 const kmFromMe = (e) => { const c = cityObj(); return distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon); };
 
-const fmt = (opts) => new Intl.DateTimeFormat('fr-FR', opts);
+const fmt = (opts) => new Intl.DateTimeFormat(LOCALE, opts);
 const fDayLong = fmt({ weekday: 'long', day: 'numeric', month: 'long' });
 const fDayShort = fmt({ weekday: 'short' });
 const fTime = fmt({ hour: '2-digit', minute: '2-digit' });
@@ -88,7 +89,7 @@ const timeLabel = (iso) => fTime.format(new Date(iso));
 const priceLabel = (p, cur = 'EUR') => {
   if (p === 0) return 'Gratuit';
   const sym = { EUR: '€', GBP: '£' }[cur];
-  return `${Number(p).toLocaleString('fr-FR')} ${sym || cur || '€'}`;
+  return `${Number(p).toLocaleString(LOCALE)} ${sym || cur || '€'}`;
 };
 const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -589,7 +590,10 @@ function teamBlock(o) {
     </div>`;
 }
 function inviteMessage(orgName, token) {
-  return `Bonjour ! 👋\n\nNous avons ajouté ${orgName} sur EuroKink, l’appli gratuite qui rassemble les soirées fetish en France.\n\nAvec ce lien personnel, tu peux gérer votre page organisateur : publier vos soirées directement, ajouter votre logo et suivre vos statistiques (vues, participants, abonnés). Vos abonnés sont prévenus à chaque nouvelle date.\n\n${inviteUrl(token)}\n(lien valable 30 jours, utilisable une seule fois)\n\nÀ bientôt,\nL’équipe EuroKink`;
+  const url = inviteUrl(token);
+  if (LANG === 'en') return `Hello! 👋\n\nWe’ve added ${orgName} to EuroKink, the free app that brings together fetish events across Europe.\n\nWith this personal link you can manage your organiser page: publish your events directly, add your logo and follow your statistics (views, attendees, followers). Your followers are notified of every new date.\n\n${url}\n(link valid for 30 days, single use)\n\nSee you soon,\nThe EuroKink Team`;
+  if (LANG === 'de') return `Hallo! 👋\n\nWir haben ${orgName} zu EuroKink hinzugefügt, der kostenlosen App für Fetisch-Partys in ganz Europa.\n\nMit diesem persönlichen Link könnt ihr eure Veranstalterseite verwalten: Partys direkt veröffentlichen, euer Logo hinzufügen und eure Statistiken verfolgen (Aufrufe, Teilnehmer, Follower). Eure Follower werden bei jedem neuen Termin benachrichtigt.\n\n${url}\n(Link 30 Tage gültig, einmal nutzbar)\n\nBis bald,\nDas EuroKink-Team`;
+  return `Bonjour ! 👋\n\nNous avons ajouté ${orgName} sur EuroKink, l’appli gratuite qui rassemble les soirées fetish en Europe.\n\nAvec ce lien personnel, tu peux gérer votre page organisateur : publier vos soirées directement, ajouter votre logo et suivre vos statistiques (vues, participants, abonnés). Vos abonnés sont prévenus à chaque nouvelle date.\n\n${inviteUrl(token)}\n(lien valable 30 jours, utilisable une seule fois)\n\nÀ bientôt,\nL’équipe EuroKink`;
 }
 function inviteNew(orgId) {
   const name = (orgDash[orgId] && orgDash[orgId].organizer.name) || '';
@@ -623,7 +627,7 @@ function inviteShare(orgId, token) {
   if (send) send.addEventListener('click', () => navigator.share({ text: el.querySelector('#invMsg').value }).catch(() => {}));
 }
 async function inviteRevoke(btn) {
-  if (!confirm('Supprimer cette invitation ? Le lien ne fonctionnera plus.')) return;
+  if (!confirm(t('Supprimer cette invitation ? Le lien ne fonctionnera plus.'))) return;
   try { await sb.rpc('revoke_organizer_invite', { p_id: btn.dataset.id }); toast('Invitation supprimée'); loadTeam(btn.dataset.org); } catch (err) { toast(err.message); }
 }
 
@@ -817,6 +821,10 @@ function viewSettings() {
       <button class="line-btn danger" data-act="delete-account">${I.trash}<span>Supprimer mon compte</span>${I.chevron}</button>
     </div>` : `<a class="line-btn rounded" href="#/compte/connexion">${I.user}<span>Me connecter ou créer un compte</span>${I.chevron}</a>`}
     <form id="settingsForm" class="settings-groups">
+      <h2 class="group-title">Langue</h2>
+      <div class="card settings">
+        <label class="field" data-no-i18n>Langue · Language · Sprache<select id="langSel">${LANGS.map(([v, l]) => `<option value="${v}" ${v === LANG ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
       <h2 class="group-title">Mon profil</h2>
       <div class="card settings">
         ${loggedIn() ? `<label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>` : ''}
@@ -864,7 +872,8 @@ function viewInfo(slug) {
   const page = PAGES[slug];
   if (!page) return `<section class="screen">${empty('Page introuvable.')}</section>`;
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="${loggedIn() ? '#/parametres' : '#/'}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${esc(page.title)}</h1></div>
-    <article class="legal card">${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
+    ${LANG === 'fr' ? '' : '<p class="tiny muted">Les documents juridiques sont pour l’instant disponibles en français uniquement.</p>'}
+    <article class="legal card" data-no-i18n>${page.html()}<p class="tiny muted">Dernière mise à jour : ${LEGAL_UPDATED}</p></article></section>`;
 }
 
 function viewLoading() {
@@ -895,6 +904,8 @@ async function swissSearch(q, kind) {
 
 // Belgique et Allemagne : Photon (OpenStreetMap, gratuit, sans clé), limité à ces deux pays
 // Pays ouverts : lus dans la base (table countries) ; la France et la Suisse ont leur propre service de recherche
+// Nom de pays dans la langue de l'appli
+const regionName = (code, fallback) => { if (LANG === 'fr') return fallback; try { return new Intl.DisplayNames([LOCALE], { type: 'region' }).of(code) || fallback; } catch (e) { return fallback; } };
 const PHOTON_COUNTRIES = { BE: 'Belgique', DE: 'Allemagne' };
 const COUNTRY_CURRENCY = { CH: 'CHF' };
 const COUNTRY_NAMES = { FR: 'France', BE: 'Belgique', CH: 'Suisse', DE: 'Allemagne' };
@@ -902,8 +913,8 @@ const EUR_RATE = { EUR: 1, CHF: 1.07 };
 sb.select('countries', 'select=code,name_fr,currency,eur_rate&enabled=eq.true').then((rows) => {
   (rows || []).forEach((c) => {
     const code = String(c.code).trim();
-    COUNTRY_NAMES[code] = c.name_fr;
-    if (code !== 'FR' && code !== 'CH') PHOTON_COUNTRIES[code] = c.name_fr;
+    COUNTRY_NAMES[code] = regionName(code, c.name_fr);
+    if (code !== 'FR' && code !== 'CH') PHOTON_COUNTRIES[code] = COUNTRY_NAMES[code];
     if (c.currency && c.currency !== 'EUR') COUNTRY_CURRENCY[code] = c.currency;
     if (c.currency) EUR_RATE[c.currency] = Number(c.eur_rate) || 1;
   });
@@ -2200,7 +2211,7 @@ document.addEventListener('click', (ev) => {
     case 'members-retry': membersError = ''; members = null; render(); break;
     case 'addr-clear': ADDR_FIELDS.forEach((k) => delete draft[k]); saveDraft(); render(); break;
     case 'reset':
-      if (confirm(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?')) {
+      if (confirm(t(loggedIn() ? 'Effacer les réglages de cet appareil et te déconnecter ? Ton compte et tes données en ligne sont conservés.' : 'Effacer tes favoris, rappels, sorties et réglages sur cet appareil ?'))) {
         sb.forgetSession();
         profile = null; serverPassport = null; checkinInfo = [];
         clearEvents();
@@ -2235,6 +2246,7 @@ document.addEventListener('input', (ev) => {
 
 document.addEventListener('change', (ev) => {
   const t = ev.target;
+  if (t.id === 'langSel') { setLang(t.value); location.reload(); return; }
   if (t.id === 'fCity') { filters.around = t.value; renderResults(); }
   if (t.id === 'fRadius') { filters.radius = Number(t.value); renderResults(); }
   if (t.id === 'fPeriod') { filters.period = t.value; renderResults(); }
@@ -2688,7 +2700,7 @@ async function serverCheckIn(e, lat, lon) {
 
 async function reportEvent(e) {
   if (!loggedIn()) { toast('Connecte-toi pour signaler une soirée.'); return; }
-  const reason = prompt('Que faut-il corriger sur cette soirée ? (date, prix, lieu, contenu inapproprié…)');
+  const reason = prompt(t('Que faut-il corriger sur cette soirée ? (date, prix, lieu, contenu inapproprié…)'));
   if (!reason || reason.trim().length < 3) return;
   try {
     await sb.insert('reports', { reporter_id: profile.id, target_type: 'event', target_id: e.id, reason: reason.trim().slice(0, 100), details: reason.trim().slice(0, 1000) });
@@ -2709,8 +2721,8 @@ async function logout() {
 }
 
 async function deleteAccount() {
-  if (!confirm('Supprimer définitivement ton compte EuroKink ? Ton profil, tes favoris, tes sorties et tes badges seront effacés.')) return;
-  if (!confirm('Dernière confirmation : cette action est irréversible.')) return;
+  if (!confirm(t('Supprimer définitivement ton compte EuroKink ? Ton profil, tes favoris, tes sorties et tes badges seront effacés.'))) return;
+  if (!confirm(t('Dernière confirmation : cette action est irréversible.'))) return;
   try {
     await sb.rpc('delete_my_account', {});
     sb.forgetSession();
@@ -2753,7 +2765,7 @@ async function pwnedCount(password) {
 async function checkPassword(password) {
   if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
   const n = await pwnedCount(password);
-  if (n > 0) throw new Error(`Ce mot de passe figure dans des fuites de données connues (vu ${n.toLocaleString('fr-FR')} fois) : il pourrait être deviné facilement. Choisis-en un autre.`);
+  if (n > 0) throw new Error(`Ce mot de passe figure dans des fuites de données connues (vu ${n.toLocaleString(LOCALE)} fois) : il pourrait être deviné facilement. Choisis-en un autre.`);
 }
 
 async function submitAccountForm(form) {
@@ -2816,6 +2828,7 @@ async function submitAccountForm(form) {
 // ---------------------------------------------------------------------------
 // Démarrage
 // ---------------------------------------------------------------------------
+startI18n();
 (async () => {
   const redirect = await sb.handleAuthRedirect();
   if (sb.getSession()) readEventsCache();

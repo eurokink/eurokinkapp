@@ -1,7 +1,7 @@
 // EuroKink — service worker : appli disponible hors ligne, mises à jour récupérées en priorité
-const CACHE = 'eurokink-v0.22.0';
+const CACHE = 'eurokink-v0.23.0';
 const FILES = [
-  './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/europe.js', './js/supabase.js',
+  './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/europe.js', './js/i18n.js', './js/supabase.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff', './fonts/InterDisplay-Black.woff',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon.svg'
 ];
