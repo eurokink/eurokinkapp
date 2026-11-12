@@ -13,7 +13,7 @@ export const PAGES = {
     title: 'Conditions générales d’utilisation',
     html: () => `${draft}
       <h2>1. Objet</h2>
-      <p>EuroKink est une application qui recense des soirées et événements fetish en France et en Europe, et aide ses utilisateurs à organiser leurs sorties. EuroKink n’organise aucune soirée.</p>
+      <p>EuroKink est une application qui recense des soirées et événements fetish partout en Europe, et aide ses utilisateurs à organiser leurs sorties. EuroKink n’organise aucune soirée.</p>
       <h2>2. Accès réservé aux adultes</h2>
       <p>L’application est réservée aux personnes âgées de 18 ans ou plus. En l’utilisant, tu confirmes avoir l’âge requis.</p>
       <h2>3. Informations sur les soirées</h2>
@@ -21,12 +21,14 @@ export const PAGES = {
       <h2>4. Règles de la communauté</h2>
       <p>L’utilisation d’EuroKink implique le respect de la charte de la communauté. Tout manquement peut entraîner un avertissement, la suspension ou la suppression du compte.</p>
       <h2>5. Comptes</h2>
-      <p>Quand la création de compte sera disponible, chaque membre restera responsable de la confidentialité de ses identifiants et des informations qu’il publie. Le compte peut être supprimé à tout moment depuis les paramètres.</p>
-      <h2>6. Propriété intellectuelle</h2>
+      <p>Chaque membre est responsable de la confidentialité de ses identifiants et des informations qu’il publie. Le compte peut être supprimé à tout moment depuis les paramètres.</p>
+      <h2>6. Traduction automatique</h2>
+      <p>L’application est proposée en plusieurs langues. Les textes publiés par les membres et les organisateurs (descriptions de soirées, précisions de dress code, présentations) peuvent être traduits automatiquement dans la langue de chaque lecteur, par un service de traduction tiers. En publiant un texte, tu acceptes qu’il soit ainsi traduit et affiché. Une traduction automatique peut contenir des erreurs : seul le texte d’origine fait foi, et il reste consultable à tout moment en touchant le texte traduit (repère ⇄). Les titres de soirées et les noms des organisateurs ne sont pas traduits.</p>
+      <h2>7. Propriété intellectuelle</h2>
       <p>La marque, le logo et l’interface d’EuroKink sont protégés. Les visuels des soirées restent la propriété de leurs organisateurs.</p>
-      <h2>7. Évolution des conditions</h2>
+      <h2>8. Évolution des conditions</h2>
       <p>Ces conditions peuvent être modifiées ; la date de mise à jour figure en bas de page. Elles sont soumises au droit français.</p>
-      <h2>8. Contact</h2>
+      <h2>9. Contact</h2>
       <p>Pour toute question : ${contactLine()}.</p>`
   },
   confidentialite: {
