@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.25.2';
+const VERSION = '0.26.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -419,11 +419,28 @@ function memberListHtml() {
 async function loadMembers(force) {
   if (!force && members && Date.now() - membersAt < 120000) return;
   try {
-    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
+    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
     membersAt = Date.now(); membersError = '';
   } catch (e) { membersError = e.message || 'Impossible de charger les membres.'; }
 }
-const memberAv = (m, cls = '') => `<span class="mini-av ${cls}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
+// Présence : « en ligne » si l'appli a donné signe de vie il y a moins de 2 min 30 (réciproque : masqué si je me cache)
+const isOnline = (m) => !!(m && profile && profile.show_online !== false && (m.id === profile.id || (m.last_seen_at && Date.now() - Date.parse(m.last_seen_at) < 150000)));
+function lastSeenLabel(m) {
+  if (!m || !profile || profile.show_online === false) return '';
+  if (isOnline(m)) return 'En ligne';
+  if (!m.last_seen_at) return '';
+  const d = new Date(m.last_seen_at); const mins = Math.round((Date.now() - d) / 60000);
+  if (mins < 60) return `Vu il y a ${mins} min`;
+  if (d.toDateString() === new Date().toDateString()) return `Vu à ${fTime.format(d)}`;
+  return `Vu le ${fShort.format(d)}`;
+}
+async function presenceTick() {
+  if (!loggedIn() || document.visibilityState !== 'visible') return;
+  try { await sb.rpc('touch_presence'); } catch (e) { /* hors ligne */ }
+}
+setInterval(presenceTick, 60000);
+document.addEventListener('visibilitychange', presenceTick);
+const memberAv = (m, cls = '') => `<span class="mini-av ${cls}${isOnline(m) ? ' is-online' : ''}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
 
 const commSeg = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
   <a href="#/communaute/liste" role="tab" aria-selected="${mode === 'list'}" class="${mode === 'list' ? 'on' : ''}">${I.list}<span>Liste</span></a>
@@ -474,7 +491,7 @@ function whoCardHtml(e) {
 }
 async function loadWho(id) {
   try {
-    const rows = await sb.select('attendances', `event_id=eq.${id}&select=user_id,created_at,profile:profiles(id,pseudo,avatar_path,city)&order=created_at.asc&limit=500`);
+    const rows = await sb.select('attendances', `event_id=eq.${id}&select=user_id,created_at,profile:profiles(id,pseudo,avatar_path,city,last_seen_at)&order=created_at.asc&limit=500`);
     const list = rows.map((r) => r.profile).filter(Boolean);
     list.sort((a, b) => (profile && b.id === profile.id) - (profile && a.id === profile.id));
     whoCache.set(id, list);
@@ -678,7 +695,7 @@ new MutationObserver(() => { if (document.querySelector('[data-ut]:not(.ut-done)
 // ---------------------------------------------------------------------------
 let convs = null; let convsAt = 0; let unreadMsgs = 0; let msgTab = 'chats';
 const threads = {};           // id de conversation -> { msgs: [], lastId }
-let msgPoll = null;
+let msgPoll = null; let msgPollN = 0;
 const fShort = fmt({ day: 'numeric', month: 'short' });
 const msgWhen = (iso) => { const d = new Date(iso); const today = new Date(); return d.toDateString() === today.toDateString() ? fTime.format(d) : fShort.format(d); };
 
@@ -703,6 +720,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.26', date: '2026-11-12',
+    fr: ['Point vert : vois qui est en ligne, et « Vu à… » dans les messages', 'Accusés de distribution et de lecture : ✓ envoyé, ✓✓ distribué, ✓✓ bleu lu', 'Tu peux te rendre discret : Paramètres › Afficher quand je suis en ligne'],
+    en: ['Green dot: see who’s online, and “Seen at…” in messages', 'Delivery and read receipts: ✓ sent, ✓✓ delivered, blue ✓✓ read', 'Stay discreet if you like: Settings › Show when I’m online'],
+    de: ['Grüner Punkt: Sieh, wer online ist, und „Gesehen um…“ in Nachrichten', 'Zustell- und Lesebestätigungen: ✓ gesendet, ✓✓ zugestellt, blaue ✓✓ gelesen', 'Bleib diskret, wenn du willst: Einstellungen › Anzeigen, wenn ich online bin'] },
   { v: '0.25', date: '2026-11-12',
     fr: ['Messagerie privée : écris aux membres depuis leur fiche, le premier message est une demande à accepter', 'L’appli parle français, anglais et allemand (Paramètres › Langue), et traduit les descriptions des soirées', 'Toute l’Europe sur la carte, avec les prix dans la monnaie de chaque pays'],
     en: ['Private messages: write to members from their profile, your first message is a request they can accept', 'The app speaks French, English and German (Settings › Language) and translates event descriptions', 'All of Europe on the map, with prices in each country’s currency'],
@@ -799,7 +820,14 @@ function viewThread(param) {
   const bubbles = th.msgs.map((m) => {
     const day = fDayLong.format(new Date(m.created_at));
     const sep = day !== lastDay ? `<div class="msg-day">${esc(cap(day))}</div>` : ''; lastDay = day;
-    return `${sep}<div class="msg ${m.sender_id === profile.id ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(m.body)}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}</span></div>`;
+    const mine = m.sender_id === profile.id;
+    let tick = '';
+    if (mine && c) {
+      const at = Date.parse(m.created_at);
+      const st = c.other_read_at && Date.parse(c.other_read_at) >= at ? 'read' : c.other_delivered_at && Date.parse(c.other_delivered_at) >= at ? 'delivered' : 'sent';
+      tick = ` <span class="tick ${st}" title="${{ sent: 'Envoyé', delivered: 'Distribué', read: 'Lu' }[st]}">${st === 'sent' ? '✓' : '✓✓'}</span>`;
+    }
+    return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(m.body)}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
   }).join('');
   const composer = declined || (c && c.blocked) ? '' : incomingRequest ? `<div class="msg-request card">
       <p><strong>${esc(other.pseudo)}</strong> souhaite discuter avec toi.</p>
@@ -807,7 +835,7 @@ function viewThread(param) {
       <button class="link center" data-act="msg-block" data-user="${other.id}">Bloquer ce membre</button></div>`
     : `<form id="msgForm" class="msg-compose" data-to="${other.id}"><textarea name="body" rows="1" maxlength="2000" placeholder="Écris ton message…" aria-label="Message"></textarea><button class="icon-btn send" type="submit" aria-label="Envoyer">${I.send}</button></form>`;
   return `<section class="screen thread">
-    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<strong>${esc(other.pseudo)}</strong></a>
+    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
       <button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button></div>
     <div class="msg-list" id="msgList">${bubbles || `<p class="muted center tiny">${c ? '' : 'Ton premier message sera envoyé comme une demande.'}</p>`}
       ${pending ? '<p class="muted center tiny">En attente d’acceptation : tu peux envoyer jusqu’à 3 messages.</p>' : ''}
@@ -832,7 +860,14 @@ function startMsgPoll(id) {
   clearInterval(msgPoll);
   msgPoll = setInterval(() => {
     if (location.hash !== `#/messages/${id}`) { clearInterval(msgPoll); return; }
-    if (document.visibilityState === 'visible') loadThread(id);
+    if (document.visibilityState === 'visible') {
+      loadThread(id);
+      msgPollN = (msgPollN + 1) % 3;
+      if (!msgPollN) {   // toutes les 12 s : lu / distribué / en ligne
+        const before = JSON.stringify(convs && convs.find((x) => x.id === id));
+        loadConvs().then(() => { if (location.hash === `#/messages/${id}` && JSON.stringify(convs.find((x) => x.id === id)) !== before) { const ta = $('#msgForm textarea'); const v = ta ? ta.value : ''; const foc = document.activeElement === ta; render(); const nt = $('#msgForm textarea'); if (nt) { nt.value = v; if (foc) nt.focus(); } scrollThread(); } });
+      }
+    }
   }, 4000);
 }
 async function sendMessage(form) {
@@ -880,7 +915,7 @@ function viewMember(id) {
   const mine = profile && id === profile.id;
   const m = mine ? profile : memberCache.get(id);
   if (m === undefined) {
-    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at`)
+    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at,last_seen_at`)
       .then((r) => { memberCache.set(id, r[0] || null); }).catch(() => memberCache.set(id, null))
       .then(() => { if (location.hash === `#/membre/${id}`) render(); });
     return `<section class="screen">${back}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
@@ -889,8 +924,9 @@ function viewMember(id) {
   const av = m.avatar_path ? sb.publicUrl('avatars', m.avatar_path) : '';
   return `<section class="screen">${back}
     <div class="member-head">
-      ${av ? `<button class="avatar member-av" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
+      ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
       <div class="pseudo">${esc(m.pseudo)}</div>
+      ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
@@ -1076,6 +1112,7 @@ function viewSettings() {
       <div class="card settings">
         <label class="field">Qui peut voir mes sorties<select name="visibility">${opt([['everyone', 'Tout le monde'], ['followed', 'Les membres que je suis'], ['nobody', 'Personne']], state.visibility)}</select></label>
         ${sw('invisible', state.invisible, 'Profil invisible', 'Tu n’apparais plus sur la carte des membres ni dans la communauté')}
+        ${loggedIn() ? sw('showOnline', profile.show_online !== false, 'Afficher quand je suis en ligne', 'Point vert et « Vu à… ». Si tu le désactives, tu ne vois plus non plus celui des autres.') : ''}
         <p class="tiny muted">Tes sorties (« J’y vais ») apparaissent dans « Qui y va ? » sur chaque soirée et sur ta fiche membre. « Les membres que je suis » : seuls ceux que tu suis les voient.</p>
       </div>
       <h2 class="group-title">Notifications</h2>
@@ -2554,6 +2591,7 @@ document.addEventListener('change', (ev) => {
       if (cityKey() !== before.city) Object.assign(patch, { city: state.city, postal_code: state.postal || null, latitude: state.cityLat, longitude: state.cityLon, country: state.country || 'FR' });
       if (state.visibility !== before.visibility) patch.attendance_visibility = state.visibility;
       if (state.invisible !== before.invisible) patch.is_invisible = state.invisible;
+      if (f.showOnline && f.showOnline.checked !== (profile.show_online !== false)) { patch.show_online = f.showOnline.checked; if (!f.showOnline.checked) patch.last_seen_at = null; }
       const np = { notif_messages: state.messagesOn !== false, notif_reminders: state.remindersOn, notif_tickets: state.ticketAlertsOn, notif_follows: state.followsOn !== false,
         notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false };
       Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
@@ -2935,6 +2973,7 @@ async function loadUser() {
   [state.favorites, state.reminders, state.alerts, state.attending] = await Promise.all(
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
+  presenceTick();
   refreshUnread();
   following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
   save();
