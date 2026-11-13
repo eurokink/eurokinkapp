@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.30.2';
+const VERSION = '0.31.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -248,6 +248,7 @@ function viewHome() {
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length ? `${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}` : `${list.length} soirée${list.length > 1 ? 's' : ''} à venir en Europe`}</p></div>
     ${cityCard()}
+    ${installCard()}
     ${homeMsgCard()}
     ${earlyCard()}
     ${newsCard()}
@@ -416,6 +417,7 @@ function viewFavorites() {
 
 // Communauté : carte des membres, placés sur la ville indiquée dans leur profil
 let members = null; let membersAt = 0; let membersError = '';
+const teamBadge = (on) => (on ? `<span class="team-badge" data-no-i18n>${I.check}${{ fr: 'Équipe EuroKink', en: 'EuroKink team', de: 'EuroKink-Team' }[LANG]}</span>` : '');
 function memberListHtml() {
   const q = memberQ.trim().toLowerCase();
   const list = (members || []).filter((m) => !q || [m.pseudo, m.city, m.postal_code || '', ...(m.interests || []).map(typeName)].some((x) => String(x).toLowerCase().includes(q)))
@@ -761,6 +763,56 @@ function cityCard() {
   return `<div class="card early-card" data-no-i18n><div class="early-top"><span class="msg-card-ic">${I.pin}</span><strong>${t[0]}</strong></div>
     <p class="muted tiny">${t[1]}</p><a class="btn btn-red btn-block" href="#/parametres">${t[2]}</a></div>`;
 }
+// --- Installation sur l'écran d'accueil (iPhone, Android, navigateurs intégrés) ---
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (ev) => { ev.preventDefault(); deferredInstall = ev; });
+window.addEventListener('appinstalled', () => { deferredInstall = null; try { localStorage.setItem('ek.installHide', '1'); } catch (e) { /* */ } });
+const isMobile = () => isIos() || /android/i.test(navigator.userAgent);
+const inAppBrowser = () => /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Snapchat|TikTok|musical_ly|LinkedInApp|Twitter|Line\//i.test(navigator.userAgent);
+const canInstall = () => isMobile() && !isStandalone();
+const IT = {
+  fr: { title: 'Installe EuroKink sur ton téléphone', sub: 'Une icône sur l’écran d’accueil, en plein écran, avec les notifications.', btn: 'Comment faire ?', install: 'Installer EuroKink', close: 'Fermer', copy: 'Copier le lien', copied: 'Lien copié : colle-le dans Safari', copiedA: 'Lien copié : colle-le dans Chrome',
+    inapp: ['Tu es dans le navigateur d’une autre appli (Instagram, Facebook…) : l’installation n’y est pas possible.', 'Touche le bouton ••• ou ⋮ en haut à droite, puis « Ouvrir dans le navigateur » (Safari sur iPhone, Chrome sur Android).', 'Ou copie le lien ci-dessous et colle-le dans ton navigateur, puis suis les étapes.'],
+    ios: ['Ouvre eurokink.eu dans <b>Safari</b> (ou Chrome).', 'Touche le bouton <b>Partager</b> {share}. Sur iOS 26, il se trouve dans le menu <b>•••</b> en bas à droite.', 'Fais défiler et touche <b>« Sur l’écran d’accueil »</b>.', 'Laisse <b>« Ouvrir comme app web »</b> activé, puis touche <b>Ajouter</b>.', 'Ouvre EuroKink depuis la nouvelle icône, puis reconnecte-toi si besoin.'],
+    and: ['Ouvre eurokink.eu dans <b>Chrome</b> (ou Samsung Internet).', 'Touche le menu <b>⋮</b> en haut à droite (≡ en bas sur Samsung Internet).', 'Touche <b>« Installer l’application »</b> ou <b>« Ajouter à l’écran d’accueil »</b>.', 'Confirme avec <b>Installer</b>, puis ouvre EuroKink depuis la nouvelle icône.'] },
+  en: { title: 'Install EuroKink on your phone', sub: 'An icon on your home screen, full screen, with notifications.', btn: 'How?', install: 'Install EuroKink', close: 'Close', copy: 'Copy the link', copied: 'Link copied: paste it in Safari', copiedA: 'Link copied: paste it in Chrome',
+    inapp: ['You are in another app’s browser (Instagram, Facebook…): installing isn’t possible there.', 'Tap the ••• or ⋮ button at the top right, then “Open in browser” (Safari on iPhone, Chrome on Android).', 'Or copy the link below, paste it in your browser and follow the steps.'],
+    ios: ['Open eurokink.eu in <b>Safari</b> (or Chrome).', 'Tap the <b>Share</b> button {share}. On iOS 26 it is in the <b>•••</b> menu at the bottom right.', 'Scroll down and tap <b>“Add to Home Screen”</b>.', 'Keep <b>“Open as Web App”</b> on, then tap <b>Add</b>.', 'Open EuroKink from the new icon and sign in again if needed.'],
+    and: ['Open eurokink.eu in <b>Chrome</b> (or Samsung Internet).', 'Tap the <b>⋮</b> menu at the top right (≡ at the bottom in Samsung Internet).', 'Tap <b>“Install app”</b> or <b>“Add to Home screen”</b>.', 'Confirm with <b>Install</b>, then open EuroKink from the new icon.'] },
+  de: { title: 'Installiere EuroKink auf deinem Handy', sub: 'Ein Symbol auf dem Startbildschirm, Vollbild, mit Benachrichtigungen.', btn: 'Wie geht das?', install: 'EuroKink installieren', close: 'Schließen', copy: 'Link kopieren', copied: 'Link kopiert: füge ihn in Safari ein', copiedA: 'Link kopiert: füge ihn in Chrome ein',
+    inapp: ['Du bist im Browser einer anderen App (Instagram, Facebook…): Dort ist keine Installation möglich.', 'Tippe oben rechts auf ••• oder ⋮ und dann auf „Im Browser öffnen“ (Safari auf dem iPhone, Chrome auf Android).', 'Oder kopiere den Link unten, füge ihn in deinen Browser ein und folge den Schritten.'],
+    ios: ['Öffne eurokink.eu in <b>Safari</b> (oder Chrome).', 'Tippe auf <b>Teilen</b> {share}. Unter iOS 26 findest du es im Menü <b>•••</b> unten rechts.', 'Scrolle nach unten und tippe auf <b>„Zum Home-Bildschirm“</b>.', 'Lass <b>„Als Web-App öffnen“</b> aktiviert und tippe auf <b>Hinzufügen</b>.', 'Öffne EuroKink über das neue Symbol und melde dich ggf. erneut an.'],
+    and: ['Öffne eurokink.eu in <b>Chrome</b> (oder Samsung Internet).', 'Tippe oben rechts auf das Menü <b>⋮</b> (≡ unten bei Samsung Internet).', 'Tippe auf <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b>.', 'Bestätige mit <b>Installieren</b> und öffne EuroKink über das neue Symbol.'] }
+};
+function installCard(small) {
+  if (!canInstall()) return '';
+  const t = IT[LANG] || IT.fr;
+  if (small) return `<button class="btn btn-ghost btn-block" data-act="install-help" data-no-i18n>${I.download}<span>${t.title}</span></button>`;
+  try { if (localStorage.getItem('ek.installHide')) return ''; } catch (e) { /* */ }
+  return `<div class="card early-card" data-no-i18n><div class="early-top"><span class="msg-card-ic">${I.download}</span><strong>${t.title}</strong>
+    <button class="icon-btn small" data-act="install-close" aria-label="${t.close}">${I.close}</button></div>
+    <p class="muted tiny">${t.sub}</p><button class="btn btn-red btn-block" data-act="install-help">${deferredInstall ? t.install : t.btn}</button></div>`;
+}
+async function installHelp() {
+  const t = IT[LANG] || IT.fr;
+  if (deferredInstall && !inAppBrowser()) {
+    deferredInstall.prompt();
+    try { await deferredInstall.userChoice; } catch (e) { /* */ }
+    deferredInstall = null; render(); return;
+  }
+  const steps = inAppBrowser() ? t.inapp : isIos() ? t.ios : t.and;
+  const el = sheet(`<div data-no-i18n><h2>${I.download} ${t.title}</h2>
+    <ol class="install-steps">${steps.map((s) => `<li>${s.replace('{share}', `<span class="ios-share">${I.share}</span>`)}</li>`).join('')}</ol>
+    ${inAppBrowser() || !/safari/i.test(navigator.userAgent) || /crios|fxios|edgios/i.test(navigator.userAgent) ? `<button class="btn btn-ghost btn-block" data-copy-link>${t.copy}</button>` : ''}
+    <button class="btn btn-red btn-block" data-sheet-close>${t.close}</button></div>`);
+  const cp = el.querySelector('[data-copy-link]');
+  if (cp) cp.addEventListener('click', () => {
+    const url = 'https://eurokink.eu/';
+    const done = () => toast(isIos() ? t.copied : t.copiedA);
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => prompt('', url)); else prompt('', url);
+  });
+}
+
 function earlyCard() {
   try { if (localStorage.getItem(EARLY_KEY)) return ''; } catch (e) { /* stockage indisponible */ }
   const t = {
@@ -819,7 +871,7 @@ function viewMessages() {
   const chats = convs.filter((c) => !requests.includes(c));
   const list = msgTab === 'requests' ? requests : chats;
   const row = (c) => `<a class="conv-row card" href="#/messages/${c.id}">${memberAv(c.other)}
-    <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
+    <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}${teamBadge(c.other.team)}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
       <div class="conv-prev ${c.unread ? 'unread' : ''}">${c.last_from_me ? '<span class="muted">Toi : </span>' : ''}<span data-no-i18n>${esc(c.last_preview || '')}</span></div>
       ${c.status === 'request' && c.mine && !isAdmin() ? '<div class="muted tiny">En attente d’acceptation</div>' : ''}${c.blocked ? '<div class="muted tiny">Bloqué</div>' : ''}</div>
     ${c.unread ? `<span class="count-pill">${c.unread}</span>` : ''}</a>`;
@@ -873,7 +925,7 @@ function viewThread(param) {
       <button class="link center" data-act="msg-block" data-user="${other.id}">Bloquer ce membre</button></div>`
     : `<form id="msgForm" class="msg-compose" data-to="${other.id}"><textarea name="body" rows="1" maxlength="2000" placeholder="Écris ton message…" aria-label="Message"></textarea><button class="icon-btn send" type="submit" aria-label="Envoyer">${I.send}</button></form>`;
   return `<section class="screen thread">
-    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
+    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${teamBadge(other.team)}${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
       <button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button></div>
     <div class="msg-list" id="msgList">${bubbles || `<p class="muted center tiny">${c ? '' : 'Ton premier message sera envoyé comme une demande.'}</p>`}
       ${pending ? '<p class="muted center tiny">En attente d’acceptation : tu peux envoyer jusqu’à 3 messages.</p>' : ''}
@@ -994,7 +1046,7 @@ function viewMember(id) {
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
@@ -1474,6 +1526,7 @@ function viewAccount(mode) {
   switch (mode) {
     case 'inscription':
       return `<section class="screen">${accountTop('Créer mon compte')}
+        ${installCard(true)}
         <form id="signupForm" class="card settings" novalidate data-t0="${Date.now()}">
           <label class="hp" aria-hidden="true">Site web<input name="ek_hp" tabindex="-1" autocomplete="off"></label>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
@@ -1525,6 +1578,7 @@ function viewAccount(mode) {
           <button class="btn btn-red btn-block" type="submit">Terminer</button></form></section>`;
     default:
       return `<section class="screen">${accountTop('Connexion')}
+        ${installCard(true)}
         <form id="loginForm" class="card settings">
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"></label>
           ${pwField('password', 'Mot de passe', 'current-password')}
@@ -2792,6 +2846,8 @@ document.addEventListener('click', (ev) => {
       sb.resendSignup(lastSignupEmail).then(() => { toast('E-mail renvoyé. Pense à regarder dans les indésirables.'); act.textContent = 'E-mail renvoyé ✓'; })
         .catch((err) => { act.disabled = false; toast(/second|rate|60/i.test(err.message) ? 'Patiente une minute avant de redemander un e-mail.' : err.message); });
       break;
+    case 'install-help': installHelp(); break;
+    case 'install-close': try { localStorage.setItem('ek.installHide', '1'); } catch (e) { /* */ } render(); break;
     case 'early-close': try { localStorage.setItem(EARLY_KEY, '1'); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'news-close': try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'msg-tab': msgTab = act.dataset.tab; render(); break;
@@ -3399,7 +3455,7 @@ async function submitAccountForm(form) {
       if (!cityPicked(form) && !(await resolveTypedCity(form.querySelector('.city-field')))) throw new Error('Ville introuvable : vérifie l’orthographe ou tape ton code postal.');
       const city = readCity(form);
       if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
-      if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris, choisis-en un autre.');
+      if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris ou réservé, choisis-en un autre.');
       const now = new Date().toISOString();
       const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, country: city.country || 'FR', adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
       if (form.id === 'completeForm') {
