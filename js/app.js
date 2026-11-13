@@ -1520,7 +1520,7 @@ function applyCity(wrap, c) {
   cityResults = []; citySeq++;
   wrap.querySelector('[name=city]').dispatchEvent(new Event('change', { bubbles: true }));
 }
-const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="10" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
+const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password"${auto === 'new-password' ? ' minlength="10"' : ''} required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
 const accountTop = (title, back = '#/profil') => (!loggedIn() && back === '#/profil' ? accountTopRaw(title, '#/') : accountTopRaw(title, back));
 const accountTopRaw = (title, back) => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
 let lastSignupEmail = '';
