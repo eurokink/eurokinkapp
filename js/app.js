@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.2';
+const VERSION = '0.33.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -734,8 +734,27 @@ function updateMsgBadges() {
   document.querySelectorAll('[data-msg-badge]').forEach((b) => { b.textContent = unreadMsgs > 9 ? '9+' : String(unreadMsgs); b.hidden = !unreadMsgs; });
 }
 const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
-setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
+setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 30000);
+// Liste des conversations ouverte : mise à jour toutes les 8 s (nouveaux messages, lu, en ligne)
+let convsLiveBusy = false;
+function refreshConvsLive() {
+  if (convsLiveBusy || !loggedIn()) return;
+  convsLiveBusy = true;
+  const before = JSON.stringify(convs);
+  loadConvs().then(() => { const h = location.hash || '#/'; if ((h === '#/messages' || h === '#/') && JSON.stringify(convs) !== before) render(); }).finally(() => { convsLiveBusy = false; });
+}
+setInterval(() => { if (document.visibilityState === 'visible' && location.hash === '#/messages') refreshConvsLive(); }, 8000);
+// Notification reçue pendant que l'appli est ouverte : mise à jour immédiate
+function onLivePush(tag) {
+  refreshUnread();
+  const h = location.hash || '#/';
+  if (tag && tag.startsWith('msg-')) {
+    const id = tag.slice(4);
+    if (h === `#/messages/${id}`) { loadThread(id); return; }
+    if (h === '#/messages' || h === '#/') { convsAt = 0; refreshConvsLive(); }
+  }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); const h = location.hash || ''; const mt = h.match(/^#\/messages\/([0-9a-f-]{36})$/); if (mt) loadThread(mt[1]); else if (h.startsWith('#/messages')) { convsAt = 0; render(); } } });
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
@@ -944,6 +963,16 @@ function viewThread(param) {
     ${composer}
   </section>`;
 }
+// Redessine l'écran en gardant le texte en cours, le curseur et le clavier ouvert
+function rerenderKeepDraft() {
+  const ta = $('#msgForm textarea'); const v = ta ? ta.value : ''; const foc = !!ta && document.activeElement === ta;
+  const a = ta ? ta.selectionStart : 0, b = ta ? ta.selectionEnd : 0;
+  render();
+  const nt = $('#msgForm textarea');
+  if (nt && v) nt.value = v;
+  if (nt && foc) { nt.focus({ preventScroll: true }); try { nt.setSelectionRange(a, b); } catch (e) { /* rien */ } }
+  scrollThread();
+}
 // Un seul chargement à la fois par fil (évite les messages en double) ; une demande pendant un chargement en relance un après
 function loadThread(id) {
   const th = threads[id] = threads[id] || { msgs: [], lastId: 0, loaded: false };
@@ -960,7 +989,7 @@ async function loadThreadOnce(id, th) {
       th.msgs.push(...rows); th.lastId = rows[rows.length - 1].id;
       if (rows.some((m) => m.sender_id !== profile.id)) sb.rpc('mark_conversation_read', { p_conv: id }).then(() => { const c = convs && convs.find((x) => x.id === id); if (c) c.unread = 0; refreshUnread(); }).catch(() => {});
     }
-    if ((first || rows.length) && location.hash === `#/messages/${id}`) { const draftTxt = $('#msgForm textarea') ? $('#msgForm textarea').value : ''; render(); if (draftTxt && $('#msgForm textarea')) $('#msgForm textarea').value = draftTxt; scrollThread(); }
+    if ((first || rows.length) && location.hash === `#/messages/${id}`) rerenderKeepDraft();
   } catch (e) { th.loaded = true; }
 }
 document.addEventListener('error', (ev) => {
@@ -994,7 +1023,7 @@ function startMsgPoll(id) {
       msgPollN = (msgPollN + 1) % 3;
       if (!msgPollN) {   // toutes les 12 s : lu / distribué / en ligne
         const before = JSON.stringify(convs && convs.find((x) => x.id === id));
-        loadConvs().then(() => { if (location.hash === `#/messages/${id}` && JSON.stringify(convs.find((x) => x.id === id)) !== before) { const ta = $('#msgForm textarea'); const v = ta ? ta.value : ''; const foc = document.activeElement === ta; render(); const nt = $('#msgForm textarea'); if (nt) { nt.value = v; if (foc) nt.focus(); } scrollThread(); } });
+        loadConvs().then(() => { if (location.hash === `#/messages/${id}` && JSON.stringify(convs.find((x) => x.id === id)) !== before) rerenderKeepDraft(); });
       }
     }
   }, 4000);
@@ -3586,7 +3615,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.addEventListener('message', (ev) => {
     if (!ev.data) return;
     if (ev.data.ekNavigate) navigate(ev.data.ekNavigate);
-    if ('ekPush' in ev.data) { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); }
+    if ('ekPush' in ev.data) { onLivePush(ev.data.ekPush); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); }
   });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
