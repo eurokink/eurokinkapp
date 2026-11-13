@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.28.10';
+const VERSION = '0.29.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -29,7 +29,7 @@ const orgLogo = (o, cls = '') => (o && o.logo
   ? `<img class="org-logo ${cls}" src="${esc(imgSrc(o.logo))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
   : `<span class="org-logo org-initial ${cls}">${esc(((o && o.name) || '?').charAt(0).toUpperCase())}</span>`);
 const salesEnded = (e) => !!(e.salesCloseAt && new Date(e.salesCloseAt) <= new Date());
-const heroImg = (e, zoom = false) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" style="object-position:${e.imageX}% ${e.imageY}%" alt="" loading="lazy" referrerpolicy="no-referrer"${zoom ? ` data-act="img-view" data-src="${esc(imgSrc(e.image))}"` : ''} onerror="this.parentNode.classList.remove('has-img');this.remove()">` : '');
+const heroImg = (e, zoom = false) => (e.image ? `<img class="hero-img" src="${esc(imgSrc(e.image))}" style="object-position:${e.imageX}% ${e.imageY}%" alt="" loading="lazy" referrerpolicy="no-referrer"${zoom ? ` data-act="img-view" data-src="${esc(imgSrc(e.image))}"` : ''} data-err="hero">` : '');
 const loggedIn = () => !!(sb.getSession() && profile);
 const defaults = {
   adult: false, pseudo: '', city: 'Nantes', visibility: 'everyone', invisible: false, neutralNotifs: true, testMode: false,
@@ -340,7 +340,7 @@ function viewEvent(id) {
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
   const showCheckin = !checked && (isLive(e) || (state.testMode && !loggedIn()));
   return `<section class="screen screen-event">
-    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e, true)}${e.image ? `<button class="icon-btn hero-btn hero-zoom" data-act="img-view" data-src="${esc(imgSrc(e.image))}" aria-label="Voir la photo en entier">${I.expand}</button>` : ''}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
+    <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e, true)}${e.image ? `<button class="icon-btn hero-btn hero-zoom" data-act="img-view" data-src="${esc(imgSrc(e.image))}" aria-label="Voir la photo en entier">${I.expand}</button>` : ''}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" data-err="remove">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
       <button class="icon-btn hero-btn hero-right" data-act="share" aria-label="Partager">${I.share}</button>
       <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
@@ -895,6 +895,13 @@ async function loadThreadOnce(id, th) {
     if ((first || rows.length) && location.hash === `#/messages/${id}`) { const draftTxt = $('#msgForm textarea') ? $('#msgForm textarea').value : ''; render(); if (draftTxt && $('#msgForm textarea')) $('#msgForm textarea').value = draftTxt; scrollThread(); }
   } catch (e) { th.loaded = true; }
 }
+document.addEventListener('error', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLImageElement) || !t.dataset.err) return;
+  if (t.dataset.err === 'hero' && t.parentNode) t.parentNode.classList.remove('has-img');
+  if (t.dataset.err === 'broken') { const p = t.closest('.img-preview'); if (p) p.classList.add('broken'); return; }
+  t.remove();
+}, true);
 function scrollThread() { const l = $('#msgList'); if (l) l.scrollTop = l.scrollHeight; }
 // Fil de discussion en plein écran, ajusté à la zone visible : le clavier iOS réduit la zone, l'en-tête reste en haut
 let vvFull = 0;
@@ -1393,7 +1400,8 @@ function viewAccount(mode) {
   switch (mode) {
     case 'inscription':
       return `<section class="screen">${accountTop('Créer mon compte')}
-        <form id="signupForm" class="card settings" novalidate>
+        <form id="signupForm" class="card settings" novalidate data-t0="${Date.now()}">
+          <label class="hp" aria-hidden="true">Site web<input name="ek_hp" tabindex="-1" autocomplete="off"></label>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
           ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
@@ -1513,7 +1521,7 @@ function viewSubmit() {
       </div>
       <h2 class="group-title">Visuel</h2>
       <div class="card settings">
-        ${draft.image_path ? `<div class="img-preview"><div class="crop-frame" id="cropFrame"><img id="cropImg" src="${esc(imgSrc(draft.image_path))}" style="object-position:${draft.image_x ?? 50}% ${draft.image_y ?? 50}%" alt="" draggable="false" referrerpolicy="no-referrer" onerror="this.closest('.img-preview').classList.add('broken')"></div>
+        ${draft.image_path ? `<div class="img-preview"><div class="crop-frame" id="cropFrame"><img id="cropImg" src="${esc(imgSrc(draft.image_path))}" style="object-position:${draft.image_x ?? 50}% ${draft.image_y ?? 50}%" alt="" draggable="false" referrerpolicy="no-referrer" data-err="broken"></div>
           <span class="hint crop-hint">Fais glisser la photo pour choisir la partie visible en haut de la fiche.</span><p class="form-error img-error">Ce lien ne mène pas à une image : il faut l’adresse de l’image elle-même (souvent terminée par .jpg ou .png), pas celle de la page. Le plus simple : enregistre l’image sur ton téléphone puis « Choisir une photo ».</p><button type="button" class="link" data-act="img-clear">Retirer l’image</button></div>` : ''}
         ${canUpload ? `<label class="btn btn-ghost btn-block file-btn">${I.image}<span>${draft.image_path ? 'Changer de photo' : 'Choisir une photo'}</span><input type="file" id="imgFile" accept="image/jpeg,image/png,image/webp"></label>` : ''}
         ${draft.image_path && !/^https:/i.test(draft.image_path) ? '' : `<label class="field">${canUpload ? 'Ou colle le lien d’une image' : 'Lien vers une image (affiche, photo)'}<input name="image_path" type="url" inputmode="url" value="${dv('image_path')}" placeholder="https://…" autocomplete="off"></label>`}
@@ -1709,7 +1717,7 @@ function adminPendingCard(p) {
       <div>${I.check}<span>Dress code ${DRESS[p.dress_code].toLowerCase()}${p.dress_code_details ? ` : ${esc(p.dress_code_details)}` : ''} · ${cloak}</span></div>
     </div>
     ${p.description ? `<p class="adm-desc">${esc(p.description)}</p>` : ''}
-    ${p.image_path ? `<img class="adm-img" src="${esc(imgSrc(p.image_path))}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}
+    ${p.image_path ? `<img class="adm-img" src="${esc(imgSrc(p.image_path))}" alt="" referrerpolicy="no-referrer" data-err="remove">` : ''}
     <div class="adm-actions"><button class="btn btn-red" data-act="adm-publish" data-id="${p.id}">Publier</button><button class="btn btn-ghost" data-act="adm-edit" data-id="${p.id}">Modifier</button><button class="btn btn-ghost" data-act="adm-reject" data-id="${p.id}">Refuser</button></div>
     ${o.is_verified ? '' : `<button class="link" data-act="adm-trust" data-id="${p.id}" data-org="${o.id}">Publier et faire confiance à « ${esc(o.name)} »</button>`}
   </article>`;
@@ -3308,6 +3316,8 @@ async function submitAccountForm(form) {
   try {
     busy(true);
     if (form.id === 'signupForm' || form.id === 'completeForm') {
+      // Anti-robots : champ piège invisible et durée minimale de remplissage
+      if (form.id === 'signupForm' && (f.get('ek_hp') || Date.now() - Number(form.dataset.t0 || 0) < 4000)) throw new Error('Petite vérification : patiente quelques secondes puis réessaie.');
       const pseudo = String(f.get('pseudo') || '').trim();
       if (pseudo.length < 3) throw new Error('Choisis un pseudo de 3 caractères minimum.');
       if (!cityPicked(form) && !(await resolveTypedCity(form.querySelector('.city-field')))) throw new Error('Ville introuvable : vérifie l’orthographe ou tape ton code postal.');

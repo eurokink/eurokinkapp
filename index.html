@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' https://odaruyzivqmuvxosvqfd.supabase.co wss://odaruyzivqmuvxosvqfd.supabase.co https://data.geopf.fr https://api3.geo.admin.ch https://photon.komoot.io https://api.pwnedpasswords.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0E0E0E">
   <meta name="color-scheme" content="dark">
@@ -18,13 +20,13 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/Inter-Regular.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="fonts/InterDisplay-Black.woff" as="font" type="font/woff" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=0.28.10">
+  <link rel="stylesheet" href="css/styles.css?v=0.29.0">
 </head>
 <body>
   <main id="view" aria-live="polite"></main>
   <nav id="nav" aria-label="Navigation principale" hidden></nav>
   <div id="toast" role="status" aria-live="polite"></div>
   <noscript><p style="padding:24px">EuroKink a besoin de JavaScript pour fonctionner.</p></noscript>
-  <script type="module" src="js/app.js?v=0.28.10"></script>
+  <script type="module" src="js/app.js?v=0.29.0"></script>
 </body>
 </html>

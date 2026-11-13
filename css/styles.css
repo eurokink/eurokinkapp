@@ -601,3 +601,6 @@ body.kb .msg-request { margin-bottom: 10px; }
 .st-top { display: flex; flex-direction: column; padding: 8px 0; border-top: 1px solid var(--border); color: inherit; text-decoration: none; }
 .st-top:first-of-type { border-top: 0; }
 .st-top span { font-weight: 600; font-size: 14px; }
+
+/* Champ piège anti-robots (invisible) */
+.hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
