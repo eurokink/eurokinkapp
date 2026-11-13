@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.32.0';
+const VERSION = '0.32.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -618,7 +618,7 @@ function teamBlock(o) {
         <button class="icon-btn small" data-act="invite-share" data-token="${i.token}" data-org="${o.id}" aria-label="Partager le lien">${I.share}</button>
         <button class="icon-btn small" data-act="invite-revoke" data-id="${i.id}" data-org="${o.id}" aria-label="Supprimer l’invitation">${I.trash}</button></div>`).join('')}
       <button class="btn btn-ghost btn-block" data-act="invite-new" data-org="${o.id}">${I.plus}<span>Inviter un gestionnaire</span></button>
-      <p class="tiny muted">Chaque lien est personnel, utilisable une seule fois et valable 30 jours.${isAdmin() && !o.is_verified ? ' Envoyé par toi, il rend aussi l’organisation vérifiée.' : ''}</p>
+      <p class="tiny muted"><span>Chaque lien est personnel, utilisable une seule fois et valable 30 jours.</span>${isAdmin() && !o.is_verified ? ' <span>Envoyé par toi, il rend aussi l’organisation vérifiée.</span>' : ''}</p>
     </div>`;
 }
 function inviteMessage(orgName, token) {
@@ -1092,7 +1092,7 @@ async function saveMemberForm(form) {
   const interests = [...form.querySelectorAll('[data-act=interest].on')].map((b) => b.dataset.type).slice(0, 8);
   btn.disabled = true;
   try {
-    const rows = await sb.update('profiles', `id=eq.${profile.id}`, { bio, interests });
+    const rows = await updateMyProfile({ bio, interests });
     profile = (rows && rows[0]) || { ...profile, bio, interests };
     membersAt = 0;
     toast('Fiche enregistrée');
@@ -2965,7 +2965,7 @@ document.addEventListener('change', (ev) => {
         notif_neutral: state.neutralNotifs, notif_admin: state.adminNotifs !== false, notif_nearby: state.nearbyOn !== false, nearby_km: state.nearbyKm || 100 };
       Object.entries(np).forEach(([k, v]) => { if (profile[k] !== undefined && profile[k] !== v) patch[k] = v; });
       if (Object.keys(patch).length) {
-        sb.update('profiles', `id=eq.${profile.id}`, patch)
+        updateMyProfile(patch)
           .then((rows) => { if (rows && rows[0]) { profile = rows[0]; state.pseudo = profile.pseudo; save(); } membersAt = 0; toast('Réglages enregistrés'); })
           .catch((err) => { toast(err.message); if (f.pseudo) f.pseudo.value = profile.pseudo; });
         return;
@@ -3153,9 +3153,12 @@ function cropCircle(file, { size = 512, type = 'image/jpeg', title = 'Cadrer la 
     img.src = url;
   });
 }
+// Mon profil complet (réglages compris) n'est lisible que par moi : lecture via une fonction dédiée
+const myProfile = () => sb.rpc('my_profile', {});
+const updateMyProfile = async (patch) => { await sb.update('profiles', `id=eq.${profile.id}&select=id`, patch); const p = await myProfile(); return p ? [p] : []; };
 async function setAvatar(path) {
   const old = profile.avatar_path;
-  const rows = await sb.update('profiles', `id=eq.${profile.id}`, { avatar_path: path });
+  const rows = await updateMyProfile({ avatar_path: path });
   if (rows && rows[0]) profile = rows[0]; else profile.avatar_path = path;
   if (old && old !== path) sb.deleteObject('avatars', old).catch(() => {});
   membersAt = 0;
@@ -3309,7 +3312,8 @@ async function loadUser() {
   const s = sb.getSession();
   if (!s || !s.user) { profile = null; return; }
   const uid = s.user.id;
-  let rows = await sb.select('profiles', `id=eq.${uid}&select=*`);
+  const mine = await myProfile();
+  let rows = mine ? [mine] : [];
   if (!rows.length) {
     const md = s.user.user_metadata || {};
     if (!md.pseudo) { profile = null; return 'incomplete'; }
@@ -3318,12 +3322,14 @@ async function loadUser() {
       postal_code: md.postal_code || null, country: md.country || 'FR', latitude: md.latitude ?? state.cityLat ?? null, longitude: md.longitude ?? state.cityLon ?? null,
       adult_confirmed_at: md.adult_confirmed_at || new Date().toISOString(),
       sensitive_consent_at: md.sensitive_consent_at || new Date().toISOString()
-    }, { returnRow: true });
+    });
+    const created = await myProfile();
+    rows = created ? [created] : [];
   }
   profile = rows[0];
   state.adult = true;
   state.pseudo = profile.pseudo;
-  if (profile.lang !== LANG) sb.update('profiles', `id=eq.${uid}`, { lang: LANG }).then((r) => { if (r && r[0]) profile = r[0]; }).catch(() => {});
+  if (profile.lang !== LANG) updateMyProfile({ lang: LANG }).then((r) => { if (r && r[0]) profile = r[0]; }).catch(() => {});
   if (profile.city) setCity({ name: profile.city, postal: profile.postal_code, lat: profile.latitude, lon: profile.longitude, country: profile.country });
   state.visibility = profile.attendance_visibility;
   state.invisible = profile.is_invisible;
@@ -3468,8 +3474,7 @@ async function submitAccountForm(form) {
       const now = new Date().toISOString();
       const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, country: city.country || 'FR', adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
       if (form.id === 'completeForm') {
-        const rows = await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, postal_code: meta.postal_code, latitude: meta.latitude, longitude: meta.longitude, country: meta.country, adult_confirmed_at: now, sensitive_consent_at: now }, { returnRow: true });
-        profile = rows[0];
+        await sb.insert('profiles', { id: sb.currentUser().id, pseudo, city: meta.city, postal_code: meta.postal_code, latitude: meta.latitude, longitude: meta.longitude, country: meta.country, adult_confirmed_at: now, sensitive_consent_at: now });
         await loadUser();
         await refreshEvents();
         navigate(afterLogin());

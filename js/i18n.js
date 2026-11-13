@@ -596,6 +596,8 @@ const T = {
   'pays': ['countries', 'Länder'],
   'vues': ['views', 'Aufrufe'],
   'favoris': ['favourites', 'Favoriten'],
+  'Chaque lien est personnel, utilisable une seule fois et valable 30 jours.': ['Each link is personal, single-use and valid for 30 days.', 'Jeder Link ist persönlich, nur einmal nutzbar und 30 Tage gültig.'],
+  'Envoyé par toi, il rend aussi l’organisation vérifiée.': ['Sent by you, it also makes the organisation verified.', 'Von dir gesendet, wird die Organisation dadurch auch verifiziert.'],
   'Prix ?': ['Price ?', 'Preis ?'],
   'Indique le prix d’entrée, ou choisis « Gratuit » ou « Prix non communiqué ».': ['Enter the entry price, or choose “Free” or “Price not announced”.', 'Gib den Eintrittspreis an oder wähle „Kostenlos“ oder „Preis nicht bekannt“.'],
   'Prix non communiqué': ['Price not announced', 'Preis nicht bekannt'],
