@@ -27,8 +27,8 @@ Deno.serve(async (req) => {
   const { data: queued, error: qErr } = await sb.rpc("queue_notifications");
   if (qErr) return json({ error: qErr.message }, 500);
 
-  const since = new Date(Date.now() - 2 * 86400e3).toISOString();
-  const { data: items } = await sb.from("push_outbox").select("*").is("sent_at", null).lt("attempts", 5).gte("created_at", since).order("id").limit(300);
+  // Réservation atomique : deux envois simultanés ne prennent jamais la même notification
+  const { data: items } = await sb.rpc("claim_push_batch", { p_limit: 300 });
   if (!items?.length) return json({ queued, sent: 0 });
   const users = [...new Set(items.map((i) => i.user_id))];
   const { data: subs } = await sb.from("push_subscriptions").select("*").in("user_id", users);
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     }
     await sb.from("push_outbox").update(delivered || !lastErr
       ? { sent_at: new Date().toISOString(), last_error: lastErr || null }
-      : { attempts: it.attempts + 1, last_error: lastErr }).eq("id", it.id);
+      : { attempts: it.attempts + 1, last_error: lastErr, claimed_at: null }).eq("id", it.id);
   }
   return json({ queued, sent, gone });
 });
