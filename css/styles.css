@@ -630,3 +630,6 @@ body.kb .msg-request { margin-bottom: 10px; }
 .tw-txt .team-badge { margin: 2px 0 0; align-self: flex-start; }
 .member-head .team-badge { margin: 6px 0 0; }
 .pills .team-badge { margin: 0; padding: 4px 10px; }
+.org-badge { background: #000; color: #fff; border: 1px solid #3a3a3a; }
+.org-badge svg { color: var(--red-text); }
+.member-head .org-badge { max-width: 100%; white-space: normal; text-align: center; }
