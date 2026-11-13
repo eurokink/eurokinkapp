@@ -15,6 +15,21 @@ const box = (x0, y0, x1, y1) => { const [ax, ay] = project(x0, y1); const [bx, b
 const REGION = box(-5.2, 41.3, 15.1, 55.1);      // vue de départ : France et voisins
 const EUROPE = box(-25, 34, 45, 71.5);            // dézoom maximal : toute l’Europe
 
+// Noms des pays, affichés quand on dézoome (à la place des villes). Position du nom [longitude, latitude] ;
+// big = assez grand pour rester lisible même en vue « toute l'Europe »
+const COUNTRY_LABELS = {
+  FR: [2.4, 46.6, 1], ES: [-3.7, 40.2, 1], PT: [-8.1, 39.7], DE: [10.3, 51.1, 1], IT: [12.3, 43.1, 1], GB: [-1.8, 52.8, 1], IE: [-8, 53.2],
+  BE: [4.6, 50.6], NL: [5.7, 52.3], CH: [8.2, 46.85], AT: [14.4, 47.6], DK: [9.2, 56.1], NO: [9, 61.5, 1], SE: [15.2, 62.5, 1],
+  FI: [26, 63.2, 1], IS: [-18.6, 64.9], PL: [19.3, 52.1, 1], CZ: [15.4, 49.8], SK: [19.6, 48.7], HU: [19.4, 47.2], SI: [14.8, 46.1],
+  HR: [16.2, 45.3], BA: [17.8, 44.2], RS: [20.8, 44], ME: [19.3, 42.8], AL: [20.1, 41.1], MK: [21.7, 41.6], GR: [22, 39.4, 1],
+  BG: [25.2, 42.7], RO: [24.9, 45.9, 1], MD: [28.5, 47.2], UA: [31.2, 49.1, 1], BY: [28, 53.5], LT: [23.9, 55.3], LV: [25.6, 56.9],
+  EE: [25.8, 58.7], TR: [34, 39.2, 1], RU: [37, 56, 1]
+};
+let regionNames = null;
+const countryName = (code) => {
+  try { regionNames = regionNames || new Intl.DisplayNames([document.documentElement.lang || 'fr'], { type: 'region' }); return regionNames.of(code) || code; } catch (e) { return code; }
+};
+
 let view = null;   // { s, tx, ty } conservé entre deux affichages de la carte
 
 // Monte la carte dans `root`. markers = [{ id, lon, lat, count, label }], home = { lon, lat }.
@@ -49,6 +64,12 @@ export function mountMap(root, { markers, home, onSelect, markerSvg, unit = 'soi
   const labelEls = CITIES.map(({ name, lon, lat }) => {
     const el = document.createElement('span');
     el.className = 'map-label'; el.textContent = name; el._p = project(lon, lat);
+    layer.appendChild(el); return el;
+  });
+  const countryEls = Object.entries(COUNTRY_LABELS).map(([code, [lon, lat, big]]) => {
+    const el = document.createElement('span');
+    el.className = `map-country${big ? ' big' : ''}`; el.textContent = countryName(code); el._p = project(lon, lat); el._big = !!big;
+    el.setAttribute('data-no-i18n', ''); el.hidden = true;
     layer.appendChild(el); return el;
   });
   let homeEl = null;
@@ -101,6 +122,9 @@ export function mountMap(root, { markers, home, onSelect, markerSvg, unit = 'soi
     const showLabels = view.s > base.s * 1.6;
     const place = (el) => { el.style.transform = `translate(${el._p[0] * view.s + view.tx}px, ${el._p[1] * view.s + view.ty}px)`; };
     labelEls.forEach((el) => { el.hidden = !showLabels; if (showLabels) place(el); });
+    // Dézoomé : noms des pays (les petits pays seulement s'il y a la place)
+    const smallOk = view.s > base.s * 0.75;
+    countryEls.forEach((el) => { const on = !showLabels && (el._big || smallOk); el.hidden = !on; if (on) place(el); });
     if (homeEl) place(homeEl);
     markerEls.forEach(place);
   }
