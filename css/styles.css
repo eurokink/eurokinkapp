@@ -629,3 +629,4 @@ body.kb .msg-request { margin-bottom: 10px; }
 .team-badge svg { width: 12px; height: 12px; }
 .tw-txt .team-badge { margin: 2px 0 0; align-self: flex-start; }
 .member-head .team-badge { margin: 6px 0 0; }
+.pills .team-badge { margin: 0; padding: 4px 10px; }

@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.31.1';
+const VERSION = '0.31.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -427,13 +427,13 @@ function memberListHtml() {
   const list = (members || []).filter((m) => !q || [m.pseudo, m.city, m.postal_code || '', ...(m.interests || []).map(typeName)].some((x) => String(x).toLowerCase().includes(q)))
     .map((m) => ({ m, km: memberKm(m) })).sort((a, b) => a.km - b.km || a.m.pseudo.localeCompare(b.m.pseudo));
   if (!list.length) return empty(q ? 'Aucun membre ne correspond à ta recherche.' : 'Aucun membre visible pour le moment.');
-  return list.map(({ m, km }) => `<a class="member-row card" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}
+  return list.map(({ m, km }) => `<a class="member-row card" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${teamBadge(m.role === 'admin')}${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}
     <div class="muted tiny">${esc(m.city)}${profile && m.id === profile.id ? '' : ` · ${km} km`}</div>${(m.interests || []).length ? `<div class="chips mini">${interestChips(m.interests, 3)}</div>` : ''}</div>${I.chevron}</a>`).join('');
 }
 async function loadMembers(force) {
   if (!force && members && Date.now() - membersAt < 120000) return;
   try {
-    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
+    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at,role&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
     membersAt = Date.now(); membersError = '';
   } catch (e) { membersError = e.message || 'Impossible de charger les membres.'; }
 }
@@ -1242,7 +1242,7 @@ function viewProfile() {
   const stats = [[places.length, 'soirées'], [new Set(places.map((x) => x.city)).size, 'villes'], [new Set(places.map((x) => x.country)).size, 'pays']];
   const sel = pass.find((b) => b.code === selectedBadge) || pass[0];
   const name = loggedIn() ? profile.pseudo : 'Invité';
-  const pills = loggedIn() ? [profile.role === 'admin' ? '<span class="pill-red">ADMIN</span>' : '',
+  const pills = loggedIn() ? [teamBadge(profile.role === 'admin'),
     pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
     isOrganizer() && !(orgStatus && orgStatus.all) ? '<span class="pill-red">ORGANISATEUR</span>' : '',
     `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
