@@ -35,7 +35,7 @@ function translate(msg, code) {
   if (m.includes('email not confirmed') || m.includes('email_not_confirmed')) return 'Ton adresse e-mail n’est pas encore confirmée : clique sur le lien reçu par e-mail.';
   if (m.includes('user is banned') || m.includes('user_banned')) return 'Ton compte est suspendu. Pour toute question : contact@eurokink.eu';
   if (m.includes('already registered') || m.includes('user_already_exists')) return 'Un compte existe déjà avec cette adresse e-mail.';
-  if (m.includes('password should be') || m.includes('weak_password')) return 'Mot de passe trop faible : 8 caractères minimum, avec lettres et chiffres.';
+  if (m.includes('password should be') || m.includes('weak_password')) return 'Mot de passe trop faible : 10 caractères minimum, avec lettres et chiffres.';
   if (m.includes('rate limit') || m.includes('over_email_send_rate_limit') || m.includes('429')) return 'Trop de tentatives : réessaie dans quelques minutes.';
   if (m.includes('profiles_pseudo_ci') || (m.includes('duplicate') && m.includes('pseudo'))) return 'Ce pseudo est déjà pris.';
   if (m.includes('failed to fetch') || m.includes('network')) return 'Pas de connexion internet.';

@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.32.1';
+const VERSION = '0.32.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1520,7 +1520,7 @@ function applyCity(wrap, c) {
   cityResults = []; citySeq++;
   wrap.querySelector('[name=city]').dispatchEvent(new Event('change', { bubbles: true }));
 }
-const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="8" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
+const pwField = (name, label, auto) => `<label class="field">${label}<span class="pw"><input name="${name}" type="password" minlength="10" required autocomplete="${auto}"><button type="button" class="pw-toggle" data-act="pw" aria-label="Afficher le mot de passe">Afficher</button></span></label>`;
 const accountTop = (title, back = '#/profil') => (!loggedIn() && back === '#/profil' ? accountTopRaw(title, '#/') : accountTopRaw(title, back));
 const accountTopRaw = (title, back) => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
 let lastSignupEmail = '';
@@ -1535,7 +1535,7 @@ function viewAccount(mode) {
           <label class="hp" aria-hidden="true">Site web<input name="ek_hp" tabindex="-1" autocomplete="off"></label>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
-          ${pwField('password', 'Mot de passe (8 caractères minimum)', 'new-password')}
+          ${pwField('password', 'Mot de passe (10 caractères minimum)', 'new-password')}
           ${cityField('Ma ville', 'Tape le nom de ta ville ou ton code postal. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
@@ -1567,7 +1567,7 @@ function viewAccount(mode) {
     case 'nouveau-mdp':
       return `<section class="screen">${accountTop('Nouveau mot de passe', '#/')}
         <form id="newPasswordForm" class="card settings">
-          ${pwField('password', 'Nouveau mot de passe (8 caractères minimum)', 'new-password')}
+          ${pwField('password', 'Nouveau mot de passe (10 caractères minimum)', 'new-password')}
           <p class="form-error" id="formError" role="alert" hidden></p>
           <button class="btn btn-red btn-block" type="submit">Enregistrer</button></form></section>`;
     case 'profil':
@@ -3449,7 +3449,7 @@ async function pwnedCount(password) {
   } catch (e) { return null; }
 }
 async function checkPassword(password) {
-  if (password.length < 8) throw new Error('Le mot de passe doit faire au moins 8 caractères.');
+  if (password.length < 10) throw new Error('Le mot de passe doit faire au moins 10 caractères.');
   const n = await pwnedCount(password);
   if (n > 0) throw new Error(`Ce mot de passe figure dans des fuites de données connues (vu ${n.toLocaleString(LOCALE)} fois) : il pourrait être deviné facilement. Choisis-en un autre.`);
 }
