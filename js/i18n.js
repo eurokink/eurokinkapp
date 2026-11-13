@@ -596,6 +596,7 @@ const T = {
   'pays': ['countries', 'Länder'],
   'vues': ['views', 'Aufrufe'],
   'favoris': ['favourites', 'Favoriten'],
+  'obtenu': ['earned', 'erhalten'],
   'rappels': ['reminders', 'Erinnerungen'],
   'alertes': ['alerts', 'Hinweise'],
   'présents': ['checked in', 'vor Ort'],
