@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.1';
+const VERSION = '0.33.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -735,7 +735,7 @@ function updateMsgBadges() {
 }
 const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
 setInterval(() => { if (document.visibilityState === 'visible') refreshUnread(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); if ((location.hash || '').startsWith('#/messages')) { convsAt = 0; render(); } } });
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
@@ -2041,6 +2041,21 @@ function viewAdmin() {
     ${body}</section>`;
 }
 
+// Rafraîchit l'espace admin en arrière-plan (sans écran de chargement)
+let admRefreshing = false;
+function admSilentRefresh() {
+  if (!isAdmin() || admRefreshing) return;
+  admRefreshing = true;
+  Promise.all([
+    sb.rpc('admin_dashboard').then((r) => { if (r) adminData = r; }),
+    adminStats && !adminStats.loading ? sb.rpc('admin_stats').then((r) => { if (r) adminStats = r; }) : null,
+    adminMembers && !adminMembers.loading ? sb.rpc('admin_members').then((r) => { adminMembers = r || []; }) : null
+  ]).catch(() => {}).then(() => {
+    admRefreshing = false;
+    const a = document.activeElement;
+    if ((location.hash || '').startsWith('#/admin') && !(a && /INPUT|TEXTAREA/.test(a.tagName))) render();
+  });
+}
 function loadStats() {
   adminStats = { loading: true };
   sb.rpc('admin_stats').then((r) => { adminStats = r; }).catch((err) => { adminStats = { error: err.message }; })
@@ -2710,7 +2725,10 @@ window.addEventListener('hashchange', () => {
   if (/access_token=|error_description=/.test(location.hash)) { location.reload(); return; }
   if (overlayClose) { const f = overlayClose; overlayClose = null; f(); }
   navDepth += 1; render(); window.scrollTo(0, 0);
+  if ((location.hash || '').startsWith('#/admin') && !(lastHash || '').startsWith('#/admin')) admSilentRefresh();
+  lastHash = location.hash;
 });
+let lastHash = location.hash;
 
 // ---------------------------------------------------------------------------
 // Interactions (délégation d'événements)
@@ -3565,7 +3583,11 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     sessionStorage.setItem('ek.updated', '1');
     location.reload();
   });
-  navigator.serviceWorker.addEventListener('message', (ev) => { if (ev.data && ev.data.ekNavigate) navigate(ev.data.ekNavigate); });
+  navigator.serviceWorker.addEventListener('message', (ev) => {
+    if (!ev.data) return;
+    if (ev.data.ekNavigate) navigate(ev.data.ekNavigate);
+    if ('ekPush' in ev.data) { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); }
+  });
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
       reg.update().catch(() => {});

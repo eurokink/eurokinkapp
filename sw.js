@@ -1,5 +1,5 @@
 // EuroKink — service worker : appli disponible hors ligne, mises à jour récupérées en priorité
-const CACHE = 'eurokink-v0.33.1';
+const CACHE = 'eurokink-v0.33.2';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/europe.js', './js/i18n.js', './js/supabase.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff', './fonts/InterDisplay-Black.woff',
@@ -24,10 +24,19 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'EuroKink', {
-    body: d.body || '', icon: './icons/icon-192.png', badge: './icons/icon-192.png',
-    tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '#/' }
-  }));
+  // iOS ajoute déjà « de EuroKink » sous le titre : on évite le doublon « EuroKink / de EuroKink »
+  // en remontant le texte en titre quand le titre est simplement « EuroKink »
+  let title = (d.title || '').trim(), body = d.body || '';
+  if (!title || title === 'EuroKink') { title = body || 'EuroKink'; body = ''; }
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(title, {
+      body, icon: './icons/icon-192.png', badge: './icons/icon-192.png',
+      tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '#/' }
+    }),
+    // Prévient l'appli si elle est ouverte, pour rafraîchir les données sans la relancer
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((list) => list.forEach((c) => c.postMessage({ ekPush: d.tag || '' })))
+  ]));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
