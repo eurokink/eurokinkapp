@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.30.1';
+const VERSION = '0.30.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -821,7 +821,7 @@ function viewMessages() {
   const row = (c) => `<a class="conv-row card" href="#/messages/${c.id}">${memberAv(c.other)}
     <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
       <div class="conv-prev ${c.unread ? 'unread' : ''}">${c.last_from_me ? '<span class="muted">Toi : </span>' : ''}<span data-no-i18n>${esc(c.last_preview || '')}</span></div>
-      ${c.status === 'request' && c.mine ? '<div class="muted tiny">En attente d’acceptation</div>' : ''}${c.blocked ? '<div class="muted tiny">Bloqué</div>' : ''}</div>
+      ${c.status === 'request' && c.mine && !isAdmin() ? '<div class="muted tiny">En attente d’acceptation</div>' : ''}${c.blocked ? '<div class="muted tiny">Bloqué</div>' : ''}</div>
     ${c.unread ? `<span class="count-pill">${c.unread}</span>` : ''}</a>`;
   return `<section class="screen">${top}
     <div class="seg seg-btn"><button class="${msgTab === 'chats' ? 'on' : ''}" data-act="msg-tab" data-tab="chats">Discussions</button><button class="${msgTab === 'requests' ? 'on' : ''}" data-act="msg-tab" data-tab="requests">Demandes${requests.length ? ` <span class="count-pill">${requests.length}</span>` : ''}</button></div>
@@ -851,8 +851,9 @@ function viewThread(param) {
   const th = c ? (threads[c.id] = threads[c.id] || { msgs: [], lastId: 0, loaded: false }) : { msgs: [], loaded: true };
   if (c && !th.loaded) loadThread(c.id);
   const incomingRequest = c && c.status === 'request' && !c.mine;
-  const pending = c && c.status === 'request' && c.mine;
-  const declined = c && c.status === 'declined';
+  // Un admin n'est pas soumis aux demandes de message
+  const pending = c && c.status === 'request' && c.mine && !isAdmin();
+  const declined = c && c.status === 'declined' && !isAdmin();
   let lastDay = '';
   const bubbles = th.msgs.map((m) => {
     const day = fDayLong.format(new Date(m.created_at));
