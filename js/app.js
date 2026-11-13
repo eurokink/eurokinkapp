@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.32.2';
+const VERSION = '0.33.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -455,7 +455,9 @@ async function presenceTick() {
 }
 setInterval(presenceTick, 60000);
 document.addEventListener('visibilitychange', presenceTick);
-const memberAv = (m, cls = '') => `<span class="mini-av ${cls}${isOnline(m) ? ' is-online' : ''}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
+// Compte système « EuroKink » (messages automatiques, sans réponse possible)
+const SYSTEM_ID = 'e0e0e0e0-0000-4000-8000-000000000001';
+const memberAv = (m, cls = '') => m && m.id === SYSTEM_ID ? `<span class="mini-av sys-av ${cls}"><img src="icons/icon-192.png" alt=""></span>` : `<span class="mini-av ${cls}${isOnline(m) ? ' is-online' : ''}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
 
 const commSeg = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
   <a href="#/communaute/liste" role="tab" aria-selected="${mode === 'list'}" class="${mode === 'list' ? 'on' : ''}">${I.list}<span>Liste</span></a>
@@ -924,14 +926,16 @@ function viewThread(param) {
     }
     return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(m.body)}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
   }).join('');
-  const composer = declined || (c && c.blocked) ? '' : incomingRequest ? `<div class="msg-request card">
+  const sys = other.id === SYSTEM_ID;
+  const composer = sys ? `<p class="sys-note muted tiny center" data-no-i18n>${{ fr: 'Message automatique : pour nous contacter, écris à', en: 'Automatic message: to contact us, write to', de: 'Automatische Nachricht: Schreib uns an' }[LANG]} <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`
+    : declined || (c && c.blocked) ? '' : incomingRequest ? `<div class="msg-request card">
       <p><strong>${esc(other.pseudo)}</strong> souhaite discuter avec toi.</p>
       <div class="adm-actions"><button class="btn btn-red" data-act="msg-accept" data-id="${c.id}">Accepter</button><button class="btn btn-ghost" data-act="msg-decline" data-id="${c.id}">Refuser</button></div>
       <button class="link center" data-act="msg-block" data-user="${other.id}">Bloquer ce membre</button></div>`
     : `<form id="msgForm" class="msg-compose" data-to="${other.id}"><textarea name="body" rows="1" maxlength="2000" placeholder="Écris ton message…" aria-label="Message"></textarea><button class="icon-btn send" type="submit" aria-label="Envoyer">${I.send}</button></form>`;
   return `<section class="screen thread">
-    <div class="thread-top">${back}<a class="thread-who" href="#/membre/${other.id}">${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${teamBadge(other.team)}${other.org && !other.team ? orgBadge(['']) : ''}${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
-      <button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button></div>
+    <div class="thread-top">${back}<a class="thread-who" ${sys ? '' : `href="#/membre/${other.id}"`}>${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${teamBadge(other.team)}${other.org && !other.team ? orgBadge(['']) : ''}${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
+      ${sys ? '' : `<button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button>`}</div>
     <div class="msg-list" id="msgList">${bubbles || `<p class="muted center tiny">${c ? '' : 'Ton premier message sera envoyé comme une demande.'}</p>`}
       ${pending ? '<p class="muted center tiny">En attente d’acceptation : tu peux envoyer jusqu’à 3 messages.</p>' : ''}
       ${declined ? '<p class="muted center tiny">Ce membre n’a pas accepté ta demande.</p>' : ''}${c && c.blocked ? '<p class="muted center tiny">Tu as bloqué ce membre.</p>' : ''}</div>

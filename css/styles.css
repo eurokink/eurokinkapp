@@ -633,3 +633,7 @@ body.kb .msg-request { margin-bottom: 10px; }
 .org-badge { background: #000; color: #fff; border: 1px solid #3a3a3a; }
 .org-badge svg { color: var(--red-text); }
 .member-head .org-badge { max-width: 100%; white-space: normal; text-align: center; }
+.sys-av { background: #000; }
+.sys-av img { width: 100%; height: 100%; object-fit: cover; }
+.sys-note { flex: none; padding: 12px 8px calc(12px + var(--safe-bottom)); border-top: 1px solid var(--border); margin: 0; }
+body.kb .sys-note { padding-bottom: 12px; }
