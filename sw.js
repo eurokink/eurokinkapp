@@ -1,5 +1,5 @@
 // EuroKink — service worker : appli disponible hors ligne, mises à jour récupérées en priorité
-const CACHE = 'eurokink-v0.33.5';
+const CACHE = 'eurokink-v0.33.6';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/europe.js', './js/i18n.js', './js/supabase.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff', './fonts/InterDisplay-Black.woff',
@@ -35,7 +35,8 @@ self.addEventListener('push', (e) => {
     }),
     // Prévient l'appli si elle est ouverte, pour rafraîchir les données sans la relancer
     self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((list) => list.forEach((c) => c.postMessage({ ekPush: d.tag || '' })))
+      .then((list) => list.forEach((c) => { try { c.postMessage({ ekPush: d.tag || '' }); } catch (err) { /* rien */ } }))
+      .catch(() => {})
   ]));
 });
 self.addEventListener('notificationclick', (e) => {
