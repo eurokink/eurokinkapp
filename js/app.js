@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.29.1';
+const VERSION = '0.30.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -979,14 +979,17 @@ function viewMember(id) {
   const mine = profile && id === profile.id;
   const m = mine ? profile : memberCache.get(id);
   if (m === undefined) {
-    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at,last_seen_at`)
+    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at,last_seen_at,role,is_invisible,suspended_until,suspension_reason`)
       .then((r) => { memberCache.set(id, r[0] || null); }).catch(() => memberCache.set(id, null))
       .then(() => { if (location.hash === `#/membre/${id}`) render(); });
     return `<section class="screen">${back}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
   }
   if (!m) return `<section class="screen">${back}${empty('Ce profil est introuvable ou masqué.')}</section>`;
   const av = m.avatar_path ? sb.publicUrl('avatars', m.avatar_path) : '';
+  const susp = isAdmin() && m.suspended_until && new Date(m.suspended_until) > new Date();
   return `<section class="screen">${back}
+    ${susp ? `<div class="card mod-banner">${I.lock}<div><strong>Profil suspendu ${new Date(m.suspended_until).getFullYear() > 2100 ? 'jusqu’à nouvel ordre' : `jusqu’au ${fDate.format(new Date(m.suspended_until))}`}</strong>${m.suspension_reason ? `<div class="muted tiny">Motif : ${esc(m.suspension_reason)}</div>` : ''}</div></div>` : ''}
+    ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
       <div class="pseudo">${esc(m.pseudo)}</div>
@@ -1006,7 +1009,8 @@ function viewMember(id) {
       : `<a class="btn btn-red btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
-        <button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}
+        ${isAdmin() ? (m.role === 'admin' ? '' : `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Modération</span></button>`)
+          : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}`}
   </section>`;
 }
 
@@ -1035,6 +1039,70 @@ async function saveMemberForm(form) {
     toast('Fiche enregistrée');
     navigate(`#/membre/${profile.id}`);
   } catch (err) { formError(form, err.message); btn.disabled = false; }
+}
+
+// Modération (admins) : avertissement, suspension, suppression définitive
+function moderateMember(id) {
+  const m = memberCache.get(id);
+  if (!m) return;
+  const susp = m.suspended_until && new Date(m.suspended_until) > new Date();
+  const el = sheet(`<h2>Modérer ${esc(m.pseudo)}</h2>
+    <div class="mod-sec"><strong>${I.bell} Envoyer un avertissement</strong>
+      <p class="muted tiny">Le membre le reçoit en notification et doit le lire à sa prochaine ouverture de l’appli.</p>
+      <label class="field">Message<textarea id="modWarn" rows="3" maxlength="1000" placeholder="Ex. : merci de respecter la charte, les propos à caractère sexuel ne sont pas autorisés dans les messages."></textarea></label>
+      <button class="btn btn-ghost btn-block" data-mod="warn">Envoyer l’avertissement</button></div>
+    <div class="mod-sec"><strong>${I.lock} ${susp ? 'Suspension en cours' : 'Suspendre le profil'}</strong>
+      ${susp ? `<p class="muted tiny">Suspendu ${new Date(m.suspended_until).getFullYear() > 2100 ? 'jusqu’à nouvel ordre' : `jusqu’au ${fDate.format(new Date(m.suspended_until))}`}${m.suspension_reason ? ` · ${esc(m.suspension_reason)}` : ''}.</p>
+        <button class="btn btn-ghost btn-block" data-mod="unsuspend">Lever la suspension</button>`
+      : `<p class="muted tiny">Le membre est déconnecté, ne peut plus se connecter et son profil disparaît pour les autres pendant la durée choisie.</p>
+        <label class="field">Durée<select id="modDays"><option value="1">1 jour</option><option value="7" selected>7 jours</option><option value="30">30 jours</option><option value="">Jusqu’à nouvel ordre</option></select></label>
+        <label class="field">Motif (visible des admins)<input id="modReason" maxlength="200" placeholder="Ex. : harcèlement signalé"></label>
+        <button class="btn btn-ghost btn-block danger-text" data-mod="suspend">Suspendre</button>`}</div>
+    <div class="mod-sec"><strong>${I.trash} Supprimer définitivement</strong>
+      <p class="muted tiny">Le compte, le profil, les messages et l’historique du membre sont effacés. Action irréversible.</p>
+      <button class="btn btn-red btn-block" data-mod="delete">Supprimer le compte de ${esc(m.pseudo)}</button></div>
+    <button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>`);
+  el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-mod]'); if (!b) return;
+    const what = b.dataset.mod;
+    try {
+      if (what === 'warn') {
+        const msg = el.querySelector('#modWarn').value.trim();
+        if (msg.length < 3) { toast('Écris le message de l’avertissement.'); return; }
+        b.disabled = true; await sb.rpc('admin_warn', { p_user: id, p_message: msg }); toast('Avertissement envoyé');
+      } else if (what === 'suspend' || what === 'unsuspend') {
+        const days = what === 'unsuspend' ? 0 : (el.querySelector('#modDays').value ? Number(el.querySelector('#modDays').value) : null);
+        if (what === 'suspend' && !confirm(`Suspendre ${m.pseudo} ?`)) return;
+        b.disabled = true;
+        const until = await sb.rpc('admin_suspend', { p_user: id, p_days: days, p_reason: what === 'suspend' ? el.querySelector('#modReason').value.trim() : null });
+        m.suspended_until = until; m.suspension_reason = what === 'suspend' ? el.querySelector('#modReason').value.trim() : null;
+        toast(what === 'suspend' ? 'Profil suspendu' : 'Suspension levée');
+      } else if (what === 'delete') {
+        const typed = prompt(`Pour confirmer, tape le pseudo du membre : ${m.pseudo}`);
+        if (typed === null) return;
+        if (typed.trim().toLowerCase() !== String(m.pseudo).toLowerCase()) { toast('Pseudo incorrect : rien n’a été supprimé.'); return; }
+        b.disabled = true; await sb.rpc('admin_delete_member', { p_user: id });
+        memberCache.delete(id); adminMembers = null; toast('Compte supprimé définitivement');
+        closeOverlay(); setTimeout(() => navigate('#/admin'), 120); return;
+      }
+      adminMembers = null; closeOverlay(); render();
+    } catch (err) { b.disabled = false; toast(err.message); }
+  });
+}
+
+// Avertissements reçus : affichés à l'ouverture tant qu'ils ne sont pas lus
+async function checkWarnings() {
+  let list = [];
+  try { list = await sb.rpc('my_warnings', {}); } catch (e) { return; }
+  if (!list || !list.length) return;
+  const t = { fr: ['Avertissement de l’équipe EuroKink', 'Merci d’en tenir compte. En cas de récidive, ton profil pourra être suspendu. Une question : ', 'J’ai compris'],
+    en: ['Warning from the EuroKink team', 'Please take it into account. If it happens again, your profile may be suspended. Any question: ', 'I understand'],
+    de: ['Verwarnung vom EuroKink-Team', 'Bitte beachte sie. Im Wiederholungsfall kann dein Profil gesperrt werden. Fragen: ', 'Verstanden'] }[LANG];
+  const el = sheet(`<div data-no-i18n><h2>${I.bell} ${t[0]}</h2>
+    ${list.map((w) => `<div class="card mod-warn"><p data-no-i18n>${esc(w.message)}</p><p class="tiny muted">${fDate.format(new Date(w.created_at))}</p></div>`).join('')}
+    <p class="muted tiny">${t[1]}<a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
+    <button class="btn btn-red btn-block" data-ack>${t[2]}</button></div>`, () => { list.forEach((w) => sb.rpc('ack_warning', { p_id: w.id }).catch(() => {})); });
+  el.querySelector('[data-ack]').addEventListener('click', () => closeOverlay());
 }
 
 function reportMember(id) {
@@ -1926,12 +1994,12 @@ function admMemberRows() {
   };
   return list.map((m) => {
     const av = memberAv({ pseudo: m.pseudo, avatar_path: m.avatar, last_seen_at: m.last_seen_at });
-    const tags = [m.role === 'admin' ? '<span class="tag tag-red">ADMIN</span>' : '', m.invisible ? '<span class="tag tag-dark">INVISIBLE</span>' : '', m.manages ? `<span class="tag tag-dark">ORGA</span>` : ''].join('');
+    const tags = [m.role === 'admin' ? '<span class="tag tag-red">ADMIN</span>' : '', m.invisible ? '<span class="tag tag-dark">INVISIBLE</span>' : '', m.manages ? `<span class="tag tag-dark">ORGA</span>` : '', m.suspended_until ? '<span class="tag tag-red">SUSPENDU</span>' : '', m.warnings ? `<span class="tag tag-dark">${m.warnings} AVERT.</span>` : ''].join('');
     const inner = `${av}<div class="mr-main"><strong>${esc(m.pseudo)}</strong> <span class="muted tiny">n° ${m.number}</span> ${tags}
       <div class="muted tiny">${esc(m.city || 'Ville non renseignée')}${m.country ? ` · ${esc(COUNTRY_NAMES[String(m.country).trim()] || String(m.country).trim())}` : ''} · appli en ${(m.lang || 'fr').toUpperCase()}</div>
       <div class="muted tiny">Inscrit le ${df.format(new Date(m.created_at))} · ${seen(m)}${m.push ? ' · notifs ✓' : ''}${m.going ? ` · ${m.going} sortie${m.going > 1 ? 's' : ''}` : ''}</div>
       ${m.manages ? `<div class="muted tiny">Gère : ${esc(m.manages)}</div>` : ''}</div>`;
-    return m.invisible ? `<div class="member-row card">${inner}</div>` : `<a class="member-row card" href="#/membre/${m.id}">${inner}${I.chevron}</a>`;
+    return `<a class="member-row card" href="#/membre/${m.id}">${inner}${I.chevron}</a>`;
   }).join('');
 }
 function viewAdmMembers() {
@@ -1943,7 +2011,7 @@ function viewAdmMembers() {
   return `<label class="search"><span>${I.search}</span><input id="admMQ" type="search" placeholder="Pseudo, ville, organisation…" value="${esc(admMemberQ)}" aria-label="Rechercher un inscrit" autocomplete="off"></label>
     <p class="muted tiny">${s.length} inscrit${s.length > 1 ? 's' : ''} dont ${inv} invisible${inv > 1 ? 's' : ''} · du plus récent au plus ancien</p>
     <div id="admMList" class="list">${admMemberRows()}</div>
-    <p class="tiny muted center">Les profils invisibles n’apparaissent qu’ici : ils restent cachés des autres membres.</p>`;
+    <p class="tiny muted center">Les profils invisibles et suspendus restent cachés des autres membres. Touche un profil pour le modérer.</p>`;
 }
 function viewStats() {
   const s = adminStats;
@@ -2709,6 +2777,7 @@ document.addEventListener('click', (ev) => {
       act.classList.toggle('on', on); act.setAttribute('aria-pressed', on); break;
     }
     case 'report-member': reportMember(act.dataset.id); break;
+    case 'moderate-member': moderateMember(act.dataset.id); break;
     case 'follow-member': toggleMemberFollow(act.dataset.id); break;
     case 'invite-accept': acceptInvite(act); break;
     case 'invite-new': inviteNew(act.dataset.org); break;
@@ -3208,6 +3277,7 @@ async function loadUser() {
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
   presenceTick();
+  setTimeout(checkWarnings, 800);
   refreshUnread();
   following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
   save();

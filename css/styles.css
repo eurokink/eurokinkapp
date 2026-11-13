@@ -605,3 +605,14 @@ body.kb .msg-request { margin-bottom: 10px; }
 
 /* Champ piège anti-robots (invisible) */
 .hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
+
+/* Modération */
+.mod-sec { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-top: 1px solid var(--border); }
+.mod-sec strong { display: flex; align-items: center; gap: 8px; }
+.mod-sec strong svg { width: 18px; height: 18px; color: var(--red-text); }
+.mod-sec textarea, .mod-sec input, .mod-sec select { width: 100%; }
+.mod-banner { display: flex; gap: 12px; align-items: center; border-color: var(--red); padding: 12px 14px; margin-bottom: 12px; }
+.mod-banner svg { width: 22px; height: 22px; color: var(--red-text); flex: none; }
+.mod-warn { padding: 12px 14px; margin: 10px 0; border-color: var(--red); }
+.mod-warn p { margin: 0; }
+.danger-text { color: var(--red-text); }
