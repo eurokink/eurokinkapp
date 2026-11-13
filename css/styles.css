@@ -684,7 +684,8 @@ body.kb .sys-note { padding-bottom: 12px; }
 .mem-back, .mem-face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; -webkit-backface-visibility: hidden; backface-visibility: hidden; }
 .mem-back { background: linear-gradient(145deg, #2A0B10, #151515); border: 1px solid #5A1620; color: var(--red); font-weight: 800; font-size: 26px; }
 .mem-face { transform: rotateY(180deg); background: #EDEDED; border: 2px solid #fff; font-size: clamp(28px, 10vw, 44px); line-height: 1; }
-.mem-card.ok .mem-face { background: #1c2a1c; border-color: #3fae5a; }
+.mem-face svg { width: 80%; height: 80%; display: block; }
+.mem-card.ok .mem-face { background: #DDEFDF; border-color: #3fae5a; }
 .game-champ { margin: 12px 0 0; padding: 8px 10px; border-radius: 10px; background: rgba(245, 166, 35, .12); border: 1px solid rgba(245, 166, 35, .45); font-size: 13px; }
 .champ-badge { background: #F5A623; color: #1a1200; }
 @media (prefers-reduced-motion: reduce) { .mem-in { transition: none; } }
