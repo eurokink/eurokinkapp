@@ -4,9 +4,10 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { mountGame } from './game.js';
+import { mountGearUp } from './gearup.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.34.0';
+const VERSION = '0.34.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -469,16 +470,31 @@ const memberKm = (m) => { const c = cityObj(); return Math.round(distanceKm(c.la
 const interestChips = (list, max = 8) => (list || []).slice(0, max).map((t) => `<span class="chip static">${esc(typeName(t))}</span>`).join('');
 let memberQ = '';
 
-// Mini-jeu « Bouche bée » : en phase de test, visible par les administrateurs uniquement
-const GAME_PUBLIC = false;
-const canPlay = () => loggedIn() && (GAME_PUBLIC || isAdmin());
+// Mini-jeux. public: false = en phase de test, visible par les administrateurs uniquement.
+// « Bouche bée » reste réservé aux administrateurs (non publiable sur les stores).
+const GAMES = {
+  gearup: { title: 'Gear Up!', desc: 'Attrape les pièces du bon dress code', public: false, mount: mountGearUp },
+  bouche: { title: 'Bouche bée', desc: 'Version osée, gardée de côté', public: false, adminOnly: true, mount: mountGame }
+};
+const playable = () => (loggedIn() ? Object.keys(GAMES).filter((k) => isAdmin() || (GAMES[k].public && !GAMES[k].adminOnly)) : []);
 let gameCleanup = null;
-const gameLink = () => (canPlay() ? `<a class="map-summary game-link" href="#/jeu"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : Bouche bée${GAME_PUBLIC ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>` : '');
-function viewGame() {
-  return `<section class="screen game-screen"><div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small">Bouche bée</h1></div><div id="gameRoot" class="game-root"></div></section>`;
+let gameKey = null;
+const gameLink = () => {
+  const list = playable(); if (!list.length) return '';
+  const g = GAMES.gearup;
+  return `<a class="map-summary game-link" href="#/jeu${list.length > 1 ? '' : '/gearup'}"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : <span data-no-i18n>${g.title}</span>${g.public ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>`;
+};
+function viewGame(key) {
+  const list = playable();
+  const top = (t, noI18n) => `<div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small"${noI18n ? ' data-no-i18n' : ''}>${t}</h1></div>`;
+  if (!key || !list.includes(key)) {
+    return `<section class="screen">${top('Mini-jeux')}<div class="game-hub">${list.map((k) => `<a class="card game-hub-card" href="#/jeu/${k}"><span class="game-emoji" aria-hidden="true">🎮</span><span class="gh-txt"><b${k === 'gearup' ? ' data-no-i18n' : ''}>${GAMES[k].title}</b><span class="muted tiny">${GAMES[k].desc}${GAMES[k].public ? '' : ' · test'}</span></span><span class="accent">Jouer</span></a>`).join('')}</div></section>`;
+  }
+  return `<section class="screen game-screen">${top(GAMES[key].title, key === 'gearup')}<div id="gameRoot" class="game-root"></div></section>`;
 }
-function initGame() {
-  gameCleanup = mountGame($('#gameRoot'), { loadBoard: () => sb.rpc('game_board', {}), submit: (score) => sb.rpc('game_submit', { p_score: score }) });
+function initGame(key) {
+  gameKey = key;
+  gameCleanup = GAMES[key].mount($('#gameRoot'), { loadBoard: () => sb.rpc('game_board', { p_game: key }), submit: (score) => sb.rpc('game_submit', { p_game: key, p_score: score }) });
 }
 function viewCommunity(mode) {
   const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a>${commSeg(mode)}</div></div>`;
@@ -2692,8 +2708,8 @@ function render() {
   const hash = location.hash || '#/';
   const [, route, param] = hash.split('/');
   // Partie en cours : on ne redessine pas l'écran (une mise à jour en arrière-plan ne doit pas couper le jeu)
-  if (route === 'jeu' && gameCleanup && $('#gameRoot')) return;
-  if (gameCleanup) { gameCleanup(); gameCleanup = null; }
+  if (route === 'jeu' && gameCleanup && gameKey === param && $('#gameRoot')) return;
+  if (gameCleanup) { gameCleanup(); gameCleanup = null; gameKey = null; }
   if (!loggedIn() && route !== 'compte' && route !== 'infos') {
     if (route === 'soiree' && isUuid(param)) sessionStorage.setItem('ek.after', hash);
     if (route === 'invitation' && /^[0-9a-f]{32}$/.test(param || '')) setPendingInvite(param);
@@ -2724,7 +2740,7 @@ function render() {
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(param === 'liste' ? 'list' : 'map'); active = '#/communaute'; break;
     case 'membre': html = viewMember(param); active = '#/communaute'; break;
-    case 'jeu': if (canPlay()) { html = viewGame(); active = null; } else { html = viewCommunity('map'); active = '#/communaute'; } break;
+    case 'jeu': if (playable().length) { html = viewGame(param); active = playable().includes(param) ? null : '#/communaute'; } else { html = viewCommunity('map'); active = '#/communaute'; } break;
     case 'messages': html = param ? viewThread(param) : viewMessages(); active = param ? null : '#/communaute'; break;
     case 'invitation': html = viewInvitation(param); active = null; break;
     case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
@@ -2750,7 +2766,7 @@ function render() {
   if (route === 'messages' && param && !param.startsWith('u-')) { startMsgPoll(param); setTimeout(scrollThread, 30); }
   if (route === 'soiree' && isUuid(param) && loggedIn()) loadWho(param);
   if ((route === 'communaute' && param !== 'liste' || route === 'jeu') && $('#map')) initMembersMap();
-  if (route === 'jeu' && $('#gameRoot')) initGame();
+  if (route === 'jeu' && $('#gameRoot')) initGame(param);
 }
 
 function navigate(hash) {

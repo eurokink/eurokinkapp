@@ -664,3 +664,16 @@ body.kb .sys-note { padding-bottom: 12px; }
 .game-top .rk { width: 22px; color: var(--muted); font-weight: 700; }
 .game-top .ps { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .game-top .sc { font-weight: 800; }
+
+/* Gear Up! */
+.game-hud { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.game-hud[hidden], .game-flash[hidden] { display: none; }
+.game-code { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 6px 12px; border-radius: 12px; background: rgba(0, 0, 0, .55); border: 2px solid var(--code, #D0142C); }
+.game-code .lbl { font-size: 10px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.game-code b { font-size: 18px; color: var(--code, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.game-pts { font-size: 32px; font-weight: 800; color: #fff; min-width: 44px; text-align: center; }
+.game-lives { font-size: 20px; color: var(--red-text); letter-spacing: 2px; white-space: nowrap; }
+.game-flash { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: 40px; font-weight: 800; text-transform: uppercase; color: var(--code, #fff); text-shadow: 0 2px 18px rgba(0, 0, 0, .9); pointer-events: none; }
+.game-hub { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.game-hub-card { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.game-hub-card .gh-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
