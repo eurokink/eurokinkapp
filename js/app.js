@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.29.0';
+const VERSION = '0.29.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -85,6 +85,10 @@ const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const dayLabel = (iso) => cap(fDayLong.format(new Date(iso)));
 const shortDay = (iso) => fDayShort.format(new Date(iso)).replace('.', '').toUpperCase();
 const dayNum = (iso) => new Date(iso).getDate();
+const MONTHS3 = { fr: ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ', 'SEP', 'OCT', 'NOV', 'DÉC'],
+  en: ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'],
+  de: ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'] };
+const monthShort = (iso) => (MONTHS3[LANG] || MONTHS3.fr)[new Date(iso).getMonth()];
 const timeLabel = (iso) => fTime.format(new Date(iso));
 const priceLabel = (p, cur = 'EUR') => {
   if (p === 0) return 'Gratuit';
@@ -191,7 +195,7 @@ function eventRow(e) {
   if (salesEnded(e)) meta.push('Billetterie fermée');
   else if (e.booking === 'required') meta.push('Réservation');
   return `<a class="row-card" href="#/soiree/${e.id}">
-    <div class="date-chip"><span>${shortDay(e.startsAt)}</span><strong>${dayNum(e.startsAt)}</strong></div>
+    <div class="date-chip" data-no-i18n><span>${shortDay(e.startsAt)}</span><strong>${dayNum(e.startsAt)}</strong><em>${monthShort(e.startsAt)}</em></div>
     <div class="row-main"><div class="row-title">${esc(e.title)}</div><div class="row-meta">${esc(meta.join(' · '))}</div></div>
     <div class="price-pill">${e.soldOut ? 'Complet' : priceLabel(e.price, e.currency)}</div>
   </a>`;

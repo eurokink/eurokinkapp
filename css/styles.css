@@ -75,9 +75,10 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .link { color: var(--red-text); font-size: 13px; font-weight: 600; background: none; border: 0; padding: 4px 0; }
 .list { display: flex; flex-direction: column; gap: 10px; }
 .row-card { display: flex; gap: 14px; align-items: center; padding: 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
-.date-chip { width: 52px; height: 56px; flex: none; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.date-chip { width: 52px; height: 64px; flex: none; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .date-chip span { font-size: 10px; color: var(--red-text); font-weight: 700; letter-spacing: 1px; }
-.date-chip strong { font-size: 20px; }
+.date-chip strong { font-size: 20px; line-height: 1.1; }
+.date-chip em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--muted); }
 .row-main { flex: 1; min-width: 0; }
 .row-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-meta { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
