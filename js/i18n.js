@@ -560,7 +560,6 @@ const T = {
   'Tu suis ce membre': ['You follow this member', 'Du folgst diesem Mitglied'],
   'Tu suis cet organisateur': ['You follow this organiser', 'Du folgst diesem Veranstalter'],
   'Type': ['Type', 'Art'],
-  'Prix': ['Price', 'Preis'],
   'Type de soirée': ['Event type', 'Partyart'],
   'Types *': ['Types *', 'Arten *'],
   'Un instant…': ['One moment…', 'Einen Moment…'],

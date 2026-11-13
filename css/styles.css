@@ -109,6 +109,9 @@ input[type=range] { width: 100%; accent-color: var(--red); height: 28px; margin:
 .hero-left { left: 16px; } .hero-right { right: 16px; }
 .hero-tags { position: absolute; left: 18px; bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
 .event-body { padding: 20px 18px; display: flex; flex-direction: column; gap: 18px; }
+.title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.title-row .event-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.price-badge { flex: none; margin-top: 2px; padding: 6px 10px; border-radius: 10px; background: var(--red, #D0142C); color: #fff; font-weight: 800; font-size: 15px; line-height: 1.2; white-space: nowrap; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .event-title { font-family: 'Inter Display', Inter, sans-serif; font-weight: 900; font-size: 28px; line-height: 1.1; }
 .org-line { display: flex; align-items: center; gap: 6px; margin-top: -10px; color: #BDBDBD; font-size: 14px; flex-wrap: wrap; }
 .org-line strong { color: var(--text); }

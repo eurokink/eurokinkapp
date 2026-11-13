@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.4';
+const VERSION = '0.33.5';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -337,7 +337,6 @@ function viewEvent(id) {
   const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000;
   const when = multiDay ? `Du ${fDate.format(new Date(e.startsAt))} au ${fDate.format(new Date(e.endsAt))}` : dayLabel(e.startsAt);
   const infos = [
-    ['Prix', evPrice(e, true) + (e.presalePrice ? ` · ${priceLabel(e.presalePrice, e.currency)} en prévente` : '')],
     ['Type', e.types.map(typeName).join(', ')], ['Dress code', DRESS[e.dressCode]],
     ['Réservation', salesClosed ? 'Billetterie fermée' : e.salesCloseAt ? `${BOOKING[e.booking]}, jusqu’au ${fDate.format(new Date(e.salesCloseAt))}` : BOOKING[e.booking]], ['Vestiaire', e.hasCloakroom ? (e.cloakroomPaid ? 'Oui, payant' : 'Oui, gratuit') : 'Non'],
     ['Fréquence', FREQ[e.frequency]], ['Langues', e.languages.join(', ')]
@@ -356,7 +355,7 @@ function viewEvent(id) {
       <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
     </div>
     <div class="event-body">
-      <h1 class="event-title">${esc(e.title)}</h1>
+      <div class="title-row"><h1 class="event-title">${esc(e.title)}</h1><span class="price-badge">${e.soldOut ? 'Complet' : evPrice(e)}</span></div>
       <div class="org-line">${e.organizer.logo ? orgLogo(e.organizer, 'xs') : ''}par <a class="org-link" href="#/organisateur/${e.organizer.id}"><strong>${esc(e.organizer.name)}</strong></a>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
       <div class="facts">
         <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}</div></div></div>
