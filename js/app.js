@@ -3,9 +3,10 @@ import { EVENT_TYPES, CITIES, BADGES } from './data.js';
 import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
+import { mountGame } from './game.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.7';
+const VERSION = '0.34.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -468,6 +469,17 @@ const memberKm = (m) => { const c = cityObj(); return Math.round(distanceKm(c.la
 const interestChips = (list, max = 8) => (list || []).slice(0, max).map((t) => `<span class="chip static">${esc(typeName(t))}</span>`).join('');
 let memberQ = '';
 
+// Mini-jeu « Bouche bée » : en phase de test, visible par les administrateurs uniquement
+const GAME_PUBLIC = false;
+const canPlay = () => loggedIn() && (GAME_PUBLIC || isAdmin());
+let gameCleanup = null;
+const gameLink = () => (canPlay() ? `<a class="map-summary game-link" href="#/jeu"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : Bouche bée${GAME_PUBLIC ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>` : '');
+function viewGame() {
+  return `<section class="screen game-screen"><div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small">Bouche bée</h1></div><div id="gameRoot" class="game-root"></div></section>`;
+}
+function initGame() {
+  gameCleanup = mountGame($('#gameRoot'), { loadBoard: () => sb.rpc('game_board', {}), submit: (score) => sb.rpc('game_submit', { p_score: score }) });
+}
 function viewCommunity(mode) {
   const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a>${commSeg(mode)}</div></div>`;
   if (!membersError && (!members || Date.now() - membersAt > 120000)) {
@@ -481,12 +493,14 @@ function viewCommunity(mode) {
     return `<section class="screen">${top}
       <label class="search"><span>${I.search}</span><input id="mQ" type="search" placeholder="Pseudo, ville, centre d’intérêt…" value="${esc(memberQ)}" aria-label="Rechercher un membre"></label>
       <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} · ${me}</span><span class="accent">Réglages</span></a>
+      ${gameLink()}
       <div id="memberList" class="member-list big">${memberListHtml()}</div></section>`;
   }
   return `<section class="screen screen-map">
     ${top}
     ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
     <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
+    ${gameLink()}
     <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
     <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse.</p>`}
   </section>`;
@@ -2677,6 +2691,9 @@ function render() {
   const nav = $('#nav');
   const hash = location.hash || '#/';
   const [, route, param] = hash.split('/');
+  // Partie en cours : on ne redessine pas l'écran (une mise à jour en arrière-plan ne doit pas couper le jeu)
+  if (route === 'jeu' && gameCleanup && $('#gameRoot')) return;
+  if (gameCleanup) { gameCleanup(); gameCleanup = null; }
   if (!loggedIn() && route !== 'compte' && route !== 'infos') {
     if (route === 'soiree' && isUuid(param)) sessionStorage.setItem('ek.after', hash);
     if (route === 'invitation' && /^[0-9a-f]{32}$/.test(param || '')) setPendingInvite(param);
@@ -2707,6 +2724,7 @@ function render() {
     case 'favoris': html = viewFavorites(); active = '#/favoris'; break;
     case 'communaute': html = viewCommunity(param === 'liste' ? 'list' : 'map'); active = '#/communaute'; break;
     case 'membre': html = viewMember(param); active = '#/communaute'; break;
+    case 'jeu': if (canPlay()) { html = viewGame(); active = null; } else { html = viewCommunity('map'); active = '#/communaute'; } break;
     case 'messages': html = param ? viewThread(param) : viewMessages(); active = param ? null : '#/communaute'; break;
     case 'invitation': html = viewInvitation(param); active = null; break;
     case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
@@ -2731,7 +2749,8 @@ function render() {
   if (route === 'messages' && param) vvSync();
   if (route === 'messages' && param && !param.startsWith('u-')) { startMsgPoll(param); setTimeout(scrollThread, 30); }
   if (route === 'soiree' && isUuid(param) && loggedIn()) loadWho(param);
-  if (route === 'communaute' && param !== 'liste' && $('#map')) initMembersMap();
+  if ((route === 'communaute' && param !== 'liste' || route === 'jeu') && $('#map')) initMembersMap();
+  if (route === 'jeu' && $('#gameRoot')) initGame();
 }
 
 function navigate(hash) {
@@ -2838,7 +2857,7 @@ document.addEventListener('click', (ev) => {
   const e = eventById(id);
   switch (act.dataset.act) {
     case 'back':
-      if (navDepth > 0) history.back(); else navigate((location.hash || '').startsWith('#/membre') ? '#/communaute' : '#/');
+      if (navDepth > 0) history.back(); else navigate(/^#\/(membre|jeu)/.test(location.hash || '') ? '#/communaute' : '#/');
       break;
     case 'share': shareEvent(e); break;
     case 'fav': toggleAction('favorites', id, 'Ajoutée à tes favoris', 'Retirée de tes favoris'); break;
