@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.0';
+const VERSION = '0.33.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -455,6 +455,8 @@ async function presenceTick() {
 }
 setInterval(presenceTick, 60000);
 document.addEventListener('visibilitychange', presenceTick);
+// Typographie : pas de « ? », « ! », « : » ou « » » seul en début de ligne
+const nbsp = (s) => String(s || '').replace(/ ([?!:;»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
 // Compte système « EuroKink » (messages automatiques, sans réponse possible)
 const SYSTEM_ID = 'e0e0e0e0-0000-4000-8000-000000000001';
 const memberAv = (m, cls = '') => m && m.id === SYSTEM_ID ? `<span class="mini-av sys-av ${cls}"><img src="icons/icon-192.png" alt=""></span>` : `<span class="mini-av ${cls}${isOnline(m) ? ' is-online' : ''}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
@@ -924,7 +926,7 @@ function viewThread(param) {
       const st = c.other_read_at && Date.parse(c.other_read_at) >= at ? 'read' : c.other_delivered_at && Date.parse(c.other_delivered_at) >= at ? 'delivered' : 'sent';
       tick = ` <span class="tick ${st}" title="${{ sent: 'Envoyé', delivered: 'Distribué', read: 'Lu' }[st]}">${st === 'sent' ? '✓' : '✓✓'}</span>`;
     }
-    return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(m.body)}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
+    return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(nbsp(m.body))}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
   }).join('');
   const sys = other.id === SYSTEM_ID;
   const composer = sys ? `<p class="sys-note muted tiny center" data-no-i18n>${{ fr: 'Message automatique : pour nous contacter, écris à', en: 'Automatic message: to contact us, write to', de: 'Automatische Nachricht: Schreib uns an' }[LANG]} <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`
