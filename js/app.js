@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.33.3';
+const VERSION = '0.33.4';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -337,6 +337,7 @@ function viewEvent(id) {
   const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000;
   const when = multiDay ? `Du ${fDate.format(new Date(e.startsAt))} au ${fDate.format(new Date(e.endsAt))}` : dayLabel(e.startsAt);
   const infos = [
+    ['Prix', evPrice(e, true) + (e.presalePrice ? ` · ${priceLabel(e.presalePrice, e.currency)} en prévente` : '')],
     ['Type', e.types.map(typeName).join(', ')], ['Dress code', DRESS[e.dressCode]],
     ['Réservation', salesClosed ? 'Billetterie fermée' : e.salesCloseAt ? `${BOOKING[e.booking]}, jusqu’au ${fDate.format(new Date(e.salesCloseAt))}` : BOOKING[e.booking]], ['Vestiaire', e.hasCloakroom ? (e.cloakroomPaid ? 'Oui, payant' : 'Oui, gratuit') : 'Non'],
     ['Fréquence', FREQ[e.frequency]], ['Langues', e.languages.join(', ')]
@@ -365,7 +366,7 @@ function viewEvent(id) {
       ${showCheckin ? `<div class="checkin card"><div><strong>Tu es à la soirée ?</strong><div class="muted">Valide ta présence pour ton passeport.${state.testMode && !loggedIn() ? ' (mode test : sans GPS)' : ''}</div></div><button class="btn btn-red" data-act="checkin">${I.locate} Je suis sur place</button></div>` : ''}
       ${checked ? `<div class="checkin card done">${I.check}<div><strong>Présence validée</strong><div class="muted">Elle compte dans ton passeport.</div></div></div>` : ''}
       <div class="info-grid">${infos.map(([l, v]) => `<div class="info"><span>${l}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
-      ${e.dressCodeDetails ? `<p class="dress muted">Dress code : ${ut(e.dressCodeDetails)}</p>` : ''}
+      ${e.dressCodeDetails ? `<p class="dress muted">Dress code : <span data-no-i18n>${esc(e.dressCodeDetails)}</span></p>` : ''}
       <div class="actions">
         ${actionBtn('fav', fav, I.heart, 'Favori')}
         ${actionBtn('reminder', rem, I.bell, 'Rappel')}
