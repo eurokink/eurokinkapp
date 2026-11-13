@@ -5,7 +5,7 @@ import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.30.0';
+const VERSION = '0.30.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -920,6 +920,7 @@ function vvSync() {
   if (kb !== document.body.classList.contains('kb')) { document.body.classList.toggle('kb', kb); if (kb) setTimeout(scrollThread, 50); }
 }
 if (window.visualViewport) { visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync); }
+vvSync();
 function startMsgPoll(id) {
   clearInterval(msgPoll);
   msgPoll = setInterval(() => {
