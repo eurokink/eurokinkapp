@@ -4,10 +4,10 @@ import * as sb from './supabase.js';
 import { PAGES, CONTACT_EMAIL, LEGAL_UPDATED } from './legal.js';
 import { mountMap, setEnabledCountries } from './map.js';
 import { mountGame } from './game.js';
-import { mountGearUp } from './gearup.js';
+import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.34.1';
+const VERSION = '0.34.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -425,15 +425,20 @@ function viewFavorites() {
 let members = null; let membersAt = 0; let membersError = '';
 const teamBadge = (on) => (on ? `<span class="team-badge" data-no-i18n>${I.check}${{ fr: 'Équipe EuroKink', en: 'EuroKink team', de: 'EuroKink-Team' }[LANG]}</span>` : '');
 const orgBadge = (names, long) => (names && names.length ? `<span class="team-badge org-badge" data-no-i18n${long ? '' : ` title="${esc(names.join(', '))}"`}>${I.check}${{ fr: 'Organisateur', en: 'Organiser', de: 'Veranstalter' }[LANG]}${long ? ` · ${esc(names.join(', '))}` : ''}</span>` : '');
+// Défi de la semaine : champions en titre (badge 🏆 sur leur profil)
+let champIds = new Set();
+function loadChamps() { sb.rpc('game_champions', {}).then((r) => { const n = new Set(r || []); if ([...n].join() !== [...champIds].join()) { champIds = n; if (/^#\/(communaute|membre|profil)/.test(location.hash || '')) render(); } }).catch(() => {}); }
+const champBadge = (id) => (champIds.has(id) ? `<span class="team-badge champ-badge" data-no-i18n><span aria-hidden="true">🏆</span>${{ fr: 'Champion de la semaine', en: 'Champion of the week', de: 'Champion der Woche' }[LANG]}</span>` : '');
 function memberListHtml() {
   const q = memberQ.trim().toLowerCase();
   const list = (members || []).filter((m) => !q || [m.pseudo, m.city, m.postal_code || '', ...(m.interests || []).map(typeName)].some((x) => String(x).toLowerCase().includes(q)))
     .map((m) => ({ m, km: memberKm(m) })).sort((a, b) => a.km - b.km || a.m.pseudo.localeCompare(b.m.pseudo));
   if (!list.length) return empty(q ? 'Aucun membre ne correspond à ta recherche.' : 'Aucun membre visible pour le moment.');
-  return list.map(({ m, km }) => `<a class="member-row card" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${teamBadge(m.role === 'admin')}${orgBadge(m.org_names)}${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}
+  return list.map(({ m, km }) => `<a class="member-row card" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names)}${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}
     <div class="muted tiny">${esc(m.city)}${profile && m.id === profile.id ? '' : ` · ${km} km`}</div>${(m.interests || []).length ? `<div class="chips mini">${interestChips(m.interests, 3)}</div>` : ''}</div>${I.chevron}</a>`).join('');
 }
 async function loadMembers(force) {
+  loadChamps();
   if (!force && members && Date.now() - membersAt < 120000) return;
   try {
     members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at,role,org_names&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
@@ -473,7 +478,7 @@ let memberQ = '';
 // Mini-jeux. public: false = en phase de test, visible par les administrateurs uniquement.
 // « Bouche bée » reste réservé aux administrateurs (non publiable sur les stores).
 const GAMES = {
-  gearup: { title: 'Gear Up!', desc: 'Attrape les pièces du bon dress code', public: false, mount: mountGearUp },
+  memory: { title: 'Memory Fetish', desc: 'Retrouve les paires · défi de la semaine', public: false, mount: mountMemory },
   bouche: { title: 'Bouche bée', desc: 'Version osée, gardée de côté', public: false, adminOnly: true, mount: mountGame }
 };
 const playable = () => (loggedIn() ? Object.keys(GAMES).filter((k) => isAdmin() || (GAMES[k].public && !GAMES[k].adminOnly)) : []);
@@ -481,16 +486,16 @@ let gameCleanup = null;
 let gameKey = null;
 const gameLink = () => {
   const list = playable(); if (!list.length) return '';
-  const g = GAMES.gearup;
-  return `<a class="map-summary game-link" href="#/jeu${list.length > 1 ? '' : '/gearup'}"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : <span data-no-i18n>${g.title}</span>${g.public ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>`;
+  const g = GAMES.memory;
+  return `<a class="map-summary game-link" href="#/jeu${list.length > 1 ? '' : '/memory'}"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : <span data-no-i18n>${g.title}</span>${g.public ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>`;
 };
 function viewGame(key) {
   const list = playable();
   const top = (t, noI18n) => `<div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small"${noI18n ? ' data-no-i18n' : ''}>${t}</h1></div>`;
   if (!key || !list.includes(key)) {
-    return `<section class="screen">${top('Mini-jeux')}<div class="game-hub">${list.map((k) => `<a class="card game-hub-card" href="#/jeu/${k}"><span class="game-emoji" aria-hidden="true">🎮</span><span class="gh-txt"><b${k === 'gearup' ? ' data-no-i18n' : ''}>${GAMES[k].title}</b><span class="muted tiny">${GAMES[k].desc}${GAMES[k].public ? '' : ' · test'}</span></span><span class="accent">Jouer</span></a>`).join('')}</div></section>`;
+    return `<section class="screen">${top('Mini-jeux')}<div class="game-hub">${list.map((k) => `<a class="card game-hub-card" href="#/jeu/${k}"><span class="game-emoji" aria-hidden="true">🎮</span><span class="gh-txt"><b${k === 'memory' ? ' data-no-i18n' : ''}>${GAMES[k].title}</b><span class="muted tiny">${GAMES[k].desc}${GAMES[k].public ? '' : ' · test'}</span></span><span class="accent">Jouer</span></a>`).join('')}</div></section>`;
   }
-  return `<section class="screen game-screen">${top(GAMES[key].title, key === 'gearup')}<div id="gameRoot" class="game-root"></div></section>`;
+  return `<section class="screen game-screen">${top(GAMES[key].title, key === 'memory')}<div id="gameRoot" class="game-root"></div></section>`;
 }
 function initGame(key) {
   gameKey = key;
@@ -1116,7 +1121,7 @@ function viewMember(id) {
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${orgBadge(m.org_names, true)}
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
@@ -1308,7 +1313,7 @@ function viewProfile() {
   const stats = [[places.length, 'soirées'], [new Set(places.map((x) => x.city)).size, 'villes'], [new Set(places.map((x) => x.country)).size, 'pays']];
   const sel = pass.find((b) => b.code === selectedBadge) || pass[0];
   const name = loggedIn() ? profile.pseudo : 'Invité';
-  const pills = loggedIn() ? [teamBadge(profile.role === 'admin'), orgBadge(profile.org_names),
+  const pills = loggedIn() ? [teamBadge(profile.role === 'admin'), champBadge(profile.id), orgBadge(profile.org_names),
     pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
     `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
   const account = loggedIn() ? '' : `<div class="card account-cta"><h2>Crée ton compte EuroKink</h2>
