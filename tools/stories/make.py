@@ -88,7 +88,14 @@ def footer(img, d, line_fr='Gratuit · Français · English · Deutsch'):
 
 MOIS = ['JANV', 'FÉVR', 'MARS', 'AVR', 'MAI', 'JUIN', 'JUIL', 'AOÛT', 'SEPT', 'OCT', 'NOV', 'DÉC']
 FLAG = {'FR': '🇫🇷', 'DE': '🇩🇪', 'BE': '🇧🇪', 'PL': '🇵🇱', 'NL': '🇳🇱', 'ES': '🇪🇸', 'GB': '🇬🇧', 'IT': '🇮🇹', 'CH': '🇨🇭', 'AT': '🇦🇹'}
-BANNED = ('fist', 'sex', 'porn', 'cum', 'nude', 'naked')
+BANNED = ('fist', 'sex', 'porn', 'cum', 'nude', 'naked', 'fetish', 'fétich', 'fetich', 'kink')
+TITLE_FIX = {'Nice So Fétiche': 'Nice · week-end des 10 ans', 'Leather & Fetish Week': 'Leather Week'}
+
+def clean_title(t):
+    for k, v in TITLE_FIX.items():
+        if k.lower() in t.lower():
+            t = v if k == 'Nice So Fétiche' else t.replace(k, v)
+    return t
 
 def dlabel(a, b):
     if a == b:
@@ -113,6 +120,7 @@ def story_events(day, data, title_fr, title_en):
     evs = []
     for e in data['events']:
         a = dt.date.fromisoformat(e['d']); b = dt.date.fromisoformat(e.get('d2') or e['d'])
+        e = dict(e, title=clean_title(e['title']))
         if b < day or any(w in e['title'].lower() for w in BANNED):
             continue
         evs.append((a, b, e))
