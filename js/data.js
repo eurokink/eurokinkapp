@@ -136,6 +136,6 @@ export const BADGES = [
     icon: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z' },
   { code: 'explorer', name: 'Explorateur', goal: 5, description: '5 types de soirée différents.',
     icon: 'M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0M16.2 7.8l-2.1 6.3-6.3 2.1 2.1-6.3z' },
-  { code: 'pioneer', name: 'Pionnier', goal: 1, description: 'Parmi les 500 premiers membres d’EuroKink.',
+  { code: 'pioneer', name: 'Pionnier', goal: 1, description: 'Parmi les 100 premiers membres d’EuroKink.',
     icon: 'M12 2l3.1 6.3 6.9 1-5 4.8 1.2 6.9-6.2-3.2-6.2 3.2 1.2-6.9-5-4.8 6.9-1z' }
 ];

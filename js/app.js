@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.35.2';
+const VERSION = '0.36.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -584,6 +584,23 @@ async function toggleMemberFollow(id) {
 
 // Sorties à venir d'un membre (visibles selon ses réglages)
 const outingsCache = new Map();
+const passportCache = new Map();
+async function loadMemberPassport(id) {
+  try { passportCache.set(id, await sb.rpc('passport', { p_user: id })); } catch (e) { passportCache.set(id, null); }
+  if (location.hash === `#/membre/${id}`) render();
+}
+function memberBadges(id, mine) {
+  if (!passportCache.has(id)) { loadMemberPassport(id); return ''; }
+  const sp = passportCache.get(id);
+  if (!Array.isArray(sp)) return '';
+  const list = BADGES.map((b) => { const x = sp.find((y) => y.code === b.code) || {}; return { ...b, earned: !!x.earned_at }; });
+  const n = list.filter((b) => b.earned).length;
+  return `<div class="card"><h2 class="card-title">Badges <span class="muted tiny">${n} / ${list.length}</span></h2>
+    ${n ? `<div class="badges mini">${list.filter((b) => b.earned).map((b) => `<span class="badge earned" title="${esc(b.description)}">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><g class="b-studs">${studs()}</g><circle cx="60" cy="60" r="34" class="b-disc"/><g transform="translate(40 40) scale(1.6667)"><path d="${b.icon}" class="b-icon"/></g></svg>
+      <span class="b-name">${esc(b.name)}</span></span>`).join('')}</div>`
+      : `<p class="muted">${mine ? 'Valide ta présence en soirée pour gagner tes premiers badges.' : 'Pas encore de badge.'}</p>`}</div>`;
+}
 async function loadOutings(id) {
   try { outingsCache.set(id, (await sb.select('attendances', `user_id=eq.${id}&select=event_id`)).map((r) => r.event_id)); } catch (e) { outingsCache.set(id, []); }
   if (location.hash === `#/membre/${id}`) render();
@@ -1144,12 +1161,13 @@ function viewMember(id) {
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
+    ${memberBadges(m.id, mine)}
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
     ${(() => {
       if (!outingsCache.has(m.id)) { loadOutings(m.id); return ''; }
