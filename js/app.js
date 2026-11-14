@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.35.1';
+const VERSION = '0.35.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -482,19 +482,21 @@ const GAMES = {
   memory: { title: 'MemoryKink', desc: 'Retrouve les paires · défi de la semaine', public: true, mount: mountMemory },
   bouche: { title: 'Bouche bée', desc: 'Version osée, gardée de côté', public: false, adminOnly: true, mount: mountGame }
 };
+const GAME_LOGO = `<svg class="game-logo-svg" viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(-14 14 21)"><rect x="5.5" y="9.5" width="16" height="22" rx="3.5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="13.5" cy="20.5" r="2.2" fill="currentColor"/></g><g transform="rotate(11 25 20)"><rect x="17" y="8" width="16.5" height="23" rx="3.5" fill="var(--red)"/><path d="M22.3 13.6v12M22.3 19.8l5.6-6.2M24.4 17.6l4.2 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g></svg>`;
+const gameLogo = (sz = '') => `<span class="game-logo ${sz}">${GAME_LOGO}</span>`;
 const playable = () => (loggedIn() ? Object.keys(GAMES).filter((k) => isAdmin() || (GAMES[k].public && !GAMES[k].adminOnly)) : []);
 let gameCleanup = null;
 let gameKey = null;
 const gameLink = () => {
   const list = playable(); if (!list.length) return '';
   const g = GAMES.memory;
-  return `<a class="map-summary game-link" href="#/jeu${list.length > 1 ? '' : '/memory'}"><span class="game-emoji" aria-hidden="true">🎮</span><span>Mini-jeu : <span data-no-i18n>${g.title}</span>${g.public ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>`;
+  return `<a class="map-summary game-link" href="#/jeu${list.length > 1 ? '' : '/memory'}">${gameLogo('sm')}<span>Mini-jeu : <span data-no-i18n>${g.title}</span>${g.public ? '' : ' · test (visible par toi seul)'}</span><span class="accent">Jouer</span></a>`;
 };
 function viewGame(key) {
   const list = playable();
   const top = (t, noI18n) => `<div class="sub-top"><button class="icon-btn" data-act="back" aria-label="Retour">${I.back}</button><h1 class="page-title small"${noI18n ? ' data-no-i18n' : ''}>${t}</h1></div>`;
   if (!key || !list.includes(key)) {
-    return `<section class="screen">${top('Mini-jeux')}<div class="game-hub">${list.map((k) => `<a class="card game-hub-card" href="#/jeu/${k}"><span class="game-emoji" aria-hidden="true">🎮</span><span class="gh-txt"><b${k === 'memory' ? ' data-no-i18n' : ''}>${GAMES[k].title}</b><span class="muted tiny">${GAMES[k].desc}${GAMES[k].public ? '' : ' · test'}</span></span><span class="accent">Jouer</span></a>`).join('')}</div></section>`;
+    return `<section class="screen">${top('Mini-jeux')}<div class="game-hub">${list.map((k) => `<a class="card game-hub-card" href="#/jeu/${k}">${gameLogo()}<span class="gh-txt"><b${k === 'memory' ? ' data-no-i18n' : ''}>${GAMES[k].title}</b><span class="muted tiny">${GAMES[k].desc}${GAMES[k].public ? '' : ' · test'}</span></span><span class="accent">Jouer</span></a>`).join('')}</div></section>`;
   }
   return `<section class="screen game-screen">${top(GAMES[key].title, key === 'memory')}<div id="gameRoot" class="game-root"></div></section>`;
 }
@@ -904,7 +906,7 @@ function gamePromoCard() {
     en: ['New: the MemoryKink mini game', 'Find the pairs as fast as you can. Every week, the best score wins the 🏆 Champion of the week badge on their profile. The title is up for grabs again every Monday!', 'Play'],
     de: ['Neu: das Minispiel MemoryKink', 'Finde die Paare so schnell wie möglich. Jede Woche gewinnt die beste Punktzahl das Abzeichen 🏆 Champion der Woche im Profil. Jeden Montag wird der Titel neu vergeben!', 'Spielen']
   }[LANG];
-  return `<div class="card early-card game-promo" data-no-i18n><div class="early-top"><span class="game-emoji" aria-hidden="true">🎮</span><strong>${t[0]}</strong>
+  return `<div class="card early-card game-promo" data-no-i18n><div class="early-top">${gameLogo()}<strong>${t[0]}</strong>
     <button class="icon-btn small" data-act="game-promo-close" aria-label="${{ fr: 'Fermer', en: 'Close', de: 'Schließen' }[LANG]}">${I.close}</button></div>
     <p class="muted tiny">${t[1]}</p><a class="btn btn-red btn-block" href="#/jeu/memory">${t[2]}</a></div>`;
 }
