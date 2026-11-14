@@ -1,4 +1,4 @@
-// EuroKink — mini-jeu « Memory Fetish » : retrouve les paires le plus vite possible, en un minimum de coups.
+// EuroKink — mini-jeu « MemoryKink » : retrouve les paires le plus vite possible, en un minimum de coups.
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Illustrations des cartes (viewBox 0 0 64 64). Noir cuir, acier, rouge EuroKink.
 const K = '#161616', S = '#9AA3AD', SL = '#D5DBE1', R = '#D0142C', W = '#FFFFFF', G = '#3A3A3A';
@@ -51,7 +51,7 @@ export function mountMemory(root, { loadBoard, submit }) {
     const best = Math.max(localBest(), board ? board.best : 0);
     over.hidden = false;
     over.innerHTML = `<div class="game-card">
-      ${!res ? `<h2 class="game-title" data-no-i18n>Memory Fetish</h2><p class="muted">Retourne les cartes deux par deux et retrouve les 8 paires. Plus tu es rapide et moins tu fais de coups, plus tu marques de points !</p>`
+      ${!res ? `<h2 class="game-title" data-no-i18n>MemoryKink</h2><p class="muted">Retourne les cartes deux par deux et retrouve les 8 paires. Plus tu es rapide et moins tu fais de coups, plus tu marques de points !</p>`
     : `<p class="game-end">Bravo !</p><p class="game-big" data-no-i18n>${res.score}</p><p class="muted"><span data-no-i18n>${clock(res.seconds)}</span> · <span data-no-i18n>${res.moves}</span> coups</p><p class="muted">${res.score >= best ? 'Nouveau record personnel !' : `Ton record : <span data-no-i18n>${best}</span>`}</p>`}
       <button class="btn btn-red game-play">${!res ? 'Jouer' : 'Rejouer'}</button>
       <div class="game-board">${boardHtml(board)}</div></div>`;

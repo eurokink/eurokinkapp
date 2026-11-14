@@ -1,4 +1,4 @@
--- Mini-jeu « Memory Fetish » et défi de la semaine (classement remis à zéro chaque lundi, heure de Paris)
+-- Mini-jeu « MemoryKink » et défi de la semaine (classement remis à zéro chaque lundi, heure de Paris)
 create or replace function public.game_week(p_offset integer default 0) returns date
 language sql stable set search_path = public as $$
   select (date_trunc('week', now() at time zone 'Europe/Paris') + make_interval(weeks => p_offset))::date $$;

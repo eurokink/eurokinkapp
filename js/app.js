@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.35.0';
+const VERSION = '0.35.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -479,7 +479,7 @@ let memberQ = '';
 // Mini-jeux. public: false = en phase de test, visible par les administrateurs uniquement.
 // « Bouche bée » reste réservé aux administrateurs (non publiable sur les stores).
 const GAMES = {
-  memory: { title: 'Memory Fetish', desc: 'Retrouve les paires · défi de la semaine', public: true, mount: mountMemory },
+  memory: { title: 'MemoryKink', desc: 'Retrouve les paires · défi de la semaine', public: true, mount: mountMemory },
   bouche: { title: 'Bouche bée', desc: 'Version osée, gardée de côté', public: false, adminOnly: true, mount: mountGame }
 };
 const playable = () => (loggedIn() ? Object.keys(GAMES).filter((k) => isAdmin() || (GAMES[k].public && !GAMES[k].adminOnly)) : []);
@@ -796,9 +796,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
   { v: '0.35', date: '2026-11-13',
-    fr: ['Nouveau mini-jeu : Memory Fetish, dans Communauté. Retrouve les paires le plus vite possible !', 'Défi de la semaine : le meilleur score gagne le badge 🏆 Champion de la semaine, remis en jeu chaque lundi', 'Cartes : le nom des pays s’affiche quand tu dézoomes', 'Fiche soirée : le prix est affiché à côté du titre'],
-    en: ['New mini game: Memory Fetish, in Community. Find the pairs as fast as you can!', 'Weekly challenge: the best score wins the 🏆 Champion of the week badge, up for grabs every Monday', 'Maps: country names appear when you zoom out', 'Event page: the price is shown next to the title'],
-    de: ['Neues Minispiel: Memory Fetish, unter Community. Finde die Paare so schnell wie möglich!', 'Wochen-Challenge: Die beste Punktzahl gewinnt das Abzeichen 🏆 Champion der Woche, jeden Montag neu vergeben', 'Karten: Ländernamen erscheinen beim Herauszoomen', 'Party-Seite: Der Preis steht neben dem Titel'] },
+    fr: ['Nouveau mini-jeu : MemoryKink, dans Communauté. Retrouve les paires le plus vite possible !', 'Défi de la semaine : le meilleur score gagne le badge 🏆 Champion de la semaine, remis en jeu chaque lundi', 'Cartes : le nom des pays s’affiche quand tu dézoomes', 'Fiche soirée : le prix est affiché à côté du titre'],
+    en: ['New mini game: MemoryKink, in Community. Find the pairs as fast as you can!', 'Weekly challenge: the best score wins the 🏆 Champion of the week badge, up for grabs every Monday', 'Maps: country names appear when you zoom out', 'Event page: the price is shown next to the title'],
+    de: ['Neues Minispiel: MemoryKink, unter Community. Finde die Paare so schnell wie möglich!', 'Wochen-Challenge: Die beste Punktzahl gewinnt das Abzeichen 🏆 Champion der Woche, jeden Montag neu vergeben', 'Karten: Ländernamen erscheinen beim Herauszoomen', 'Party-Seite: Der Preis steht neben dem Titel'] },
   { v: '0.28', date: '2026-11-12',
     fr: ['Nouvelle alerte : sois prévenu quand une soirée est publiée près de chez toi (Paramètres › Notifications)', 'Accueil : les soirées les plus proches de toi quand rien n’est prévu ce week-end', 'CGU, confidentialité et charte disponibles en anglais et en allemand'],
     en: ['New alert: get notified when an event is published near you (Settings › Notifications)', 'Home: the events closest to you when nothing is on this weekend', 'Terms, privacy and guidelines now available in English and German'],
@@ -900,9 +900,9 @@ const gamePromoDone = () => { try { localStorage.setItem(GAME_PROMO_KEY, '1'); }
 function gamePromoCard() {
   if (!loggedIn() || gamePromoSeen()) return '';
   const t = {
-    fr: ['Nouveau : le mini-jeu Memory Fetish', 'Retrouve les paires le plus vite possible. Chaque semaine, le meilleur score gagne le badge 🏆 Champion de la semaine sur son profil. Le titre est remis en jeu tous les lundis !', 'Jouer'],
-    en: ['New: the Memory Fetish mini game', 'Find the pairs as fast as you can. Every week, the best score wins the 🏆 Champion of the week badge on their profile. The title is up for grabs again every Monday!', 'Play'],
-    de: ['Neu: das Minispiel Memory Fetish', 'Finde die Paare so schnell wie möglich. Jede Woche gewinnt die beste Punktzahl das Abzeichen 🏆 Champion der Woche im Profil. Jeden Montag wird der Titel neu vergeben!', 'Spielen']
+    fr: ['Nouveau : le mini-jeu MemoryKink', 'Retrouve les paires le plus vite possible. Chaque semaine, le meilleur score gagne le badge 🏆 Champion de la semaine sur son profil. Le titre est remis en jeu tous les lundis !', 'Jouer'],
+    en: ['New: the MemoryKink mini game', 'Find the pairs as fast as you can. Every week, the best score wins the 🏆 Champion of the week badge on their profile. The title is up for grabs again every Monday!', 'Play'],
+    de: ['Neu: das Minispiel MemoryKink', 'Finde die Paare so schnell wie möglich. Jede Woche gewinnt die beste Punktzahl das Abzeichen 🏆 Champion der Woche im Profil. Jeden Montag wird der Titel neu vergeben!', 'Spielen']
   }[LANG];
   return `<div class="card early-card game-promo" data-no-i18n><div class="early-top"><span class="game-emoji" aria-hidden="true">🎮</span><strong>${t[0]}</strong>
     <button class="icon-btn small" data-act="game-promo-close" aria-label="${{ fr: 'Fermer', en: 'Close', de: 'Schließen' }[LANG]}">${I.close}</button></div>
