@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.43.0';
+const VERSION = '0.43.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -989,6 +989,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.43', date: '2026-11-15',
+    fr: ['Tu peux maintenant soutenir EuroKink par un don, ponctuel ou mensuel, et recevoir le badge « Soutien »'],
+    en: ['You can now support EuroKink with a one-off or monthly donation and get the “Supporter” badge'],
+    de: ['Du kannst EuroKink jetzt mit einer einmaligen oder monatlichen Spende unterstützen und das Abzeichen „Unterstützer“ erhalten'] },
   { v: '0.42.2', date: '2026-11-15',
     fr: ['Tu peux changer ton pseudo dans « Modifier ma fiche »'],
     en: ['You can change your username in “Edit my profile”'],
