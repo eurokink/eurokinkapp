@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.43.2';
+const VERSION = '0.44.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -92,6 +92,14 @@ const MONTHS3 = { fr: ['JAN', 'FÉV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUL', 'AOÛ',
   de: ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'] };
 const monthShort = (iso) => (MONTHS3[LANG] || MONTHS3.fr)[new Date(iso).getMonth()];
 const timeLabel = (iso) => fTime.format(new Date(iso));
+// Date d'une soirée, avec l'heure seulement si elle est connue
+const whenLine = (startIso, endIso, allDay) => {
+  const multi = new Date(endIso).toDateString() !== new Date(startIso).toDateString();
+  if (allDay) return multi ? `Du ${fDate.format(new Date(startIso))} au ${fDate.format(new Date(endIso))}` : dayLabel(startIso);
+  return `${dayLabel(startIso)} · ${timeLabel(startIso)}`;
+};
+// Valeur « AAAA-MM-JJ » locale d'une date ISO (champ date)
+const toLocalDay = (iso) => (iso ? toLocalInput(iso).slice(0, 10) : '');
 // Tarif d'une soirée selon son type : prix unique, « dès » (plusieurs prix), gratuit, non communiqué
 const evPrice = (e, long) => (e.priceKind === 'free' ? 'Gratuit' : e.priceKind === 'unknown' ? (long ? 'Prix non communiqué' : 'Prix ?')
   : e.priceKind === 'from' ? `Dès ${priceLabel(e.price, e.currency)}` : priceLabel(e.price, e.currency));
@@ -213,7 +221,7 @@ function featuredCard(e) {
       ${e.organizer.verified ? '<span class="tag tag-dark tag-right">Vérifié</span>' : ''}
       <div class="feature-title">${esc(e.title)}</div></div>
     <div class="feature-body">
-      <div class="feature-line"><span>${dayLabel(e.startsAt)} · ${timeLabel(e.startsAt)}</span><span>${esc(e.venue.city)}</span></div>
+      <div class="feature-line"><span>${whenLine(e.startsAt, e.endsAt, e.allDay)}</span><span>${esc(e.venue.city)}</span></div>
       <div class="feature-line muted"><span>${evPrice(e, true)} · Réservation ${BOOKING[e.booking].toLowerCase()}</span><span class="accent">${attendeesLabel(attendeesOf(e))}</span></div>
     </div></a>`;
 }
@@ -375,7 +383,7 @@ function viewEvent(id) {
   const soon = e.ticketsSoon && !salesLater;
   const salesClosed = salesEnded(e);
   const km = Math.round(kmFromMe(e));
-  const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000;
+  const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && (e.allDay || new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000);
   const when = multiDay ? `Du ${fDate.format(new Date(e.startsAt))} au ${fDate.format(new Date(e.endsAt))}` : dayLabel(e.startsAt);
   const infos = [
     ['Dress code', DRESS[e.dressCode]],
@@ -400,7 +408,7 @@ function viewEvent(id) {
       <div class="title-row"><h1 class="event-title">${esc(e.title)}</h1><span class="price-badge">${e.soldOut ? 'Complet' : evPrice(e)}</span></div>
       <div class="org-line">${e.organizer.logo ? orgLogo(e.organizer, 'xs') : ''}par <a class="org-link" href="#/organisateur/${e.organizer.id}"><strong>${esc(e.organizer.name)}</strong></a>${e.organizer.verified ? I.verified : ''}<span class="muted">· ${esc(e.organizer.kind)}</span></div>
       <div class="facts">
-        <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}</div></div></div>
+        <div class="fact"><span class="fact-ic">${I.calendar}</span><div><strong>${when}</strong><div class="muted">${e.allDay ? 'Horaires non communiqués' : `${timeLabel(e.startsAt)} – ${timeLabel(e.endsAt)}`}</div></div></div>
         <div class="fact"><span class="fact-ic">${I.pin}</span><div class="fact-main"><strong>${esc(e.venue.name)}</strong><div class="muted">${esc(e.venue.city)} · à ${km} km de ${esc(state.city)}</div></div>
           <a class="route-btn" href="${mapsUrl(e)}" target="_blank" rel="noopener">${I.route}<span>Itinéraire</span></a></div>
       </div>
@@ -989,6 +997,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.44', date: '2026-11-15',
+    fr: ['Soirées : on peut indiquer seulement la date (ou plusieurs jours) quand les horaires ne sont pas connus', 'Entrée sur place : les champs de billetterie disparaissent du formulaire'],
+    en: ['Events: you can now give just the date (or several days) when the times aren’t known', 'Pay at the door: ticketing fields disappear from the form'],
+    de: ['Partys: Du kannst jetzt nur das Datum (oder mehrere Tage) angeben, wenn die Uhrzeiten nicht bekannt sind', 'Abendkasse: die Ticketfelder verschwinden aus dem Formular'] },
   { v: '0.43', date: '2026-11-15',
     fr: ['Tu peux maintenant soutenir EuroKink par un don, ponctuel ou mensuel, et recevoir le badge « Soutien »'],
     en: ['You can now support EuroKink with a one-off or monthly donation and get the “Supporter” badge'],
@@ -2119,8 +2131,11 @@ function viewSubmit() {
         <label class="field">Nom de la soirée *<input name="title" maxlength="120" value="${dv('title')}" placeholder="Ex. Black Rubber Night" autocomplete="off"></label>
         <div class="field">Types * <span class="hint">Choisis tous les types qui correspondent</span>
           <div class="chips wrap">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${types.includes(t.slug) ? 'on' : ''}" data-act="ptype" data-slug="${t.slug}" aria-pressed="${types.includes(t.slug)}">${esc(t.name)}</button>`).join('')}</div></div>
-        <label class="field">Début *<input name="starts_at" type="datetime-local" value="${dv('starts_at')}"></label>
-        <label class="field">Fin *<input name="ends_at" type="datetime-local" value="${dv('ends_at')}"></label>
+        <label class="checkline"><input type="checkbox" name="all_day" ${draft.all_day ? 'checked' : ''}><span>Horaires non communiqués : je n’indique que la ou les dates</span></label>
+        ${draft.all_day ? `<label class="field">Date *<input name="day_start" type="date" value="${dv('day_start')}"></label>
+        <label class="field">Jusqu’au<input name="day_end" type="date" value="${dv('day_end')}"><span class="hint">Seulement si la soirée dure plusieurs jours (festival, week-end…).</span></label>`
+        : `<label class="field">Début *<input name="starts_at" type="datetime-local" value="${dv('starts_at')}"></label>
+        <label class="field">Fin *<input name="ends_at" type="datetime-local" value="${dv('ends_at')}"></label>`}
         <label class="field">Fréquence${selectField('frequency', Object.entries(FREQ), draft.frequency || 'once')}</label>
         <label class="field">Description<textarea name="description" rows="5" maxlength="4000" placeholder="Ambiance, programme, infos utiles…">${dv('description')}</textarea></label>
       </div>
@@ -2150,12 +2165,12 @@ function viewSubmit() {
         <label class="field">Devise<select name="currency">${[...new Set(['EUR', 'CHF', ...Object.values(COUNTRY_CURRENCY), draft.currency || 'EUR'])].map((v) => [v, { EUR: 'Euro (€)', CHF: 'Franc suisse (CHF)', GBP: 'Livre sterling (£)' }[v] || v]).map(([v, l]) => `<option value="${v}" ${(draft.currency || 'EUR') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="field">Tarif *${selectField('price_kind', Object.entries({ fixed: 'Prix unique', from: 'Plusieurs prix (à partir de…)', free: 'Gratuit', unknown: 'Prix non communiqué' }), draft.price_kind || 'fixed')}</label>
         ${['free', 'unknown'].includes(draft.price_kind) ? '' : `<label class="field">${draft.price_kind === 'from' ? 'Prix le plus bas' : 'Prix d’entrée'} (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')}) *<input name="price" inputmode="decimal" value="${dv('price')}" placeholder="Ex. 15"></label>
-        <label class="field">Prix en prévente (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')})<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>`}
+        ${draft.booking === 'door_only' || !draft.booking ? '' : `<label class="field">Prix en prévente (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')})<input name="presale_price" inputmode="decimal" value="${dv('presale_price')}"></label>`}`}
         <label class="field">Réservation${selectField('booking', Object.entries({ door_only: 'Sur place, sans réservation', recommended: 'Conseillée', required: 'Obligatoire' }), draft.booking || 'door_only')}</label>
-        <label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
+        ${draft.booking === 'door_only' || !draft.booking ? '<p class="tiny muted">Entrée sur place : pas de billetterie à renseigner.</p>' : `<label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
         <label class="field">Ouverture de la billetterie<input name="sales_open_at" type="datetime-local" value="${dv('sales_open_at')}"><span class="hint">Si les places ne sont pas encore en vente : les membres seront alertés.</span></label>
         <label class="checkline"><input type="checkbox" name="tickets_soon" ${draft.tickets_soon ? 'checked' : ''}><span>Billetterie pas encore ouverte, date inconnue (décoche quand elle ouvre : les membres seront alertés)</span></label>
-        <label class="field">Fin de la billetterie<input name="sales_close_at" type="datetime-local" value="${dv('sales_close_at')}"><span class="hint">Après cette date, la fiche affichera « Billetterie fermée ».</span></label>
+        <label class="field">Fin de la billetterie<input name="sales_close_at" type="datetime-local" value="${dv('sales_close_at')}"><span class="hint">Après cette date, la fiche affichera « Billetterie fermée ».</span></label>`}
         <label class="field">Dress code${selectField('dress_code', Object.entries(DRESS), draft.dress_code || 'recommended')}</label>
         <label class="field">Précisions sur le dress code<input name="dress_code_details" maxlength="200" value="${dv('dress_code_details')}" placeholder="Ex. Cuir ou rubber, pas de jean" autocomplete="off"></label>
         <label class="field">Vestiaire${selectField('cloak', [['', 'Je ne sais pas'], ['no', 'Non'], ['free', 'Oui, gratuit'], ['paid', 'Oui, payant']], draft.cloak || '')}</label>
@@ -2221,9 +2236,21 @@ async function submitEvent(form) {
   const title = String(d.title || '').trim();
   if (title.length < 3) return fail('Indique le nom de la soirée (3 caractères minimum).');
   if (!(d.types || []).length) return fail('Choisis au moins un type de soirée.');
-  if (!d.starts_at || !d.ends_at) return fail('Indique la date et l’heure de début et de fin.');
-  if (!d.id && new Date(d.starts_at) < new Date()) return fail('La soirée doit être à venir.');
-  if (new Date(d.ends_at) <= new Date(d.starts_at)) return fail('La fin doit être après le début.');
+  let startIso, endIso;
+  if (d.all_day) {
+    if (!d.day_start) return fail('Indique la date de la soirée.');
+    const s = new Date(`${d.day_start}T00:00`), e = new Date(`${d.day_end || d.day_start}T23:59`);
+    if (e < s) return fail('La date de fin doit être après la date de début.');
+    if (!d.id && e < new Date()) return fail('La soirée doit être à venir.');
+    if (e - s > 7 * 864e5) return fail('Une soirée dure 7 jours au maximum.');
+    startIso = s.toISOString(); endIso = e.toISOString();
+  } else {
+    if (!d.starts_at || !d.ends_at) return fail('Indique la date et l’heure de début et de fin.');
+    if (!d.id && new Date(d.starts_at) < new Date()) return fail('La soirée doit être à venir.');
+    if (new Date(d.ends_at) <= new Date(d.starts_at)) return fail('La fin doit être après le début.');
+    startIso = isoOrNull(d.starts_at); endIso = isoOrNull(d.ends_at);
+  }
+  const doorOnly = (d.booking || 'door_only') === 'door_only';
   if (String(d.venue_name || '').trim().length < 2) return fail('Indique le nom du lieu.');
   if (d.latitude == null) return fail(d.secret ? 'Choisis la ville dans la liste proposée.' : 'Choisis l’adresse dans la liste proposée.');
   if (!d.id && !isUuid(d.organizer_id) && String(d.organizer_name || '').trim().length < 2) return fail('Indique le nom de l’organisateur.');
@@ -2237,19 +2264,19 @@ async function submitEvent(form) {
     if (d[k] && !/^https?:\/\/\S+$/i.test(String(d[k]).trim())) return fail(`${label} doit commencer par https://`);
   }
   if (d.cloak === 'paid' && d.cloakroom_price && !(numOrNull(d.cloakroom_price) >= 0 && numOrNull(d.cloakroom_price) <= 100)) return fail('Prix du vestiaire invalide.');
-  if (d.sales_close_at && new Date(d.sales_close_at) > new Date(d.ends_at)) return fail('La fin de la billetterie doit être avant la fin de la soirée.');
-  if (d.sales_close_at && d.sales_open_at && new Date(d.sales_close_at) <= new Date(d.sales_open_at)) return fail('La fin de la billetterie doit être après son ouverture.');
+  if (!doorOnly && d.sales_close_at && new Date(d.sales_close_at) > new Date(endIso)) return fail('La fin de la billetterie doit être avant la fin de la soirée.');
+  if (!doorOnly && d.sales_close_at && d.sales_open_at && new Date(d.sales_close_at) <= new Date(d.sales_open_at)) return fail('La fin de la billetterie doit être après son ouverture.');
   if (!d.certify) return fail('Coche la case de confirmation en bas du formulaire.');
   const p = {
     id: d.id || null, organizer_id: d.id || !isUuid(d.organizer_id) ? null : d.organizer_id,
-    title, types: d.types, starts_at: isoOrNull(d.starts_at), ends_at: isoOrNull(d.ends_at), frequency: d.frequency || 'once',
+    title, types: d.types, starts_at: startIso, ends_at: endIso, all_day: !!d.all_day, frequency: d.frequency || 'once',
     description: d.description || '', venue_name: String(d.venue_name).trim(), address: d.secret ? '' : (d.address || ''),
     postal_code: d.postal_code || '', city: d.city, latitude: d.latitude, longitude: d.longitude, country: d.country || 'FR', currency: d.currency || 'EUR',
     organizer_name: String(d.organizer_name || '').trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
-    price, presale_price: presale, price_kind: priceKind, booking: d.booking || 'door_only', ticket_url: (d.ticket_url || '').trim(), sales_open_at: isoOrNull(d.sales_open_at),
+    price, presale_price: doorOnly ? null : presale, price_kind: priceKind, booking: d.booking || 'door_only', ticket_url: doorOnly ? '' : (d.ticket_url || '').trim(), sales_open_at: doorOnly ? null : isoOrNull(d.sales_open_at),
     dress_code: d.dress_code || 'recommended', dress_code_details: d.dress_code_details || '',
     has_cloakroom: d.cloak ? d.cloak !== 'no' : null, cloakroom_paid: d.cloak === 'paid' ? true : d.cloak === 'free' ? false : null,
-    cloakroom_price: d.cloak === 'paid' && d.cloakroom_price ? numOrNull(d.cloakroom_price) : null, tickets_soon: !!d.tickets_soon && !d.sales_open_at
+    cloakroom_price: d.cloak === 'paid' && d.cloakroom_price ? numOrNull(d.cloakroom_price) : null, tickets_soon: !doorOnly && !!d.tickets_soon && !d.sales_open_at
   };
   const btn = form.querySelector('button[type=submit]');
   submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
@@ -2259,7 +2286,7 @@ async function submitEvent(form) {
     if (r && r.id && imgKey !== ((d._img || '').startsWith('|') ? '' : d._img || '')) {
       try { await sb.rpc('set_event_image', { p_event: r.id, p_image: d.image_path || null, p_x: Math.round(d.image_x ?? 50), p_y: Math.round(d.image_y ?? 50) }); } catch (err) { toast(`Soirée enregistrée, mais image refusée : ${err.message}`); }
     }
-    if (r && r.id && (d.sales_close_at || '') !== (d._close || '')) {
+    if (r && r.id && !doorOnly && (d.sales_close_at || '') !== (d._close || '')) {
       try { await sb.rpc('set_event_sales_close', { p_event: r.id, p_close: isoOrNull(d.sales_close_at) }); } catch (err) { toast(`Soirée enregistrée, mais fin de billetterie refusée : ${err.message}`); }
     }
     const orgMode = !!(d.id || d.organizer_id);
@@ -2293,7 +2320,7 @@ function viewMySubmissions() {
   const cards = mySubs.map((s) => {
     const [cls, label] = SUB_STATUS[s.status] || ['pill-grey', s.status];
     return `<div class="card sub-card"><div class="sub-head"><strong>${esc(s.title)}</strong><span class="${cls}">${label}</span></div>
-      <div class="muted tiny">${dayLabel(s.starts_at)} · ${timeLabel(s.starts_at)} · ${esc(s.city)}</div>
+      <div class="muted tiny">${whenLine(s.starts_at, s.ends_at || s.starts_at, s.all_day)} · ${esc(s.city)}</div>
       ${s.status === 'pending' ? '<p class="tiny muted">L’équipe EuroKink la vérifie avant publication.</p>' : ''}
       ${s.status === 'rejected' && s.rejection_reason ? `<p class="tiny">Motif : ${esc(s.rejection_reason)}</p>` : ''}
       ${s.status === 'published' && eventById(s.id) ? `<a class="link" href="#/soiree/${s.id}">Voir la fiche</a>` : ''}</div>`;
@@ -2314,7 +2341,7 @@ async function loadAdmin() {
 function adminPendingCard(p) {
   const o = p.organizer, v = p.venue;
   const multi = new Date(p.ends_at).toDateString() !== new Date(p.starts_at).toDateString();
-  const when = `${dayLabel(p.starts_at)} · ${timeLabel(p.starts_at)} – ${multi ? `${fDate.format(new Date(p.ends_at))} ` : ''}${timeLabel(p.ends_at)}`;
+  const when = p.all_day ? `${whenLine(p.starts_at, p.ends_at, true)} · horaires non communiqués` : `${dayLabel(p.starts_at)} · ${timeLabel(p.starts_at)} – ${multi ? `${fDate.format(new Date(p.ends_at))} ` : ''}${timeLabel(p.ends_at)}`;
   const osm = `https://www.openstreetmap.org/?mlat=${v.latitude}&mlon=${v.longitude}#map=16/${v.latitude}/${v.longitude}`;
   const cloak = p.has_cloakroom == null ? 'Vestiaire ?' : p.has_cloakroom ? `Vestiaire ${p.cloakroom_paid ? `payant${p.cloakroom_price ? ` (${priceLabel(Number(p.cloakroom_price), p.currency || 'EUR')})` : ''}` : 'gratuit'}` : 'Sans vestiaire';
   return `<article class="card adm-card">
@@ -2684,7 +2711,8 @@ function eventToDraft(ev, orgId, copy) {
     image_path: ev.image_path || '', image_x: ev.image_x ?? 50, image_y: ev.image_y ?? 50,
     _img: copy ? '' : `${ev.image_path || ''}|${ev.image_x ?? 50}|${ev.image_y ?? 50}`,
     id: copy ? undefined : ev.id, organizer_id: orgId, title: ev.title, types: [...(ev.types || [])],
-    starts_at: copy ? '' : toLocalInput(ev.starts_at), ends_at: copy ? '' : toLocalInput(ev.ends_at),
+    starts_at: copy ? '' : toLocalInput(ev.starts_at), ends_at: copy ? '' : toLocalInput(ev.ends_at), all_day: !!ev.all_day,
+    day_start: copy ? '' : toLocalDay(ev.starts_at), day_end: copy || !ev.all_day || toLocalDay(ev.ends_at) === toLocalDay(ev.starts_at) ? '' : toLocalDay(ev.ends_at),
     frequency: ev.frequency, description: ev.description || '', venue_name: v.name, secret: !v.address,
     address: v.address || '', postal_code: v.postal_code || '', city: v.city, latitude: v.latitude, longitude: v.longitude,
     addrLabel: [v.address, v.postal_code, v.city].filter(Boolean).join(' '),
@@ -2882,7 +2910,7 @@ function orgEventCard(ev, past) {
   const live = !past && ev.status !== 'cancelled';
   return `<article class="card sub-card">
     <div class="sub-head"><strong>${esc(ev.title)}</strong><span class="${st[0]}">${st[1]}</span></div>
-    <div class="muted tiny">${dayLabel(ev.starts_at)} · ${timeLabel(ev.starts_at)} · ${esc(ev.venue.city)}</div>
+    <div class="muted tiny">${whenLine(ev.starts_at, ev.ends_at, ev.all_day)} · ${esc(ev.venue.city)}</div>
     ${ev.status === 'pending' ? '<p class="tiny muted">En cours de vérification par l’équipe EuroKink.</p>' : ''}
     ${ev.status === 'rejected' ? `<p class="tiny">Refusée${ev.rejection_reason ? ` : ${esc(ev.rejection_reason)}` : ''}. Corrige-la pour la renvoyer en vérification.</p>` : ''}
     <div class="stat-row">${statLine(ev.stats, past)}</div>
@@ -3425,7 +3453,13 @@ document.addEventListener('input', (ev) => {
   if (t.form && t.form.id === 'submitForm' && t.name && t.name !== 'secret') {
     draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
     if (t.id === 'addrInput') geocode(t.value);
-    if (t.name === 'price_kind' || t.name === 'cloak') render();
+    if (t.name === 'all_day') {
+      // On garde les dates déjà saisies quand on bascule d'un mode à l'autre
+      if (t.checked) { if (draft.starts_at && !draft.day_start) draft.day_start = draft.starts_at.slice(0, 10); if (draft.ends_at && !draft.day_end && draft.ends_at.slice(0, 10) !== draft.starts_at.slice(0, 10)) draft.day_end = draft.ends_at.slice(0, 10); }
+      else if (draft.day_start && !draft.starts_at) draft.starts_at = `${draft.day_start}T20:00`;
+      saveDraft(); render();
+    }
+    if (t.name === 'price_kind' || t.name === 'cloak' || t.name === 'booking') render();
   }
 });
 
@@ -3727,7 +3761,7 @@ function downloadIcs(e) {
 // Données Supabase : soirées, compte, synchronisation
 // ---------------------------------------------------------------------------
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
-const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'price_kind', 'presale_price',
+const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'description', 'starts_at', 'ends_at', 'all_day', 'dress_code', 'dress_code_details', 'price', 'price_kind', 'presale_price',
   'currency', 'booking', 'ticket_url', 'sales_open_at', 'sales_close_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'cloakroom_price', 'tickets_soon', 'frequency', 'languages',
   'organizer:organizers(id,name,kind,is_verified,logo_path)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
@@ -3735,7 +3769,7 @@ const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'descri
 function mapEvent(r, counts) {
   return {
     id: r.id, title: r.title, description: r.description || '', image: r.image_path || null, imageX: r.image_x ?? 50, imageY: r.image_y ?? 50,
-    startsAt: r.starts_at, endsAt: r.ends_at,
+    startsAt: r.starts_at, endsAt: r.ends_at, allDay: !!r.all_day,
     organizer: { id: r.organizer.id, name: r.organizer.name, kind: ORG_KIND[r.organizer.kind] || 'Organisateur', verified: r.organizer.is_verified, logo: r.organizer.logo_path || null },
     venue: { name: r.venue.name, city: r.venue.city, lat: r.venue.latitude, lon: r.venue.longitude },
     country: r.venue.country,

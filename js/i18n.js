@@ -359,6 +359,15 @@ const T = {
   'Organisateurs': ['Organisers', 'Veranstalter'],
   'Modération': ['Moderation', 'Moderation'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Horaires non communiqués : je n’indique que la ou les dates': ['Times not announced: I only give the date(s)', 'Uhrzeiten nicht bekannt: ich gebe nur das Datum bzw. die Daten an'],
+  'Date *': ['Date *', 'Datum *'],
+  'Jusqu’au': ['Until', 'Bis'],
+  'Seulement si la soirée dure plusieurs jours (festival, week-end…).': ['Only if the event lasts several days (festival, weekend…).', 'Nur wenn die Party mehrere Tage dauert (Festival, Wochenende…).'],
+  'Entrée sur place : pas de billetterie à renseigner.': ['Pay at the door: no ticketing to fill in.', 'Abendkasse: kein Ticketverkauf anzugeben.'],
+  'Horaires non communiqués': ['Times not announced', 'Uhrzeiten nicht bekannt'],
+  'Indique la date de la soirée.': ['Enter the date of the event.', 'Gib das Datum der Party an.'],
+  'La date de fin doit être après la date de début.': ['The end date must be after the start date.', 'Das Enddatum muss nach dem Startdatum liegen.'],
+  'Une soirée dure 7 jours au maximum.': ['An event lasts 7 days at most.', 'Eine Party dauert höchstens 7 Tage.'],
   'Soutenir EuroKink': ['Support EuroKink', 'EuroKink unterstützen'],
   'Merci pour ton soutien !': ['Thank you for your support!', 'Danke für deine Unterstützung!'],
   'Gratuite et sans pub grâce à vos dons': ['Free and ad-free thanks to your donations', 'Kostenlos und werbefrei dank eurer Spenden'],
@@ -825,6 +834,8 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^Du (.+) au (.+?)( · horaires non communiqués)?$/, (m) => [`From ${m[1]} to ${m[2]}${m[3] ? ' · times not announced' : ''}`, `Vom ${m[1]} bis ${m[2]}${m[3] ? ' · Uhrzeiten nicht bekannt' : ''}`]],
+  [/^(.+) · horaires non communiqués$/, (m) => [`${m[1]} · times not announced`, `${m[1]} · Uhrzeiten nicht bekannt`]],
   [/^Paiement sécurisé par Stripe : EuroKink ne voit jamais tes coordonnées bancaires\. Un don ne donne accès à aucune fonction en plus, juste notre gratitude et le badge « Soutien »(.*)\.$/, (m) => [`Secure payment by Stripe: EuroKink never sees your bank details. A donation gives no extra features, just our gratitude and the “Supporter” badge${m[1] ? ' (log in first to get it)' : ''}.`, `Sichere Zahlung über Stripe: EuroKink sieht nie deine Bankdaten. Eine Spende schaltet keine Funktionen frei, nur unseren Dank und das Abzeichen „Unterstützer“${m[1] ? ' (melde dich zuerst an, um es zu erhalten)' : ''}.`]],
   [/^Photo de (.+)$/, (m) => [`${m[1]}’s photo`, `Foto von ${m[1]}`]],
   [/^Conversation avec (.+)$/, (m) => [`Conversation with ${m[1]}`, `Unterhaltung mit ${m[1]}`]],
