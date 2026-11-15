@@ -14,6 +14,7 @@ type Ev = {
   external_id: string; title: string; description?: string; starts_at: string; ends_at?: string;
   venue_name?: string; address?: string; postal_code?: string; city?: string; latitude?: number; longitude?: number;
   location_text?: string; country?: string; price?: number | null; ticket_url?: string; image?: string; organizer_name?: string;
+  types?: string[];
 };
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -75,7 +76,7 @@ function parseIcal(text: string): Ev[] {
 }
 
 // ---- Données structurées schema.org (JSON-LD) ---------------------------------
-function parseJsonLd(html: string, pageUrl: string): Ev[] {
+function parseJsonLd(html: string, pageUrl: string, withSub = true): Ev[] {
   const found: Record<string, unknown>[] = [];
   const walk = (n: unknown) => {
     if (!n || typeof n !== "object") return;
@@ -83,7 +84,7 @@ function parseJsonLd(html: string, pageUrl: string): Ev[] {
     const o = n as Record<string, unknown>;
     const t = ([] as unknown[]).concat(o["@type"] ?? []).map(String);
     if (t.some((x) => /Event$/.test(x))) found.push(o);
-    ["@graph", "itemListElement", "item", "subEvent", "event", "events"].forEach((k) => walk(o[k]));
+    ["@graph", "itemListElement", "item", ...(withSub ? ["subEvent"] : []), "event", "events"].forEach((k) => walk(o[k]));
   };
   for (const m of html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
     try { walk(JSON.parse(m[1].trim())); } catch { /* bloc illisible */ }
@@ -106,6 +107,54 @@ function parseJsonLd(html: string, pageUrl: string): Ev[] {
       organizer_name: typeof org === "string" ? org : clean(org?.name),
     } as Ev;
   }).filter((e) => e.starts_at && e.title);
+}
+
+// ---- Lecture directe d'un site d'organisateur ------------------------------------
+// Part d'une page (accueil, agenda), suit les liens des pages de soirée (link_pattern) et lit chaque page :
+// données « Event » schema.org en priorité, sinon balises Open Graph + dates trouvées dans la page.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function readCrawl(src: any): Promise<Ev[]> {
+  const r = await fetch(src.url, { headers: { "User-Agent": UA, Accept: "text/html,*/*" } });
+  if (!r.ok) throw new Error(`le site a répondu ${r.status}`);
+  const html = await r.text();
+  const base = new URL(src.url);
+  const re = src.link_pattern ? new RegExp(src.link_pattern) : null;
+  const links = new Set<string>();
+  for (const m of html.matchAll(/href=["']([^"'#]+)["']/gi)) {
+    try {
+      const u = new URL(m[1].replace(/&amp;/g, "&"), base);
+      if (u.host !== base.host) continue;
+      u.hash = "";
+      const path = u.pathname + u.search;
+      if (re ? re.test(path) : false) links.add(u.toString());
+    } catch { /* lien invalide */ }
+  }
+  const out: Ev[] = [];
+  for (const url of [...links].slice(0, 30)) {
+    await sleep(400);
+    try {
+      const pr = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,*/*" } });
+      if (!pr.ok) continue;
+      const page = await pr.text();
+      const evs = parseJsonLd(page, url, false).map((e) => ({ ...e, external_id: url, ticket_url: e.ticket_url || url }));
+      out.push(...evs.slice(0, 1));
+    } catch { /* page illisible : on passe à la suivante */ }
+  }
+  return out;
+}
+
+// Styles de soirée devinés d'après le titre et la description (sinon : styles par défaut de la source)
+const TYPE_WORDS: [RegExp, string][] = [
+  [/pupp?y|\bpups?\b|\bk9\b/i, "puppy"], [/diaper|abdl|\bcouche/i, "abdl"], [/rubber|latex|caoutchouc|\brub/i, "rubber"],
+  [/leather|\bcuir/i, "leather"], [/sportswear|\bsport\b|football|\bfoot\b/i, "sportswear"], [/sneaker|basket/i, "sneaker"],
+  [/\bskin|\blads?\b|scally/i, "skin-lads"], [/uniform/i, "uniform"], [/milita|army|tactic/i, "military"],
+  [/workwear|worker|chantier/i, "workwear"], [/puffer|doudoune/i, "puffer-down"], [/bondage|shibari|bdsm/i, "bondage"],
+  [/biker|motard|\bmoto/i, "biker"], [/\bbears?\b|\bours\b/i, "bears"],
+];
+function guessTypes(e: Ev): string[] | undefined {
+  const t = `${e.title} ${e.description || ""}`;
+  const found = [...new Set(TYPE_WORDS.filter(([re]) => re.test(t)).map(([, slug]) => slug))];
+  return found.length ? found.slice(0, 3) : undefined;
 }
 
 // ---- WordPress « The Events Calendar » ---------------------------------------
@@ -227,6 +276,7 @@ async function locate(e: Ev, fallbackCity?: string): Promise<Ev | null> {
 
 async function readSource(src: any): Promise<Ev[]> {
   if (src.kind === "tribe") return readTribe(src.url);
+  if (src.kind === "crawl") return readCrawl(src);
   const r = await fetch(src.url, { headers: { "User-Agent": UA, Accept: src.kind === "ical" ? "text/calendar,*/*" : "text/html,*/*" } });
   if (!r.ok) throw new Error(`le site a répondu ${r.status}`);
   const text = await r.text();
@@ -264,7 +314,7 @@ Deno.serve(async (req) => {
       found = list.length;
       for (const raw of list.slice(0, 60)) {
         const before = { title: raw.title, lieu: raw.location_text || [raw.venue_name, raw.address, raw.city].filter(Boolean).join(", "), lat: raw.latitude, lon: raw.longitude };
-        const e = await locate({ ...raw }, src.organizer?.city || undefined);
+        const e = await locate({ ...raw, types: raw.types ?? guessTypes(raw) }, src.organizer?.city || undefined);
         if (samples.length < 3) samples.push({ ...before, ville: e?.city ?? null });
         let r = "pays non ouvert ou lieu introuvable";
         if (e) {
@@ -272,7 +322,7 @@ Deno.serve(async (req) => {
           r = err ? `erreur : ${err.message}` : String(data);
         }
         reasons[r] = (reasons[r] ?? 0) + 1;
-        if (r === "ajoutée") added++;
+        if (r === "ajoutée" || r === "publiée") added++;
       }
       if (!found) error = "aucune soirée à venir trouvée sur cette page";
     } catch (err) { error = (err as Error).message || String(err); }
