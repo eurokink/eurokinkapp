@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.37.0';
+const VERSION = '0.37.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -506,7 +506,7 @@ function initGame(key) {
   gameCleanup = GAMES[key].mount($('#gameRoot'), { loadBoard: () => sb.rpc('game_board', { p_game: key }), submit: (score) => sb.rpc('game_submit', { p_game: key, p_score: score }) });
 }
 function viewCommunity(mode) {
-  const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a>${commSeg(mode)}</div></div>`;
+  const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions">${commSeg(mode)}</div></div>`;
   if (!membersError && (!members || Date.now() - membersAt > 120000)) {
     members = null;
     loadMembers().then(() => { if ((location.hash || '').startsWith('#/communaute')) render(); });
@@ -817,9 +817,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
   { v: '0.37', date: '2026-11-15',
-    fr: ['Messagerie plus visible dans Communauté : écris à n’importe quel membre, quand tu veux, même sans soirée en commun', 'Les badges obtenus s’affichent sur la fiche de chaque membre', 'Le badge Pionnier est réservé aux 100 premiers membres'],
-    en: ['Messages are easier to find in Community: write to any member, any time, even without a party in common', 'Earned badges now show on every member’s profile', 'The Pioneer badge is reserved for the first 100 members'],
-    de: ['Nachrichten sind unter Community besser sichtbar: Schreib jedem Mitglied, wann du willst, auch ohne gemeinsame Party', 'Erhaltene Abzeichen erscheinen jetzt im Profil jedes Mitglieds', 'Das Pionier-Abzeichen gibt es nur für die ersten 100 Mitglieder'] },
+    fr: ['Messagerie plus visible dans Communauté : discute en illimité avec les membres d’EuroKink !', 'Les badges obtenus s’affichent sur la fiche de chaque membre', 'Le badge Pionnier est réservé aux 100 premiers membres'],
+    en: ['Messages are easier to find in Community: chat without limits with EuroKink members!', 'Earned badges now show on every member’s profile', 'The Pioneer badge is reserved for the first 100 members'],
+    de: ['Nachrichten sind unter Community besser sichtbar: Chatte unbegrenzt mit den Mitgliedern von EuroKink!', 'Erhaltene Abzeichen erscheinen jetzt im Profil jedes Mitglieds', 'Das Pionier-Abzeichen gibt es nur für die ersten 100 Mitglieder'] },
   { v: '0.35', date: '2026-11-13',
     fr: ['Nouveau mini-jeu : MemoryKink, dans Communauté. Retrouve les paires le plus vite possible !', 'Défi de la semaine : le meilleur score gagne le badge 🏆 Champion de la semaine, remis en jeu chaque lundi', 'Cartes : le nom des pays s’affiche quand tu dézoomes', 'Fiche soirée : le prix est affiché à côté du titre'],
     en: ['New mini game: MemoryKink, in Community. Find the pairs as fast as you can!', 'Weekly challenge: the best score wins the 🏆 Champion of the week badge, up for grabs every Monday', 'Maps: country names appear when you zoom out', 'Event page: the price is shown next to the title'],
@@ -959,10 +959,10 @@ function homeMsgCard(where = 'home') {
   if (!fresh.length) {
     if (where === 'comm') {
       return `<a class="card msg-card msg-card-comm" href="#/messages"><span class="msg-card-ic">${I.chat}</span>
-        <div class="mr-main"><strong>Messagerie</strong><div class="muted tiny wrap">Écris à n’importe quel membre, quand tu veux, même sans soirée en commun.</div></div>${I.chevron}</a>`;
+        <div class="mr-main"><strong>Messagerie</strong><div class="muted tiny wrap">Discute en illimité avec les membres d’EuroKink !</div></div>${I.chevron}</a>`;
     }
     return `<a class="card msg-card" href="#/messages"><span class="msg-card-ic">${I.chat}</span>
-      <div class="mr-main"><strong>Messages</strong><div class="muted tiny">Écris à n’importe quel membre, quand tu veux</div></div>${I.chevron}</a>`;
+      <div class="mr-main"><strong>Messages</strong><div class="muted tiny">Discute en illimité avec les membres d’EuroKink !</div></div>${I.chevron}</a>`;
   }
   const n = fresh.reduce((k, c) => k + Number(c.unread), 0);
   const c0 = fresh[0];
