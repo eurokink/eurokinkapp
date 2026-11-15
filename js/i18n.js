@@ -357,6 +357,15 @@ const T = {
   'Organisateur vérifié : publication directe': ['Verified organiser: direct publishing', 'Verifizierter Veranstalter: direkte Veröffentlichung'],
   'Organisateur vérifié : ta soirée est publiée tout de suite.': ['Verified organiser: your event is published straight away.', 'Verifizierter Veranstalter: Deine Party wird sofort veröffentlicht.'],
   'Organisateurs': ['Organisers', 'Veranstalter'],
+  'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Afficher les soirées': ['Show events', 'Partys anzeigen'],
+  'Tout effacer': ['Clear all', 'Alles löschen'],
+  'Réduire': ['Show less', 'Weniger'],
+  'Non précisé': ['Not specified', 'Keine Angabe'],
+  'Aucun organisateur pour le moment.': ['No organisers yet.', 'Noch keine Veranstalter.'],
+  'Billetterie bientôt : m’alerter': ['Tickets soon: alert me', 'Tickets bald: benachrichtigen'],
+  'Prix du vestiaire invalide.': ['Invalid cloakroom price.', 'Ungültiger Garderobenpreis.'],
+  'Billetterie pas encore ouverte, date inconnue (décoche quand elle ouvre : les membres seront alertés)': ['Ticketing not open yet, date unknown (untick when it opens: members will be alerted)', 'Ticketverkauf noch nicht offen, Datum unbekannt (abhaken, sobald er öffnet: Mitglieder werden benachrichtigt)'],
   'Organisateurs suivis': ['Followed organisers', 'Gefolgte Veranstalter'],
   'Organisation': ['Organisation', 'Organisation'],
   'Organisation introuvable': ['Organisation not found', 'Organisation nicht gefunden'],
@@ -734,6 +743,11 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^\+ (\d+) autres$/, (m) => [`+ ${m[1]} more`, `+ ${m[1]} weitere`]],
+  [/^(\d+) soirées? à venir$/, (m) => [`${m[1]} upcoming ${P(m[1], 'event', 'events')}`, `${m[1]} kommende ${P(m[1], 'Party', 'Partys')}`]],
+  [/^Oui, payant · (.+)$/, (m) => [`Yes, paid · ${m[1]}`, `Ja, kostenpflichtig · ${m[1]}`]],
+  [/^Prix du vestiaire \((.+)\)$/, (m) => [`Cloakroom price (${m[1]})`, `Garderobenpreis (${m[1]})`]],
+  [/^(Conseillée|Obligatoire|Sur place) · billetterie pas encore ouverte$/, (m) => [`${{ 'Conseillée': 'Recommended', 'Obligatoire': 'Required', 'Sur place': 'At the door' }[m[1]]} · ticketing not open yet`, `${{ 'Conseillée': 'Empfohlen', 'Obligatoire': 'Pflicht', 'Sur place': 'An der Abendkasse' }[m[1]]} · Ticketverkauf noch nicht offen`]],
   [/^(\d+) messages?$/, (m) => [`${m[1]} ${P(m[1], 'message', 'messages')}`, `${m[1]} ${P(m[1], 'Nachricht', 'Nachrichten')}`]],
   [/^(\d+) soirées? trouvées?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} found`, `${m[1]} ${P(m[1], 'Party', 'Partys')} gefunden`]],
   [/^(\d+) soirées? sur la carte(?: · (\d+) filtres? actifs?)?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} on the map${m[2] ? ` · ${m[2]} ${P(m[2], 'filter', 'filters')} on` : ''}`, `${m[1]} ${P(m[1], 'Party', 'Partys')} auf der Karte${m[2] ? ` · ${m[2]} Filter aktiv` : ''}`]],

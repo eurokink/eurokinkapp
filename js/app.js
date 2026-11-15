@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.39.1';
+const VERSION = '0.40.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -268,25 +268,29 @@ function viewHome() {
 }
 
 // Filtres de l'écran Explorer (gardés en mémoire pendant la session)
-const freshFilters = () => ({ q: '', around: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false });
+const freshFilters = () => ({ q: '', around: '', radius: state.defaultRadius, period: 'all', types: [], budget: 100, noBooking: false, cloakroom: false, orgs: [] });
+let typesOpen = false;
+// Recherche tolérante : sans accents, sans majuscules, sans espaces ni ponctuation (« eventstorm » trouve « Event Storm »)
+const fold = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const filters = freshFilters();
 
 function filtered({ ignoreRadius = false } = {}) {
   const now = new Date();
   const { start, end } = weekendWindow();
   const horizon = { week: 7, month: 31 }[filters.period];
-  const q = filters.q.trim().toLowerCase();
+  const q = filters.q.trim().toLowerCase(), qf = fold(filters.q);
   return upcoming().filter((e) => {
+    if (filters.orgs.length && !filters.orgs.includes(e.organizer.id)) return false;
     const s = new Date(e.startsAt);
     if (filters.period === 'weekend' && !(s < end && new Date(e.endsAt) > start)) return false;
     if (horizon && s - now > horizon * 86400000) return false;
-    if (!ignoreRadius && filters.radius) { const c = aroundObj(); if (distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon) > filters.radius) return false; }
+    if (!ignoreRadius && filters.radius && !qf) { const c = aroundObj(); if (distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon) > filters.radius) return false; }
     if (filters.types.length && !e.types.some((t) => filters.types.includes(t))) return false;
     if (filters.budget === 0 && e.priceKind !== 'free') return false;
     if (filters.budget < 100 && e.priceKind !== 'unknown' && inEuros(e) > filters.budget) return false;
     if (filters.noBooking && e.booking !== 'door_only') return false;
     if (filters.cloakroom && !e.hasCloakroom) return false;
-    if (q && ![e.title, e.organizer.name, e.venue.city, e.venue.name].some((x) => x.toLowerCase().includes(q))) return false;
+    if (q && ![e.title, e.organizer.name, e.venue.city, e.venue.name].some((x) => x.toLowerCase().includes(q) || (qf && fold(x).includes(qf)))) return false;
     return true;
   });
 }
@@ -309,8 +313,9 @@ function viewExplorer() {
       <label class="select-card"><span class="sc-label">${I.compass} Rayon</span><select id="fRadius">${radii.map(([v, l]) => `<option value="${v}" ${v === filters.radius ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     </div>
     <label class="select-card"><span class="sc-label">${I.calendar} Quand</span><select id="fPeriod">${periods.map(([v, l]) => `<option value="${v}" ${v === filters.period ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    ${orgFilterCard()}
     <div class="label-up">Type de soirée</div>
-    <div class="chips wrap" id="fTypes">${EVENT_TYPES.map((t) => `<button class="chip ${filters.types.includes(t.slug) ? 'on' : ''}" data-type="${t.slug}" aria-pressed="${filters.types.includes(t.slug)}">${esc(t.name)}</button>`).join('')}</div>
+    <div class="chips wrap" id="fTypes">${typeChips()}</div>
     <div class="budget-head"><label for="fBudget" class="label-up">Budget max</label><strong id="budgetLabel" class="accent">${budgetLabel()}</strong></div>
     <div class="card budget-card"><input id="fBudget" type="range" min="0" max="100" step="5" value="${filters.budget}">
       <div class="ticks"><span>Gratuit</span><span>25 €</span><span>50 €</span><span>75 €</span><span>100 €+</span></div></div>
@@ -321,6 +326,37 @@ function viewExplorer() {
     <div class="section-head"><h2 id="resultCount"></h2><button class="link" id="fReset">Réinitialiser</button></div>
     <div class="list" id="results"></div>
   </section>`;
+}
+
+function typeChips() {
+  const shown = typesOpen ? EVENT_TYPES : EVENT_TYPES.filter((t, i) => i < 5 || filters.types.includes(t.slug));
+  return shown.map((t) => `<button class="chip ${filters.types.includes(t.slug) ? 'on' : ''}" data-type="${t.slug}" aria-pressed="${filters.types.includes(t.slug)}">${esc(t.name)}</button>`).join('')
+    + (EVENT_TYPES.length > 5 ? `<button class="chip chip-more" data-act="types-toggle">${typesOpen ? 'Réduire' : `+ ${EVENT_TYPES.length - shown.length} autres`}</button>` : '');
+}
+// Organisateurs ayant des soirées à venir (pour le filtre de l'onglet Events)
+function eventOrgs() {
+  const m = new Map();
+  upcoming().forEach((e) => { const o = m.get(e.organizer.id) || { ...e.organizer, n: 0 }; o.n++; m.set(e.organizer.id, o); });
+  return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+}
+function orgFilterCard() {
+  const sel = eventOrgs().filter((o) => filters.orgs.includes(o.id));
+  return `<button class="select-card org-filter" data-act="orgs-open"><span class="sc-label">${I.users} Organisateurs</span>
+    <span class="org-filter-val">${sel.length ? sel.map((o) => `${orgLogo(o, 'xs')}<span>${esc(o.name)}</span>`).join('') : '<span class="muted">Voir les organisateurs</span>'}</span>${I.chevron}</button>`;
+}
+function orgsSheet() {
+  const list = eventOrgs();
+  const pick = new Set(filters.orgs);
+  const row = (o) => `<button class="org-pick ${pick.has(o.id) ? 'on' : ''}" data-org="${o.id}">${orgLogo(o)}<span class="op-name">${esc(o.name)}${o.verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.n} soirée${o.n > 1 ? 's' : ''} à venir</span></span><span class="op-check">${I.check}</span></button>`;
+  const el = sheet(`<div class="sheet-head"><h2>Organisateurs</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <div class="org-pick-list">${list.length ? list.map(row).join('') : '<p class="muted">Aucun organisateur pour le moment.</p>'}</div>
+    <div class="adm-actions"><button class="btn btn-red" data-orgs-apply>Afficher les soirées</button><button class="btn btn-ghost" data-orgs-clear>Tout effacer</button></div>`);
+  el.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-org]');
+    if (b) { const id = b.dataset.org; if (pick.has(id)) pick.delete(id); else pick.add(id); b.classList.toggle('on', pick.has(id)); return; }
+    if (ev.target.closest('[data-orgs-clear]')) { pick.clear(); el.querySelectorAll('.org-pick.on').forEach((x) => x.classList.remove('on')); return; }
+    if (ev.target.closest('[data-orgs-apply]')) { filters.orgs = [...pick]; if (filters.orgs.length) filters.radius = 0; closeOverlay(); render(); }
+  });
 }
 
 function renderResults() {
@@ -335,18 +371,20 @@ function viewEvent(id) {
   const fav = state.favorites.includes(id), rem = state.reminders.includes(id), al = state.alerts.includes(id), att = state.attending.includes(id);
   const checked = state.checkins.some((c) => c.id === id);
   const salesLater = e.salesOpenAt && new Date(e.salesOpenAt) > new Date();
+  const soon = e.ticketsSoon && !salesLater;
   const salesClosed = salesEnded(e);
   const km = Math.round(kmFromMe(e));
   const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000;
   const when = multiDay ? `Du ${fDate.format(new Date(e.startsAt))} au ${fDate.format(new Date(e.endsAt))}` : dayLabel(e.startsAt);
   const infos = [
     ['Type', e.types.map(typeName).join(', ')], ['Dress code', DRESS[e.dressCode]],
-    ['Réservation', salesClosed ? 'Billetterie fermée' : e.salesCloseAt ? `${BOOKING[e.booking]}, jusqu’au ${fDate.format(new Date(e.salesCloseAt))}` : BOOKING[e.booking]], ['Vestiaire', e.hasCloakroom ? (e.cloakroomPaid ? 'Oui, payant' : 'Oui, gratuit') : 'Non'],
+    ['Réservation', soon ? `${BOOKING[e.booking]} · billetterie pas encore ouverte` : salesClosed ? 'Billetterie fermée' : e.salesCloseAt ? `${BOOKING[e.booking]}, jusqu’au ${fDate.format(new Date(e.salesCloseAt))}` : BOOKING[e.booking]], ['Vestiaire', e.hasCloakroom == null ? 'Non précisé' : e.hasCloakroom ? (e.cloakroomPaid ? (e.cloakroomPrice ? `Oui, payant · ${priceLabel(e.cloakroomPrice, e.currency)}` : 'Oui, payant') : 'Oui, gratuit') : 'Non'],
     ['Fréquence', FREQ[e.frequency]], ['Langues', e.languages.join(', ')]
   ];
   let cta;
   if (e.soldOut) cta = `<button class="btn btn-red btn-grow" data-act="alert">${al ? 'Alerte activée' : 'Complet : m’alerter'}</button>`;
   else if (salesClosed) cta = '<span class="btn btn-ghost btn-grow static">Billetterie fermée</span>';
+  else if (soon) cta = `<button class="btn btn-red btn-grow" data-act="alert">${al ? 'Alerte activée' : 'Billetterie bientôt : m’alerter'}</button>`;
   else if (salesLater) cta = `<button class="btn btn-red btn-grow" data-act="alert">${al ? 'Alerte activée' : `Billets le ${fDate.format(new Date(e.salesOpenAt))}`}</button>`;
   else if (e.booking === 'door_only' || !e.ticketUrl) cta = '<span class="btn btn-ghost btn-grow static">Entrée sur place</span>';
   else cta = `<a class="btn btn-red btn-grow" href="${esc(e.ticketUrl)}" target="_blank" rel="noopener">Réserver ma place</a>`;
@@ -822,6 +860,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.40', date: '2026-11-15',
+    fr: ['Events : nouveau filtre « Organisateurs » avec leurs logos', 'La recherche trouve « eventstorm » comme « Event Storm »', 'Le prix du vestiaire est affiché quand il est payant', 'Billetterie pas encore ouverte : active une alerte pour être prévenu'],
+    en: ['Events: new “Organisers” filter with their logos', 'Search finds “eventstorm” as “Event Storm”', 'The cloakroom price is shown when it is paid', 'Ticketing not open yet: set an alert to be notified'],
+    de: ['Events: neuer Filter „Veranstalter“ mit Logos', 'Die Suche findet „eventstorm“ auch als „Event Storm“', 'Der Garderobenpreis wird angezeigt, wenn sie kostenpflichtig ist', 'Ticketverkauf noch nicht offen: Alarm aktivieren und benachrichtigt werden'] },
   { v: '0.38', date: '2026-11-15',
     fr: ['Communauté : la carte est maintenant aussi grande que celle des soirées', 'L’onglet Explorer s’appelle désormais Events'],
     en: ['Community: the map is now as big as the events map', 'The Explore tab is now called Events'],
@@ -1828,10 +1870,12 @@ function viewSubmit() {
         <label class="field">Réservation${selectField('booking', Object.entries({ door_only: 'Sur place, sans réservation', recommended: 'Conseillée', required: 'Obligatoire' }), draft.booking || 'door_only')}</label>
         <label class="field">Lien de la billetterie<input name="ticket_url" type="url" inputmode="url" value="${dv('ticket_url')}" placeholder="https://" autocomplete="off"></label>
         <label class="field">Ouverture de la billetterie<input name="sales_open_at" type="datetime-local" value="${dv('sales_open_at')}"><span class="hint">Si les places ne sont pas encore en vente : les membres seront alertés.</span></label>
+        <label class="checkline"><input type="checkbox" name="tickets_soon" ${draft.tickets_soon ? 'checked' : ''}><span>Billetterie pas encore ouverte, date inconnue (décoche quand elle ouvre : les membres seront alertés)</span></label>
         <label class="field">Fin de la billetterie<input name="sales_close_at" type="datetime-local" value="${dv('sales_close_at')}"><span class="hint">Après cette date, la fiche affichera « Billetterie fermée ».</span></label>
         <label class="field">Dress code${selectField('dress_code', Object.entries(DRESS), draft.dress_code || 'recommended')}</label>
         <label class="field">Précisions sur le dress code<input name="dress_code_details" maxlength="200" value="${dv('dress_code_details')}" placeholder="Ex. Cuir ou rubber, pas de jean" autocomplete="off"></label>
         <label class="field">Vestiaire${selectField('cloak', [['', 'Je ne sais pas'], ['no', 'Non'], ['free', 'Oui, gratuit'], ['paid', 'Oui, payant']], draft.cloak || '')}</label>
+        ${draft.cloak === 'paid' ? `<label class="field">Prix du vestiaire (${priceLabel(1, draft.currency || 'EUR').replace(/^1 /, '')})<input name="cloakroom_price" inputmode="decimal" value="${dv('cloakroom_price')}" placeholder="Ex. 3"></label>` : ''}
       </div>
       <div class="card settings">
         <label class="checkline"><input type="checkbox" name="certify" ${draft.certify ? 'checked' : ''}><span>Je certifie que cette soirée existe, qu’elle est réservée aux adultes et qu’elle respecte la <a href="#/infos/charte">charte</a>.</span></label>
@@ -1908,6 +1952,7 @@ async function submitEvent(form) {
   for (const [k, label] of [['ticket_url', 'Le lien de la billetterie'], ['organizer_website', 'Le site de l’organisateur']]) {
     if (d[k] && !/^https?:\/\/\S+$/i.test(String(d[k]).trim())) return fail(`${label} doit commencer par https://`);
   }
+  if (d.cloak === 'paid' && d.cloakroom_price && !(numOrNull(d.cloakroom_price) >= 0 && numOrNull(d.cloakroom_price) <= 100)) return fail('Prix du vestiaire invalide.');
   if (d.sales_close_at && new Date(d.sales_close_at) > new Date(d.ends_at)) return fail('La fin de la billetterie doit être avant la fin de la soirée.');
   if (d.sales_close_at && d.sales_open_at && new Date(d.sales_close_at) <= new Date(d.sales_open_at)) return fail('La fin de la billetterie doit être après son ouverture.');
   if (!d.certify) return fail('Coche la case de confirmation en bas du formulaire.');
@@ -1919,7 +1964,8 @@ async function submitEvent(form) {
     organizer_name: String(d.organizer_name || '').trim(), organizer_kind: d.organizer_kind || 'association', organizer_website: (d.organizer_website || '').trim(),
     price, presale_price: presale, price_kind: priceKind, booking: d.booking || 'door_only', ticket_url: (d.ticket_url || '').trim(), sales_open_at: isoOrNull(d.sales_open_at),
     dress_code: d.dress_code || 'recommended', dress_code_details: d.dress_code_details || '',
-    has_cloakroom: d.cloak ? d.cloak !== 'no' : null, cloakroom_paid: d.cloak === 'paid' ? true : d.cloak === 'free' ? false : null
+    has_cloakroom: d.cloak ? d.cloak !== 'no' : null, cloakroom_paid: d.cloak === 'paid' ? true : d.cloak === 'free' ? false : null,
+    cloakroom_price: d.cloak === 'paid' && d.cloakroom_price ? numOrNull(d.cloakroom_price) : null, tickets_soon: !!d.tickets_soon && !d.sales_open_at
   };
   const btn = form.querySelector('button[type=submit]');
   submitting = true; btn.disabled = true; btn.textContent = 'Envoi…'; formError(form, '');
@@ -1986,7 +2032,7 @@ function adminPendingCard(p) {
   const multi = new Date(p.ends_at).toDateString() !== new Date(p.starts_at).toDateString();
   const when = `${dayLabel(p.starts_at)} · ${timeLabel(p.starts_at)} – ${multi ? `${fDate.format(new Date(p.ends_at))} ` : ''}${timeLabel(p.ends_at)}`;
   const osm = `https://www.openstreetmap.org/?mlat=${v.latitude}&mlon=${v.longitude}#map=16/${v.latitude}/${v.longitude}`;
-  const cloak = p.has_cloakroom == null ? 'Vestiaire ?' : p.has_cloakroom ? `Vestiaire ${p.cloakroom_paid ? 'payant' : 'gratuit'}` : 'Sans vestiaire';
+  const cloak = p.has_cloakroom == null ? 'Vestiaire ?' : p.has_cloakroom ? `Vestiaire ${p.cloakroom_paid ? `payant${p.cloakroom_price ? ` (${priceLabel(Number(p.cloakroom_price), p.currency || 'EUR')})` : ''}` : 'gratuit'}` : 'Sans vestiaire';
   return `<article class="card adm-card">
     <div class="sub-head"><strong>${esc(p.title)}</strong><span class="pill-grey">${p.source === 'import' ? 'Import' : p.by_manager ? 'Organisateur' : 'Signalée'}</span></div>
     <div class="muted tiny">par ${esc(p.submitter || 'le robot d’import')} · reçue le ${fDate.format(new Date(p.created_at))}</div>
@@ -2362,7 +2408,8 @@ function eventToDraft(ev, orgId, copy) {
     price: numStr(ev.price), presale_price: numStr(ev.presale_price), booking: ev.booking, ticket_url: ev.ticket_url || '',
     sales_open_at: copy ? '' : toLocalInput(ev.sales_open_at), sales_close_at: copy ? '' : toLocalInput(ev.sales_close_at),
     _close: copy ? '' : toLocalInput(ev.sales_close_at), dress_code: ev.dress_code, dress_code_details: ev.dress_code_details || '',
-    cloak: ev.has_cloakroom == null ? '' : !ev.has_cloakroom ? 'no' : ev.cloakroom_paid ? 'paid' : 'free'
+    cloak: ev.has_cloakroom == null ? '' : !ev.has_cloakroom ? 'no' : ev.cloakroom_paid ? 'paid' : 'free',
+    cloakroom_price: numStr(ev.cloakroom_price), tickets_soon: copy ? false : !!ev.tickets_soon
   };
 }
 
@@ -2742,7 +2789,7 @@ const segmented = (mode) => `<div class="seg" role="tablist" aria-label="Afficha
 
 function viewMap() {
   const n = filtered({ ignoreRadius: true }).length;
-  const active = filters.types.length + (filters.budget < 100 ? 1 : 0) + (filters.period !== 'all' ? 1 : 0) + (filters.noBooking ? 1 : 0) + (filters.cloakroom ? 1 : 0) + (filters.q ? 1 : 0);
+  const active = filters.types.length + filters.orgs.length + (filters.budget < 100 ? 1 : 0) + (filters.period !== 'all' ? 1 : 0) + (filters.noBooking ? 1 : 0) + (filters.cloakroom ? 1 : 0) + (filters.q ? 1 : 0);
   return `<section class="screen screen-map">
     <div class="explore-top"><h1 class="page-title">Events</h1>${segmented('map')}</div>
     <a class="map-summary" href="#/explorer">${I.sliders}<span>${n} soirée${n > 1 ? 's' : ''} sur la carte${active ? ` · ${active} filtre${active > 1 ? 's' : ''} actif${active > 1 ? 's' : ''}` : ''}</span><span class="accent">Filtres</span></a>
@@ -3020,6 +3067,8 @@ document.addEventListener('click', (ev) => {
     case 'who-all': whoSheet(act.dataset.id); break;
     case 'news-open': newsSheet(); break;
     case 'oauth-google': sb.startOAuth('google'); break;
+    case 'orgs-open': orgsSheet(); break;
+    case 'types-toggle': typesOpen = !typesOpen; $('#fTypes').innerHTML = typeChips(); break;
     case 'resend-confirm':
       act.disabled = true;
       sb.resendSignup(lastSignupEmail).then(() => { toast('E-mail renvoyé. Pense à regarder dans les indésirables.'); act.textContent = 'E-mail renvoyé ✓'; })
@@ -3081,7 +3130,7 @@ document.addEventListener('input', (ev) => {
   if (t.form && t.form.id === 'submitForm' && t.name && t.name !== 'secret') {
     draft[t.name] = t.type === 'checkbox' ? t.checked : t.value; saveDraft();
     if (t.id === 'addrInput') geocode(t.value);
-    if (t.name === 'price_kind') render();
+    if (t.name === 'price_kind' || t.name === 'cloak') render();
   }
 });
 
@@ -3383,7 +3432,7 @@ function downloadIcs(e) {
 // ---------------------------------------------------------------------------
 const ORG_KIND = { association: 'Association', group: 'Groupe', club: 'Club', bar: 'Bar', other: 'Organisateur' };
 const EVENT_SELECT = ['id', 'image_path', 'image_x', 'image_y', 'title', 'description', 'starts_at', 'ends_at', 'dress_code', 'dress_code_details', 'price', 'price_kind', 'presale_price',
-  'currency', 'booking', 'ticket_url', 'sales_open_at', 'sales_close_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'frequency', 'languages',
+  'currency', 'booking', 'ticket_url', 'sales_open_at', 'sales_close_at', 'is_sold_out', 'has_cloakroom', 'cloakroom_paid', 'cloakroom_price', 'tickets_soon', 'frequency', 'languages',
   'organizer:organizers(id,name,kind,is_verified,logo_path)', 'venue:venues(name,city,country,latitude,longitude)',
   'types:event_event_types(type:event_types(slug))'].join(',');
 
@@ -3398,7 +3447,7 @@ function mapEvent(r, counts) {
     dressCode: r.dress_code, dressCodeDetails: r.dress_code_details,
     currency: r.currency || 'EUR', price: Number(r.price), priceKind: r.price_kind || (Number(r.price) === 0 ? 'unknown' : 'fixed'), presalePrice: r.presale_price == null ? null : Number(r.presale_price),
     booking: r.booking, ticketUrl: r.ticket_url, salesOpenAt: r.sales_open_at, salesCloseAt: r.sales_close_at, soldOut: r.is_sold_out,
-    hasCloakroom: r.has_cloakroom, cloakroomPaid: r.cloakroom_paid, frequency: r.frequency,
+    hasCloakroom: r.has_cloakroom, cloakroomPaid: r.cloakroom_paid, cloakroomPrice: r.cloakroom_price == null ? null : Number(r.cloakroom_price), ticketsSoon: !!r.tickets_soon, frequency: r.frequency,
     languages: r.languages || [], attendees: counts.get(r.id) || 0
   };
 }
