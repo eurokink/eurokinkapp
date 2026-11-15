@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.40.0';
+const VERSION = '0.40.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -861,9 +861,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
   { v: '0.40', date: '2026-11-15',
-    fr: ['Events : nouveau filtre « Organisateurs » avec leurs logos', 'La recherche trouve « eventstorm » comme « Event Storm »', 'Le prix du vestiaire est affiché quand il est payant', 'Billetterie pas encore ouverte : active une alerte pour être prévenu'],
-    en: ['Events: new “Organisers” filter with their logos', 'Search finds “eventstorm” as “Event Storm”', 'The cloakroom price is shown when it is paid', 'Ticketing not open yet: set an alert to be notified'],
-    de: ['Events: neuer Filter „Veranstalter“ mit Logos', 'Die Suche findet „eventstorm“ auch als „Event Storm“', 'Der Garderobenpreis wird angezeigt, wenn sie kostenpflichtig ist', 'Ticketverkauf noch nicht offen: Alarm aktivieren und benachrichtigt werden'] },
+    fr: ['Une soirée peut maintenant avoir autant de types que nécessaire', 'Events : nouveau filtre « Organisateurs » avec leurs logos', 'La recherche trouve « eventstorm » comme « Event Storm »', 'Le prix du vestiaire est affiché quand il est payant', 'Billetterie pas encore ouverte : active une alerte pour être prévenu'],
+    en: ['An event can now have as many types as needed', 'Events: new “Organisers” filter with their logos', 'Search finds “eventstorm” as “Event Storm”', 'The cloakroom price is shown when it is paid', 'Ticketing not open yet: set an alert to be notified'],
+    de: ['Eine Party kann jetzt beliebig viele Arten haben', 'Events: neuer Filter „Veranstalter“ mit Logos', 'Die Suche findet „eventstorm“ auch als „Event Storm“', 'Der Garderobenpreis wird angezeigt, wenn sie kostenpflichtig ist', 'Ticketverkauf noch nicht offen: Alarm aktivieren und benachrichtigt werden'] },
   { v: '0.38', date: '2026-11-15',
     fr: ['Communauté : la carte est maintenant aussi grande que celle des soirées', 'L’onglet Explorer s’appelle désormais Events'],
     en: ['Community: the map is now as big as the events map', 'The Explore tab is now called Events'],
@@ -1833,7 +1833,7 @@ function viewSubmit() {
       <h2 class="group-title">La soirée</h2>
       <div class="card settings">
         <label class="field">Nom de la soirée *<input name="title" maxlength="120" value="${dv('title')}" placeholder="Ex. Black Rubber Night" autocomplete="off"></label>
-        <div class="field">Types * <span class="hint">1 à 4 types</span>
+        <div class="field">Types * <span class="hint">Choisis tous les types qui correspondent</span>
           <div class="chips wrap">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${types.includes(t.slug) ? 'on' : ''}" data-act="ptype" data-slug="${t.slug}" aria-pressed="${types.includes(t.slug)}">${esc(t.name)}</button>`).join('')}</div></div>
         <label class="field">Début *<input name="starts_at" type="datetime-local" value="${dv('starts_at')}"></label>
         <label class="field">Fin *<input name="ends_at" type="datetime-local" value="${dv('ends_at')}"></label>
@@ -3037,7 +3037,6 @@ document.addEventListener('click', (ev) => {
     case 'ptype': {
       const t = act.dataset.slug;
       const list = draft.types || [];
-      if (!list.includes(t) && list.length >= 4) { toast('4 types au maximum'); break; }
       draft.types = list.includes(t) ? list.filter((x) => x !== t) : [...list, t];
       saveDraft();
       act.classList.toggle('on'); act.setAttribute('aria-pressed', draft.types.includes(t));

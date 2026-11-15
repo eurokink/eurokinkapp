@@ -26,7 +26,7 @@ const T = {
   '+ Ajouter une source': ['+ Add a source', '+ Quelle hinzufügen'],
   '+ Nouvel organisateur (pas encore dans l’appli)': ['+ New organiser (not yet in the app)', '+ Neuer Veranstalter (noch nicht in der App)'],
   '0 si gratuit': ['0 if free', '0 wenn kostenlos'],
-  '1 à 4 types': ['1 to 4 types', '1 bis 4 Arten'],
+  'Choisis tous les types qui correspondent': ['Pick every type that fits', 'Wähle alle passenden Arten'],
   '2 heures avant': ['2 hours before', '2 Stunden vorher'],
   '3 à 30 caractères, visible par la communauté.': ['3 to 30 characters, visible to the community.', '3 bis 30 Zeichen, für die Community sichtbar.'],
   '30 jours': ['30 days', '30 Tage'],
