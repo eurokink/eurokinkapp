@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.43.1';
+const VERSION = '0.43.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -2950,6 +2950,7 @@ function viewOrga(param) {
       <label class="field">Présentation<textarea name="description" rows="5" maxlength="2000" placeholder="Qui vous êtes, l’esprit de vos soirées…">${esc(o.description || '')}</textarea></label>
       <label class="field">Site internet<input name="website" type="url" inputmode="url" value="${esc(o.website || '')}" placeholder="https://"></label>
       <label class="field">Ville<input name="city" maxlength="80" value="${esc(o.city || '')}"></label>
+      <label class="field">Pays<select name="country"><option value="">Non précisé</option>${Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1], LOCALE)).map(([c, n]) => `<option value="${c}"${c === o.country ? ' selected' : ''}>${esc(n)}</option>`).join('')}${o.country && !COUNTRY_NAMES[o.country] ? `<option value="${esc(o.country)}" selected>${esc(o.country)}</option>` : ''}</select></label>
       <p class="form-error" id="formError" role="alert" hidden></p>
       <div class="adm-actions"><button class="btn btn-red" type="submit">Enregistrer</button><button class="btn btn-ghost" type="button" data-act="org-page-cancel">Annuler</button></div>
       ${isAdmin() ? '' : '<p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p>'}</form>` : '';
@@ -2957,7 +2958,7 @@ function viewOrga(param) {
   return `<section class="screen">${top}
     ${switcher}
     <div class="card org-head"><div class="org-head-top">${orgLogo(o, 'lg')}<div><div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
-      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div></div>
+      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''}${o.country ? ` · ${esc(COUNTRY_NAMES[o.country] || o.country)}` : ''} · ${o.is_verified ? 'Organisateur vérifié : publication directe' : 'Tes soirées sont vérifiées avant publication'}</div></div></div>
       <div class="org-links"><a class="link" href="#/organisateur/${o.id}">Voir ma page</a>${orgEditing ? '' : '<button class="link" data-act="org-page-edit">Modifier ma page</button>'}</div></div>
     ${edit}
     <div class="stats four">${[[o.followers, 'abonnés'], [upcoming.length, 'à venir'], [sum('views'), 'vues'], [sum('attending'), 'j’y vais']].map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
@@ -2997,7 +2998,7 @@ async function orgAct(act) {
 
 async function saveOrgPage(form) {
   const f = new FormData(form);
-  const patch = { description: String(f.get('description') || '').trim() || null, website: String(f.get('website') || '').trim() || null, city: String(f.get('city') || '').trim() || null };
+  const patch = { description: String(f.get('description') || '').trim() || null, website: String(f.get('website') || '').trim() || null, city: String(f.get('city') || '').trim() || null, country: String(f.get('country') || '') || null };
   const logoLink = String(f.get('logo_path') || '').trim();
   if (logoLink) {
     if (!/^https:\/\/\S+$/i.test(logoLink)) return formError(form, 'Le lien du logo doit commencer par https://');
@@ -3028,7 +3029,7 @@ function viewOrganizerPage(id) {
     <div class="card org-public">
       ${orgLogo(o, 'xl')}
       <div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
-      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
+      <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''}${o.country ? ` · ${esc(COUNTRY_NAMES[o.country] || o.country)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
       <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
       ${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site officiel</a>` : ''}
     </div>

@@ -440,6 +440,7 @@ const T = {
   'Afficher les soirées': ['Show events', 'Partys anzeigen'],
   'Tout effacer': ['Clear all', 'Alles löschen'],
   'Réduire': ['Show less', 'Weniger'],
+  'Pays': ['Country', 'Land'],
   'Non précisé': ['Not specified', 'Keine Angabe'],
   'Aucun organisateur pour le moment.': ['No organisers yet.', 'Noch keine Veranstalter.'],
   'Billetterie bientôt : m’alerter': ['Tickets soon: alert me', 'Tickets bald: benachrichtigen'],
