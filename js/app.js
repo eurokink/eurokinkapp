@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.40.2';
+const VERSION = '0.41.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -764,6 +764,47 @@ function inviteShare(orgId, token) {
   const send = el.querySelector('[data-inv-send]');
   if (send) send.addEventListener('click', () => navigator.share({ text: el.querySelector('#invMsg').value }).catch(() => {}));
 }
+// Liens internes à l'appli dans les messages (ex. invitation) : ouverts dans l'appli
+const linkApp = (html) => html.replace(/https:\/\/eurokink\.eu\/#\/([\w\-/]+)/g, (u, path) => `<a class="msg-link" href="#/${path}">${u}</a>`);
+
+// Inviter un membre à gérer une organisation (admin : toutes ; gestionnaire : les siennes)
+async function orgInviteMember(userId, pseudo) {
+  const el = sheet(`<div class="sheet-head"><h2>Inviter ${esc(pseudo)}</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <p class="muted">Choisis l’organisation : ${esc(pseudo)} recevra un message privé de EuroKink avec un lien pour devenir gestionnaire.</p>
+    <div id="oiBody"><div class="loading"><div class="spinner" aria-hidden="true"></div></div></div>`);
+  let list;
+  try { list = await sb.rpc('invitable_orgs', { p_user: userId }); } catch (err) { el.querySelector('#oiBody').innerHTML = `<p class="form-error">${esc(err.message)}</p>`; return; }
+  let pick = null;
+  const row = (o) => {
+    const st = o.member ? 'Gère déjà cette organisation' : o.pending ? 'Invitation envoyée · touche pour la renvoyer' : `${o.managers ? `${o.managers} gestionnaire${o.managers > 1 ? 's' : ''}` : 'Aucun gestionnaire'}${o.city ? ` · ${esc(o.city)}` : ''}`;
+    return `<button class="org-pick${o.member ? ' done' : ''}" data-oi="${o.id}" ${o.member ? 'disabled' : ''} data-name="${esc(o.name.toLowerCase())}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="op-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${st}</span></span><span class="op-check">${I.check}</span></button>`;
+  };
+  el.querySelector('#oiBody').innerHTML = list.length ? `${list.length > 8 ? '<input class="input" id="oiFind" type="search" placeholder="Rechercher une organisation…">' : ''}
+    <div class="org-pick-list">${list.map(row).join('')}</div>
+    <div class="adm-actions"><button class="btn btn-red" data-oi-send disabled>Envoyer l’invitation</button><button class="btn btn-ghost" data-sheet-close>Annuler</button></div>`
+    : '<p class="muted">Tu ne gères encore aucune organisation.</p>';
+  const send = el.querySelector('[data-oi-send]');
+  const find = el.querySelector('#oiFind');
+  if (find) find.addEventListener('input', () => { const q = fold(find.value); el.querySelectorAll('[data-oi]').forEach((b) => { b.hidden = q && !fold(b.dataset.name).includes(q); }); });
+  el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-oi]');
+    if (b && !b.disabled) {
+      pick = pick === b.dataset.oi ? null : b.dataset.oi;
+      el.querySelectorAll('[data-oi]').forEach((x) => x.classList.toggle('on', x.dataset.oi === pick));
+      send.disabled = !pick; return;
+    }
+    if (ev.target.closest('[data-oi-send]') && pick) {
+      send.disabled = true;
+      try {
+        const r = await sb.rpc('invite_member_to_org', { p_user: userId, p_org: pick });
+        closeOverlay();
+        Object.keys(orgTeam).forEach((k) => delete orgTeam[k]);
+        toast(`Invitation envoyée à ${pseudo} pour ${r.organizer}`);
+      } catch (err) { toast(err.message); send.disabled = false; }
+    }
+  });
+}
+
 async function inviteRevoke(btn) {
   if (!confirm(t('Supprimer cette invitation ? Le lien ne fonctionnera plus.'))) return;
   try { await sb.rpc('revoke_organizer_invite', { p_id: btn.dataset.id }); toast('Invitation supprimée'); loadTeam(btn.dataset.org); } catch (err) { toast(err.message); }
@@ -860,6 +901,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.41', date: '2026-11-15',
+    fr: ['Gestionnaires d’organisation : invite un membre depuis son profil, il reçoit un message avec le lien'],
+    en: ['Organisation managers: invite a member from their profile, they get a message with the link'],
+    de: ['Organisations-Verwalter: lade ein Mitglied über sein Profil ein, es erhält eine Nachricht mit dem Link'] },
   { v: '0.40', date: '2026-11-15',
     fr: ['Une soirée peut maintenant avoir autant de types que nécessaire', 'Events : nouveau filtre « Organisateurs » avec leurs logos', 'La recherche trouve « eventstorm » comme « Event Storm »', 'Le prix du vestiaire est affiché quand il est payant', 'Billetterie pas encore ouverte : active une alerte pour être prévenu'],
     en: ['An event can now have as many types as needed', 'Events: new “Organisers” filter with their logos', 'Search finds “eventstorm” as “Event Storm”', 'The cloakroom price is shown when it is paid', 'Ticketing not open yet: set an alert to be notified'],
@@ -1082,7 +1127,7 @@ function viewThread(param) {
       const st = c.other_read_at && Date.parse(c.other_read_at) >= at ? 'read' : c.other_delivered_at && Date.parse(c.other_delivered_at) >= at ? 'delivered' : 'sent';
       tick = ` <span class="tick ${st}" title="${{ sent: 'Envoyé', delivered: 'Distribué', read: 'Lu' }[st]}">${st === 'sent' ? '✓' : '✓✓'}</span>`;
     }
-    return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${esc(nbsp(m.body))}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
+    return `${sep}<div class="msg ${mine ? 'me' : 'them'}"><div class="bubble" data-no-i18n>${linkApp(esc(nbsp(m.body)))}</div><span class="msg-time">${fTime.format(new Date(m.created_at))}${tick}</span></div>`;
   }).join('');
   const sys = other.id === SYSTEM_ID;
   const composer = sys ? `<p class="sys-note muted tiny center" data-no-i18n>${{ fr: 'Message automatique : pour nous contacter, écris à', en: 'Automatic message: to contact us, write to', de: 'Automatische Nachricht: Schreib uns an' }[LANG]} <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`
@@ -1241,6 +1286,7 @@ function viewMember(id) {
       : `<a class="btn btn-red btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
+        ${(isAdmin() || isOrganizer()) && m.id !== SYSTEM_ID ? `<button class="btn btn-ghost btn-block" data-act="org-invite-member" data-id="${m.id}" data-pseudo="${esc(m.pseudo)}">${I.users}<span>Inviter à rejoindre une organisation</span></button>` : ''}
         ${isAdmin() ? (m.role === 'admin' ? '' : `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Modération</span></button>`)
           : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}`}
   </section>`;
@@ -3058,6 +3104,7 @@ document.addEventListener('click', (ev) => {
     }
     case 'report-member': reportMember(act.dataset.id); break;
     case 'moderate-member': moderateMember(act.dataset.id); break;
+    case 'org-invite-member': orgInviteMember(act.dataset.id, act.dataset.pseudo); break;
     case 'follow-member': toggleMemberFollow(act.dataset.id); break;
     case 'invite-accept': acceptInvite(act); break;
     case 'invite-new': inviteNew(act.dataset.org); break;

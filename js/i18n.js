@@ -357,7 +357,16 @@ const T = {
   'Organisateur vérifié : publication directe': ['Verified organiser: direct publishing', 'Verifizierter Veranstalter: direkte Veröffentlichung'],
   'Organisateur vérifié : ta soirée est publiée tout de suite.': ['Verified organiser: your event is published straight away.', 'Verifizierter Veranstalter: Deine Party wird sofort veröffentlicht.'],
   'Organisateurs': ['Organisers', 'Veranstalter'],
+  'Modération': ['Moderation', 'Moderation'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Inviter à rejoindre une organisation': ['Invite to join an organisation', 'Zu einer Organisation einladen'],
+  'Envoyer l’invitation': ['Send invitation', 'Einladung senden'],
+  'Gère déjà cette organisation': ['Already manages this organisation', 'Verwaltet diese Organisation bereits'],
+  'Invitation envoyée · touche pour la renvoyer': ['Invitation sent · tap to resend', 'Einladung gesendet · tippen zum erneuten Senden'],
+  'Aucun gestionnaire': ['No manager', 'Kein Verwalter'],
+  'Rechercher une organisation…': ['Search an organisation…', 'Organisation suchen…'],
+  'Tu ne gères encore aucune organisation.': ['You don’t manage any organisation yet.', 'Du verwaltest noch keine Organisation.'],
+  'Cette invitation est réservée à un autre membre': ['This invitation is for another member', 'Diese Einladung ist für ein anderes Mitglied'],
   'Afficher les soirées': ['Show events', 'Partys anzeigen'],
   'Tout effacer': ['Clear all', 'Alles löschen'],
   'Réduire': ['Show less', 'Weniger'],
@@ -743,6 +752,11 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^Inviter (.+)$/, (m) => [`Invite ${m[1]}`, `${m[1]} einladen`]],
+  [/^Choisis l’organisation : (.+) recevra un message privé de EuroKink avec un lien pour devenir gestionnaire\.$/, (m) => [`Choose the organisation: ${m[1]} will get a private message from EuroKink with a link to become a manager.`, `Wähle die Organisation: ${m[1]} erhält eine private Nachricht von EuroKink mit einem Link, um Verwalter zu werden.`]],
+  [/^Invitation envoyée à (.+) pour (.+)$/, (m) => [`Invitation sent to ${m[1]} for ${m[2]}`, `Einladung an ${m[1]} für ${m[2]} gesendet`]],
+  [/^(\d+) gestionnaires?( · .+)?$/, (m) => [`${m[1]} ${P(m[1], 'manager', 'managers')}${m[2] || ''}`, `${m[1]} Verwalter${m[2] || ''}`]],
+  [/^Aucun gestionnaire( · .+)$/, (m) => [`No manager${m[1]}`, `Kein Verwalter${m[1]}`]],
   [/^\+ (\d+) autres$/, (m) => [`+ ${m[1]} more`, `+ ${m[1]} weitere`]],
   [/^(\d+) soirées? à venir$/, (m) => [`${m[1]} upcoming ${P(m[1], 'event', 'events')}`, `${m[1]} kommende ${P(m[1], 'Party', 'Partys')}`]],
   [/^Oui, payant · (.+)$/, (m) => [`Yes, paid · ${m[1]}`, `Ja, kostenpflichtig · ${m[1]}`]],

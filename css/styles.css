@@ -737,3 +737,8 @@ body.kb .sys-note { padding-bottom: 12px; }
 .event-hero.has-img:has(.hero-tags.many) .hero-zoom { bottom: auto; top: calc(var(--safe-top) + 186px) !important; }
 .event-hero.has-img:has(.hero-tags.many) { padding-top: calc(254px + var(--safe-top)); }
 .event-hero.has-img:has(.hero-tags.many) .hero-img { height: calc(240px + var(--safe-top)); bottom: auto; }
+
+.org-pick.done { opacity: 0.55; }
+.org-pick[hidden] { display: none; }
+#oiFind { width: 100%; margin: 4px 0 8px; }
+.msg-link { color: inherit; text-decoration: underline; word-break: break-all; }
