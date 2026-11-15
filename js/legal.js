@@ -28,9 +28,11 @@ const FR = {
       <p>L’application est proposée en plusieurs langues. Les textes publiés par les membres et les organisateurs (descriptions de soirées, précisions de dress code, présentations) peuvent être traduits automatiquement dans la langue de chaque lecteur, par un service de traduction tiers. En publiant un texte, tu acceptes qu’il soit ainsi traduit et affiché. Une traduction automatique peut contenir des erreurs : seul le texte d’origine fait foi, et il reste consultable à tout moment en touchant le texte traduit (repère ⇄). Les titres de soirées et les noms des organisateurs ne sont pas traduits.</p>
       <h2>7. Propriété intellectuelle</h2>
       <p>La marque, le logo et l’interface d’EuroKink sont protégés. Les visuels des soirées restent la propriété de leurs organisateurs.</p>
-      <h2>8. Évolution des conditions</h2>
+      <h2>8. Dons</h2>
+      <p>Il est possible de soutenir EuroKink par un don, ponctuel ou mensuel. Les dons sont volontaires, ne donnent accès à aucune fonctionnalité supplémentaire et n’ouvrent droit à aucune contrepartie, en dehors d’un badge « Soutien » affiché sur le profil. Le paiement s’effectue sur une page sécurisée de Stripe, qui traite les informations de paiement : EuroKink ne reçoit ni ne conserve tes coordonnées bancaires. Un don mensuel peut être arrêté à tout moment depuis le lien reçu par e-mail de Stripe. EuroKink étant édité par un particulier, les dons n’ouvrent pas droit à une réduction d’impôt.</p>
+      <h2>9. Évolution des conditions</h2>
       <p>Ces conditions peuvent être modifiées ; la date de mise à jour figure en bas de page. Elles sont soumises au droit français.</p>
-      <h2>9. Contact</h2>
+      <h2>10. Contact</h2>
       <p>Pour toute question : ${contactLine()}.</p>`
   },
   confidentialite: {
@@ -85,7 +87,7 @@ const FR = {
       <p><strong>Application</strong> : GitHub, Inc. (service GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.</p>
       <p><strong>Comptes et données des membres</strong> : Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapour 049513. Les données sont stockées dans un centre de données situé à <strong>Paris</strong> (Union européenne).</p>
       <h2>Prestataires</h2>
-      <p>E-mails de compte (confirmation, mot de passe) : Brevo (Sendinblue SAS, France). Recherche d’adresse : Géoplateforme de l’IGN (France) swisstopo, Office fédéral de topographie (Suisse) et Photon, Komoot GmbH, données OpenStreetMap (autres pays d’Europe). Contours de la carte : d’après thematicmapping.org, licence CC BY-SA 3.0. Traduction automatique des textes publiés : MyMemory, Translated srl (Italie). Vérification des mots de passe : Have I Been Pwned (k-anonymat, aucun mot de passe transmis). Notifications : services de notification d’Apple, Google ou Mozilla selon ton téléphone.</p>
+      <p>Paiement des dons : Stripe Payments Europe Ltd (Irlande). E-mails de compte (confirmation, mot de passe) : Brevo (Sendinblue SAS, France). Recherche d’adresse : Géoplateforme de l’IGN (France) swisstopo, Office fédéral de topographie (Suisse) et Photon, Komoot GmbH, données OpenStreetMap (autres pays d’Europe). Contours de la carte : d’après thematicmapping.org, licence CC BY-SA 3.0. Traduction automatique des textes publiés : MyMemory, Translated srl (Italie). Vérification des mots de passe : Have I Been Pwned (k-anonymat, aucun mot de passe transmis). Notifications : services de notification d’Apple, Google ou Mozilla selon ton téléphone.</p>
       <h2>Propriété intellectuelle</h2>
       <p>© 2026 EuroKink™ · Tous droits réservés. Le nom, le logo et l’interface d’EuroKink ne peuvent être reproduits sans autorisation.</p>
       <h2>Contact</h2>
@@ -112,9 +114,11 @@ const EN = {
       <p>The app is available in several languages. Texts published by members and organisers (event descriptions, dress code details, profiles) may be automatically translated into each reader’s language by a third-party translation service. By publishing a text, you accept that it is translated and displayed this way. An automatic translation may contain errors: only the original text is authoritative, and it can be viewed at any time by tapping the translated text (⇄ mark). Event titles and organiser names are not translated.</p>
       <h2>7. Intellectual property</h2>
       <p>The EuroKink brand, logo and interface are protected. Event visuals remain the property of their organisers.</p>
-      <h2>8. Changes to these terms</h2>
+      <h2>8. Donations</h2>
+      <p>You can support EuroKink with a one-off or monthly donation. Donations are voluntary, give access to no additional feature and carry no consideration other than a “Supporter” badge shown on your profile. Payment takes place on a secure Stripe page, which processes the payment details: EuroKink never receives or stores your bank details. A monthly donation can be stopped at any time from the link in Stripe’s email. As EuroKink is run by a private individual, donations are not tax-deductible.</p>
+      <h2>9. Changes to these terms</h2>
       <p>These terms may be amended; the date of the last update is shown at the bottom of the page. They are governed by French law.</p>
-      <h2>9. Contact</h2>
+      <h2>10. Contact</h2>
       <p>For any question: ${contactLine()}.</p>`
   },
   confidentialite: {
@@ -169,7 +173,7 @@ const EN = {
       <p><strong>Application</strong>: GitHub, Inc. (GitHub Pages service), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, United States.</p>
       <p><strong>Member accounts and data</strong>: Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapore 049513. Data is stored in a data centre located in <strong>Paris</strong> (European Union).</p>
       <h2>Service providers</h2>
-      <p>Account emails (confirmation, password): Brevo (Sendinblue SAS, France). Address search: IGN Géoplateforme (France), swisstopo, Federal Office of Topography (Switzerland) and Photon, Komoot GmbH, OpenStreetMap data (other European countries). Map outlines: based on thematicmapping.org, CC BY-SA 3.0 licence. Automatic translation of published texts: MyMemory, Translated srl (Italy). Password checks: Have I Been Pwned (k-anonymity, no password transmitted). Notifications: Apple, Google or Mozilla notification services depending on your phone.</p>
+      <p>Donation payments: Stripe Payments Europe Ltd (Ireland). Account emails (confirmation, password): Brevo (Sendinblue SAS, France). Address search: IGN Géoplateforme (France), swisstopo, Federal Office of Topography (Switzerland) and Photon, Komoot GmbH, OpenStreetMap data (other European countries). Map outlines: based on thematicmapping.org, CC BY-SA 3.0 licence. Automatic translation of published texts: MyMemory, Translated srl (Italy). Password checks: Have I Been Pwned (k-anonymity, no password transmitted). Notifications: Apple, Google or Mozilla notification services depending on your phone.</p>
       <h2>Intellectual property</h2>
       <p>© 2026 EuroKink™ · All rights reserved. The EuroKink name, logo and interface may not be reproduced without permission.</p>
       <h2>Contact</h2>
@@ -196,9 +200,11 @@ const DE = {
       <p>Die App ist in mehreren Sprachen verfügbar. Von Mitgliedern und Veranstaltern veröffentlichte Texte (Eventbeschreibungen, Angaben zum Dresscode, Profiltexte) können durch einen externen Übersetzungsdienst automatisch in die Sprache jedes Lesers übersetzt werden. Mit der Veröffentlichung eines Textes stimmst du dieser Übersetzung und Anzeige zu. Eine automatische Übersetzung kann Fehler enthalten: Maßgeblich ist allein der Originaltext, der jederzeit durch Antippen des übersetzten Textes (Zeichen ⇄) angezeigt werden kann. Eventtitel und Veranstalternamen werden nicht übersetzt.</p>
       <h2>7. Geistiges Eigentum</h2>
       <p>Marke, Logo und Oberfläche von EuroKink sind geschützt. Die Bilder der Events bleiben Eigentum ihrer Veranstalter.</p>
-      <h2>8. Änderungen der Bedingungen</h2>
+      <h2>8. Spenden</h2>
+      <p>Du kannst EuroKink mit einer einmaligen oder monatlichen Spende unterstützen. Spenden sind freiwillig, schalten keine zusätzlichen Funktionen frei und begründen keine Gegenleistung außer einem Abzeichen „Unterstützer“ auf deinem Profil. Die Zahlung erfolgt auf einer sicheren Seite von Stripe, das die Zahlungsdaten verarbeitet: EuroKink erhält oder speichert niemals deine Bankdaten. Eine monatliche Spende kann jederzeit über den Link in der E-Mail von Stripe beendet werden. Da EuroKink von einer Privatperson betrieben wird, sind Spenden nicht steuerlich absetzbar.</p>
+      <h2>9. Änderungen der Bedingungen</h2>
       <p>Diese Bedingungen können geändert werden; das Datum der letzten Aktualisierung steht unten auf der Seite. Es gilt französisches Recht.</p>
-      <h2>9. Kontakt</h2>
+      <h2>10. Kontakt</h2>
       <p>Bei Fragen: ${contactLine()}.</p>`
   },
   confidentialite: {
@@ -253,7 +259,7 @@ const DE = {
       <p><strong>Anwendung</strong>: GitHub, Inc. (Dienst GitHub Pages), 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, USA.</p>
       <p><strong>Mitgliederkonten und -daten</strong>: Supabase Pte. Ltd., 65 Chulia Street #38-02/03, OCBC Centre, Singapur 049513. Die Daten werden in einem Rechenzentrum in <strong>Paris</strong> (Europäische Union) gespeichert.</p>
       <h2>Dienstleister</h2>
-      <p>Konto-E-Mails (Bestätigung, Passwort): Brevo (Sendinblue SAS, Frankreich). Adresssuche: Géoplateforme des IGN (Frankreich), swisstopo, Bundesamt für Landestopografie (Schweiz) und Photon, Komoot GmbH, OpenStreetMap-Daten (übrige europäische Länder). Kartenumrisse: nach thematicmapping.org, Lizenz CC BY-SA 3.0. Automatische Übersetzung veröffentlichter Texte: MyMemory, Translated srl (Italien). Passwortprüfung: Have I Been Pwned (k-Anonymität, kein Passwort übermittelt). Benachrichtigungen: Benachrichtigungsdienste von Apple, Google oder Mozilla je nach Telefon.</p>
+      <p>Zahlung von Spenden: Stripe Payments Europe Ltd (Irland). Konto-E-Mails (Bestätigung, Passwort): Brevo (Sendinblue SAS, Frankreich). Adresssuche: Géoplateforme des IGN (Frankreich), swisstopo, Bundesamt für Landestopografie (Schweiz) und Photon, Komoot GmbH, OpenStreetMap-Daten (übrige europäische Länder). Kartenumrisse: nach thematicmapping.org, Lizenz CC BY-SA 3.0. Automatische Übersetzung veröffentlichter Texte: MyMemory, Translated srl (Italien). Passwortprüfung: Have I Been Pwned (k-Anonymität, kein Passwort übermittelt). Benachrichtigungen: Benachrichtigungsdienste von Apple, Google oder Mozilla je nach Telefon.</p>
       <h2>Geistiges Eigentum</h2>
       <p>© 2026 EuroKink™ · Alle Rechte vorbehalten. Name, Logo und Oberfläche von EuroKink dürfen nicht ohne Genehmigung vervielfältigt werden.</p>
       <h2>Kontakt</h2>

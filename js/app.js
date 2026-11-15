@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.42.3';
+const VERSION = '0.43.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -258,6 +258,7 @@ function viewHome() {
     ${homeMsgCard()}
     ${earlyCard()}
     ${newsCard()}
+    ${donateCard()}
     ${featured ? `<div class="section-head"><h2>À la une</h2><a href="#/explorer" class="link">Tout voir</a></div>${featuredCard(featured)}` : ''}
     ${weekend.length ? `<h2 class="section-title">Ce week-end près de toi</h2><div class="list">${weekend.map(eventRow).join('')}</div>`
       : nearest.length ? `<h2 class="section-title">Les plus proches de toi</h2><div class="list">${nearest.map(eventRow).join('')}</div>` : ''}
@@ -641,7 +642,7 @@ function memberBadges(id, mine) {
   if (!passportCache.has(id)) { loadMemberPassport(id); return ''; }
   const sp = passportCache.get(id);
   if (!Array.isArray(sp)) return '';
-  const list = BADGES.map((b) => { const x = sp.find((y) => y.code === b.code) || {}; return { ...b, earned: !!x.earned_at }; });
+  const list = BADGES.map((b) => { const x = sp.find((y) => y.code === b.code) || {}; return { ...b, earned: !!x.earned_at }; }).filter((b) => b.code !== 'supporter' || b.earned || donateOn());
   const n = list.filter((b) => b.earned).length;
   return `<div class="card"><h2 class="card-title">Badges <span class="muted tiny">${n} / ${list.length}</span></h2>
     ${n ? `<div class="badges mini">${list.filter((b) => b.earned).map((b) => `<span class="badge earned" title="${esc(b.description)}">
@@ -1363,7 +1364,7 @@ function viewMember(id) {
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'supporter' && b.earned_at) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : ''}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
@@ -1521,6 +1522,84 @@ function moderateMember(id) {
   });
 }
 
+// --- Dons (liens de paiement Stripe, réglés par l'admin) ---
+const DONATE_KEY = 'ek.donateCard';
+let donateLinks = null; // { once, monthly }
+function loadDonateLinks() {
+  if (donateLinks) return donateLinks;
+  donateLinks = { loading: true };
+  sb.select('app_settings', 'key=in.(donate_once_url,donate_monthly_url)&select=key,value')
+    .then((rows) => { const g = (k) => { const r = rows.find((x) => x.key === k); return r && typeof r.value === 'string' && /^https:\/\//.test(r.value) ? r.value : null; }; donateLinks = { once: g('donate_once_url'), monthly: g('donate_monthly_url') }; })
+    .catch(() => { donateLinks = { once: null, monthly: null }; })
+    .then(() => render());
+  return donateLinks;
+}
+const donateOn = () => { const l = loadDonateLinks(); return !l.loading && !!(l.once || l.monthly); };
+const isSupporter = () => passport().some((b) => b.code === 'supporter' && b.earned);
+const donateUrl = (base) => {
+  const u = new URL(base);
+  if (loggedIn()) u.searchParams.set('client_reference_id', profile.id);
+  u.searchParams.set('locale', LANG);
+  return u.toString();
+};
+function donateLine() {
+  if (!donateOn()) return '';
+  return `<button class="line-btn donate-line" data-act="donate">${I.heart}<span>Soutenir EuroKink<span class="muted tiny block">${isSupporter() ? 'Merci pour ton soutien !' : 'Gratuite et sans pub grâce à vos dons'}</span></span>${I.chevron}</button>`;
+}
+function donateCard() {
+  if (!loggedIn() || !donateOn() || isSupporter()) return '';
+  try { const t = Number(localStorage.getItem(DONATE_KEY) || 0); if (t && Date.now() - t < 30 * 864e5) return ''; } catch (e) { /* stockage indisponible */ }
+  return `<div class="card early-card donate-card"><div class="early-top"><span class="msg-card-ic">${I.heart}</span><strong>Soutiens EuroKink</strong>
+    <button class="icon-btn small" data-act="donate-close" aria-label="Fermer">${I.close}</button></div>
+    <p class="muted tiny">EuroKink est gratuite, sans pub, et le restera. Un petit don aide à payer l’hébergement et à faire grandir l’appli. Les donateurs reçoivent le badge « Soutien ».</p>
+    <button class="btn btn-red btn-block" data-act="donate">${I.heart}<span>Faire un don</span></button></div>`;
+}
+function donateSheet() {
+  const l = loadDonateLinks();
+  sheet(`<div class="sheet-head"><h2>Soutenir EuroKink</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <p class="muted">EuroKink est gratuite et sans pub. Tes dons servent à payer l’hébergement, le nom de domaine et les outils de l’appli. Merci ! 🖤</p>
+    <div class="donate-opts">
+      ${l.once ? `<a class="donate-opt" href="${esc(donateUrl(l.once))}" target="_blank" rel="noopener">${I.heart}<span><strong>Un don ponctuel</strong><span class="muted tiny block">Le montant de ton choix, une seule fois</span></span>${I.chevron}</a>` : ''}
+      ${l.monthly ? `<a class="donate-opt" href="${esc(donateUrl(l.monthly))}" target="_blank" rel="noopener">${I.calendar}<span><strong>Un don mensuel</strong><span class="muted tiny block">Chaque mois, résiliable à tout moment</span></span>${I.chevron}</a>` : ''}
+    </div>
+    <p class="tiny muted">Paiement sécurisé par Stripe : EuroKink ne voit jamais tes coordonnées bancaires. Un don ne donne accès à aucune fonction en plus, juste notre gratitude et le badge « Soutien »${loggedIn() ? '' : ' (connecte-toi d’abord pour le recevoir)'}.</p>`);
+}
+function viewThanks() {
+  if (loggedIn()) { [4000, 15000].forEach((ms) => setTimeout(() => { passportCache.delete(profile.id); loadPassport().then(() => { if ((location.hash || '').startsWith('#/merci') || location.hash === '#/profil') render(); }).catch(() => {}); }, ms)); }
+  return `<section class="screen">${accountTopRaw('Merci !', '#/profil')}
+    <div class="card center-card"><div class="thanks-heart">${I.heart}</div><h2>Merci pour ton soutien !</h2>
+      <p class="muted">Ton don aide à garder EuroKink gratuite et sans pub pour toute la communauté. Ton badge « Soutien » arrive sur ton profil dans quelques instants, avec un petit message de l’équipe.</p>
+      <a class="btn btn-red btn-block" href="#/profil">Voir mon profil</a></div></section>`;
+}
+// Admin : liens de don et suivi
+let adminDon = null;
+function donateAdmin() {
+  if (!adminDon) { adminDon = { loading: true }; sb.rpc('admin_donations', {}).then((r) => { adminDon = r; }).catch((err) => { adminDon = { error: err.message }; }).then(() => { if ((location.hash || '').startsWith('#/admin')) render(); }); }
+  const l = loadDonateLinks();
+  const d = adminDon;
+  const eur = (n) => priceLabel(Number(n || 0), 'EUR');
+  return `<h2 class="group-title">Dons</h2>
+    ${d && !d.loading && !d.error ? `<div class="stats four">${[[eur(d.month), 'ce mois-ci'], [eur(d.total), 'au total'], [d.donors, 'donateurs'], [d.monthly_active, 'dons mensuels']].map(([n, x]) => `<div class="stat"><strong>${n}</strong><span>${x}</span></div>`).join('')}</div>
+      ${d.recent.length ? `<div class="card st-list"><strong>Derniers dons</strong>${d.recent.map((r) => `<div class="st-row"><span>${esc(r.pseudo || 'Anonyme')}</span><span class="muted tiny">${r.kind === 'monthly' ? 'mensuel' : 'ponctuel'} · ${fDate.format(new Date(r.at))}</span><strong>${priceLabel(Number(r.amount), String(r.currency).toUpperCase())}</strong></div>`).join('')}</div>` : ''}` : ''}
+    <div class="card settings">
+      <label class="field">Lien Stripe « don ponctuel »<input id="donOnce" type="url" inputmode="url" placeholder="https://buy.stripe.com/…" value="${esc((l && l.once) || '')}"></label>
+      <label class="field">Lien Stripe « don mensuel »<input id="donMonthly" type="url" inputmode="url" placeholder="https://buy.stripe.com/…" value="${esc((l && l.monthly) || '')}"></label>
+      <button class="btn btn-red btn-block" data-act="donate-save">Enregistrer les liens</button>
+      <p class="tiny muted">Tant qu’aucun lien n’est enregistré, le bouton de don n’apparaît nulle part. Adresse du webhook à donner à Stripe : <span class="break" data-no-i18n>${esc(sb.SUPABASE_URL)}/functions/v1/stripe-webhook</span></p>
+    </div>`;
+}
+async function donateSave(btn) {
+  const once = $('#donOnce').value.trim(), monthly = $('#donMonthly').value.trim();
+  const ok = (u) => !u || /^https:\/\/(buy|donate)\.stripe\.com\/\S+$/.test(u);
+  if (!ok(once) || !ok(monthly)) { toast('Colle un lien Stripe qui commence par https://buy.stripe.com/'); return; }
+  btn.disabled = true;
+  try {
+    await sb.update('app_settings', 'key=eq.donate_once_url', { value: once || null });
+    await sb.update('app_settings', 'key=eq.donate_monthly_url', { value: monthly || null });
+    donateLinks = null; toast('Liens de don enregistrés'); render();
+  } catch (err) { toast(err.message); btn.disabled = false; }
+}
+
 // Avertissements reçus : affichés à l'ouverture tant qu'ils ne sont pas lus
 async function checkWarnings() {
   let list = [];
@@ -1610,13 +1689,14 @@ function passport() {
 let selectedBadge = 'first_steps';
 
 function viewProfile() {
-  const pass = passport();
+  const pass = passport().filter((b) => b.code !== 'supporter' || b.earned || donateOn());
   const places = loggedIn() ? checkinInfo : state.checkins.map((c) => eventById(c.id)).filter(Boolean).map((e) => ({ city: e.venue.city, country: e.country }));
   const stats = [[places.length, 'soirées'], [new Set(places.map((x) => x.city)).size, 'villes'], [new Set(places.map((x) => x.country)).size, 'pays']];
   const sel = pass.find((b) => b.code === selectedBadge) || pass[0];
   const name = loggedIn() ? profile.pseudo : 'Invité';
   const pills = loggedIn() ? [teamBadge(profile.role === 'admin'), champBadge(profile.id), orgBadge(profile.org_names),
     pass.find((b) => b.code === 'pioneer' && b.earned) ? '<span class="pill-red">PIONNIER</span>' : '',
+    pass.find((b) => b.code === 'supporter' && b.earned) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : '',
     `<span class="pill-grey">Membre n° ${String(profile.member_number).padStart(4, '0')}</span>`].join('') : '';
   const account = loggedIn() ? '' : `<div class="card account-cta"><h2>Crée ton compte EuroKink</h2>
       <p class="muted">Retrouve tes favoris, rappels et sorties sur tous tes appareils, et fais valider tes badges.</p>
@@ -1635,6 +1715,7 @@ function viewProfile() {
         <span class="b-name">${esc(b.name)}</span><span class="b-bar"><span style="width:${Math.round((100 * b.progress) / b.goal)}%"></span></span></button>`).join('')}</div>
     <div class="card badge-detail"><strong>${esc(sel.name)}</strong> <span class="accent">${sel.earned ? '· obtenu' : `· ${sel.progress} / ${sel.goal}`}</span><p class="muted">${esc(sel.description)}</p></div>
     ${loggedIn() ? `<div class="practical flat">
+      ${donateLine()}
       <a class="line-btn" href="#/membre/${profile.id}">${I.user}<span>Ma fiche membre<span class="muted tiny block">${profile.bio || (profile.interests || []).length ? 'Présentation et centres d’intérêt' : 'Ajoute une présentation et tes centres d’intérêt'}</span></span>${I.chevron}</a>
       ${isOrganizer() ? `<a class="line-btn" href="#/orga">${I.sliders}<span>Espace organisateur</span>${I.chevron}</a>`
         : orgStatus && orgStatus.request && orgStatus.request.status === 'pending' ? `<a class="line-btn" href="#/devenir-organisateur">${I.sliders}<span>Devenir organisateur<span class="muted tiny block">Demande en cours d’examen</span></span>${I.chevron}</a>`
@@ -1708,6 +1789,7 @@ function viewSettings() {
 
     ${group(I.doc, 'Aide et informations')}
     <div class="practical">
+      ${donateLine()}
       ${CONTACT_EMAIL ? `<a class="line-btn" href="mailto:${CONTACT_EMAIL}">${I.mail}<span>Nous contacter<span class="muted tiny block">${esc(CONTACT_EMAIL)}</span></span>${I.chevron}</a>` : ''}
       ${info('charte', 'Charte de la communauté')}
       ${info('cgu', 'Conditions générales d’utilisation')}
@@ -2419,7 +2501,7 @@ function viewAdmin() {
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : adminTab === 'robot' ? viewRobot()
-    : adminTab === 'stats' ? viewStats()
+    : adminTab === 'stats' ? viewStats() + donateAdmin()
     : adminTab === 'members' ? viewAdmMembers()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
@@ -3072,6 +3154,7 @@ function render() {
     case 'jeu': if (playable().length) { html = viewGame(param); active = playable().includes(param) ? null : '#/communaute'; } else { html = viewCommunity('map'); active = '#/communaute'; } break;
     case 'messages': html = param ? viewThread(param) : viewMessages(); active = param ? null : '#/communaute'; break;
     case 'invitation': html = viewInvitation(param); active = null; break;
+    case 'merci': html = viewThanks(); active = '#/profil'; break;
     case 'ma-fiche': html = viewEditMember(); active = '#/profil'; break;
     case 'profil': html = viewProfile(); active = '#/profil'; break;
     case 'parametres': html = viewSettings(); active = '#/profil'; break;
@@ -3281,6 +3364,9 @@ document.addEventListener('click', (ev) => {
     case 'install-help': installHelp(); break;
     case 'install-close': try { localStorage.setItem('ek.installHide', '1'); } catch (e) { /* */ } render(); break;
     case 'game-promo-close': gamePromoDone(); render(); break;
+    case 'donate': donateSheet(); break;
+    case 'donate-close': try { localStorage.setItem(DONATE_KEY, String(Date.now())); } catch (e) { /* stockage indisponible */ } render(); break;
+    case 'donate-save': donateSave(act); break;
     case 'early-close': try { localStorage.setItem(EARLY_KEY, '1'); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'news-close': try { localStorage.setItem(NEWS_KEY, NEWS[0].v); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'msg-tab': msgTab = act.dataset.tab; render(); break;

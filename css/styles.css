@@ -752,3 +752,13 @@ body.kb .sys-note { padding-bottom: 12px; }
 
 .rc-photo { width: 100%; max-height: 50vh; object-fit: contain; border-radius: 14px; background: #000; }
 .rc-msgs { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; padding: 6px 0; }
+
+/* Dons */
+.donate-line > svg:first-child, .donate-card .msg-card-ic svg { color: var(--red-text); }
+.donate-opts { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.donate-opt { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: inherit; text-decoration: none; }
+.donate-opt > svg:first-child { width: 22px; height: 22px; color: var(--red-text); flex: none; }
+.donate-opt > span { flex: 1; }
+.donate-opt > svg:last-child { width: 18px; height: 18px; color: var(--muted); }
+.pill-red svg { width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px; }
+.thanks-heart svg { width: 56px; height: 56px; color: var(--red); margin: 6px auto 10px; display: block; }
