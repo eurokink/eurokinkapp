@@ -199,6 +199,29 @@ def story_stat(big, fr, en, sub_fr, sub_en, kicker='LA COMMUNAUTÉ · COMMUNITY'
     footer(img, d)
     return img
 
+STYLES = [('🧥', 'Cuir'), ('✨', 'Latex'), ('🐶', 'Puppy'), ('⚙️', 'Gear'), ('🎯', 'Tactique'), ('👟', 'Sportswear'),
+          ('💈', 'Skin'), ('👟', 'Sneakers'), ('👮', 'Uniforme'), ('🪖', 'Militaire'), ('🦺', 'Workwear'), ('🧣', 'Puffer'),
+          ('🏍️', 'Biker'), ('🐻', 'Bears')]
+
+def story_styles():
+    img, d = base('TOUS LES STYLES · EVERY STYLE')
+    y = text_block(d, 'Quel que soit ton style.', BLACK(96), 480, TXT)
+    y = text_block(d, 'Whatever your style.', SEMI(46), y + 4, MUTED) + 40
+    x = 90
+    f = BOLD(38)
+    for em, lab in STYLES:
+        w = int(d.textlength(lab, font=f)) + 100
+        if x + w > 990:
+            x = 90; y += 96
+        d.rounded_rectangle((x, y, x + w, y + 76), radius=38, fill=SURF, outline=BORDER, width=2)
+        emoji(img, em, x + 38, y + 38, 36)
+        d.text((x + 66, y + 38), lab, font=f, fill=TXT, anchor='lm')
+        x += w + 16
+    d.text((90, y + 120), 'Toutes les soirées sur EuroKink', font=BOLD(40), fill=RED_T)
+    d.text((90, y + 172), 'Every party on EuroKink', font=SEMI(34), fill=MUTED)
+    footer(img, d)
+    return img
+
 FEATURES = {
     'alerts': ('🎟️', 'Les billets sortent ? Tu le sais en premier.', 'Tickets drop? You know first.',
                'Mets une soirée en favori : rappel avant le jour\u00a0J et alerte dès que la billetterie ouvre.',
@@ -236,14 +259,14 @@ def plan(day, data):
     feat = ['going', 'passport', 'stay', 'privacy', 'messages', 'alerts', 'memory'][wd]
     s2 = story_feature(*FEATURES[feat], kicker=('MINI-JEU · MINI-GAME' if feat == 'memory' else 'DANS L’APPLI · IN THE APP'))
     third = {
-        0: lambda: story_quiz('Ton style ?', 'Your style?', [('👟', 'Sportswear'), ('🐶', 'Pup'), ('🪖', 'Uniforme'), ('🏍️', 'Cuir')]),
+        0: lambda: story_quiz('Ton style ?', 'Your style?', [('🐶', 'Puppy'), ('🎯', 'Gear / Tactique'), ('👟', 'Sportswear'), ('💈', 'Skin')]),
         1: lambda: story_stat(str(data['countries']), 'pays couverts', 'countries covered',
                               'De Paris à Varsovie, toutes les soirées au même endroit.', 'From Paris to Warsaw, every party in one place.',
                               kicker='TOUTE L’EUROPE · ALL OF EUROPE'),
         2: lambda: story_quiz('Ta prochaine destination ?', 'Your next trip?', [('🌴', 'Nice'), ('🗼', 'Paris'), ('🍺', 'Cologne'), ('🐻', 'Berlin')]),
-        3: lambda: story_feature(*FEATURES['memory'], kicker='MINI-JEU · MINI-GAME'),
+        3: lambda: story_styles(),
         4: lambda: story_quiz('Bottes ou baskets ?', 'Boots or sneakers?', [('🥾', 'Bottes · Boots'), ('👟', 'Baskets · Sneakers'), ('🤷', 'Les deux · Both')]),
-        5: lambda: story_quiz('Cuir ou latex ?', 'Leather or rubber?', [('🖤', 'Cuir · Leather'), ('✨', 'Latex · Rubber'), ('🔥', 'Les deux · Both')]),
+        5: lambda: story_quiz('Ce soir, tu sors en…', 'Tonight you’re wearing…', [('🐶', 'Puppy'), ('🎯', 'Tactique · Tactical'), ('👮', 'Uniforme · Uniform'), ('🧥', 'Cuir · Leather')]),
         6: lambda: story_stat(f'{n}', 'membres dès la 1re semaine', 'members in week one',
                               'Merci ! Invite tes potes : plus on est, plus l’agenda est complet.', 'Thank you! Invite your mates: the more we are, the fuller the agenda.'),
     }[wd]
