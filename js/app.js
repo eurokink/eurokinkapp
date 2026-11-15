@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.42.2';
+const VERSION = '0.42.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -505,6 +505,8 @@ document.addEventListener('visibilitychange', presenceTick);
 const nbsp = (s) => String(s || '').replace(/ ([?!:;»])/g, '\u00a0$1').replace(/« /g, '«\u00a0');
 // Compte système « EuroKink » (messages automatiques, sans réponse possible)
 const SYSTEM_ID = 'e0e0e0e0-0000-4000-8000-000000000001';
+const OWNER_ID = '42907178-7fbe-4143-b3f0-50c8512c1fa7'; // fondateur (membre n° 1) : compte protégé
+const isOwner = () => !!profile && profile.id === OWNER_ID;
 const memberAv = (m, cls = '') => m && m.id === SYSTEM_ID ? `<span class="mini-av sys-av ${cls}"><img src="icons/icon-192.png" alt=""></span>` : `<span class="mini-av ${cls}${isOnline(m) ? ' is-online' : ''}">${m.avatar_path ? `<img src="${esc(sb.publicUrl('avatars', m.avatar_path))}" alt="" loading="lazy">` : esc((m.pseudo || '?').charAt(0).toUpperCase())}</span>`;
 
 const commSeg = (mode) => `<div class="seg" role="tablist" aria-label="Affichage">
@@ -1380,8 +1382,8 @@ function viewMember(id) {
       : `<a class="btn btn-red btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
-        ${(isAdmin() || isOrganizer()) && m.id !== SYSTEM_ID ? `<button class="btn btn-ghost btn-block" data-act="org-invite-member" data-id="${m.id}" data-pseudo="${esc(m.pseudo)}">${I.users}<span>Inviter à rejoindre une organisation</span></button>` : ''}
-        ${isAdmin() ? `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Administration</span></button>`
+        ${(isAdmin() || isOrganizer()) && m.id !== SYSTEM_ID && m.id !== OWNER_ID ? `<button class="btn btn-ghost btn-block" data-act="org-invite-member" data-id="${m.id}" data-pseudo="${esc(m.pseudo)}">${I.users}<span>Inviter à rejoindre une organisation</span></button>` : ''}
+        ${isAdmin() && (m.id !== OWNER_ID || isOwner()) ? `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Administration</span></button>`
           : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}`}
   </section>`;
 }
@@ -1430,9 +1432,9 @@ function admAccountHtml(a, mine) {
       <p class="tiny muted">${a.email_confirmed ? 'Adresse e-mail confirmée' : 'Adresse e-mail pas encore confirmée'} · <span>Connexion par ${prov || 'e-mail'}</span>${a.last_sign_in_at ? ` · <span>dernière connexion le ${fDate.format(new Date(a.last_sign_in_at))}</span>` : ''}</p>
       ${a.email_confirmed ? '' : `<div class="adm-actions"><button class="btn btn-red" data-adm="confirm">Confirmer l’adresse</button><button class="btn btn-ghost" data-adm="resend">Renvoyer l’e-mail</button></div>`}
 </div>
-    <div class="mod-sec"><strong>${I.shield || I.lock} Rôle : ${a.role === 'admin' ? 'administrateur' : 'membre'}</strong>
-      <p class="muted tiny">Un administrateur a accès à l’espace admin et peut tout faire dans l’appli.</p>
-      <button class="btn btn-ghost btn-block${a.role === 'admin' ? ' danger-text' : ''}" data-adm="role" data-on="${a.role === 'admin' ? '' : '1'}">${a.role === 'admin' ? (mine ? 'Retirer mon rôle d’administrateur' : 'Retirer le rôle d’administrateur') : 'Rendre administrateur'}</button></div>
+    <div class="mod-sec"><strong>${I.shield || I.lock} Rôle : ${a.id === OWNER_ID ? 'fondateur' : a.role === 'admin' ? 'administrateur' : 'membre'}</strong>
+      <p class="muted tiny">${a.id === OWNER_ID ? 'Compte protégé : personne d’autre que toi ne peut agir dessus.' : isOwner() ? 'Un administrateur a accès à l’espace admin et peut tout faire dans l’appli, sauf agir sur ton compte et nommer d’autres admins.' : 'Seul le fondateur peut nommer ou retirer un administrateur.'}</p>
+      ${a.id === OWNER_ID || !isOwner() ? '' : `<button class="btn btn-ghost btn-block${a.role === 'admin' ? ' danger-text' : ''}" data-adm="role" data-on="${a.role === 'admin' ? '' : '1'}">${a.role === 'admin' ? 'Retirer le rôle d’administrateur' : 'Rendre administrateur'}</button>`}</div>
     <div class="mod-sec"><strong>${I.users} Organisations gérées</strong>
       ${a.orgs.length ? a.orgs.map((o) => `<div class="adm-org-row">${orgLogo({ name: o.name, logo: o.logo_path }, 'sm')}<a href="#/orga/${o.id}" class="aor-name">${esc(o.name)}</a><button class="btn btn-ghost btn-sm" data-adm="org-remove" data-org="${o.id}" data-name="${esc(o.name)}">Retirer</button></div>`).join('') : '<p class="muted tiny">Aucune.</p>'}
       <button class="btn btn-ghost btn-block" data-adm="org-add">${I.plus}<span>Ajouter à une organisation</span></button></div>`;
@@ -1444,6 +1446,10 @@ function moderateMember(id) {
   const mine = profile && id === profile.id;
   const susp = m.suspended_until && new Date(m.suspended_until) > new Date();
   let acc = null;
+  if (id === OWNER_ID && !isOwner()) {
+    sheet(`<h2>Administration · ${esc(m.pseudo)}</h2><p class="muted">Compte du fondateur d’EuroKink : il est protégé, personne d’autre que lui ne peut agir dessus.</p><button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>`);
+    return;
+  }
   const el = sheet(`<h2>Administration · ${esc(m.pseudo)}</h2>
     <div id="admAcc"><div class="loading"><div class="spinner" aria-hidden="true"></div></div></div>
     ${mine ? '<button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>' : `<div class="mod-sec"><strong>${I.bell} Envoyer un avertissement</strong>
