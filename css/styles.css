@@ -556,6 +556,8 @@ body.kb .msg-request { margin-bottom: 10px; }
 .msg-card { display: flex; align-items: center; gap: 12px; padding: 14px; color: inherit; text-decoration: none; margin: 4px 0 2px; }
 .msg-card .mr-main { flex: 1; min-width: 0; }
 .msg-card .tiny { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-card .tiny.wrap { white-space: normal; }
+.msg-card-comm { margin: 0 0 10px; border-color: rgba(208, 20, 44, .45); background: linear-gradient(135deg, rgba(208, 20, 44, .16), var(--surface) 70%); }
 .msg-card-ic { width: 44px; height: 44px; border-radius: 50%; background: var(--red-tint); color: var(--red-text); display: flex; align-items: center; justify-content: center; flex: none; }
 .msg-card.hot { background: var(--red); border-color: var(--red); color: #fff; }
 .msg-card.hot .ic { color: #fff; }

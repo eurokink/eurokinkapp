@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.36.0';
+const VERSION = '0.37.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -517,6 +517,7 @@ function viewCommunity(mode) {
   if (mode === 'list' && !membersError) {
     return `<section class="screen">${top}
       <label class="search"><span>${I.search}</span><input id="mQ" type="search" placeholder="Pseudo, ville, centre d’intérêt…" value="${esc(memberQ)}" aria-label="Rechercher un membre"></label>
+      ${homeMsgCard('comm')}
       <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} · ${me}</span><span class="accent">Réglages</span></a>
       ${gameLink()}
       <div id="memberList" class="member-list big">${memberListHtml()}</div></section>`;
@@ -524,6 +525,7 @@ function viewCommunity(mode) {
   return `<section class="screen screen-map">
     ${top}
     ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
+    ${homeMsgCard('comm')}
     <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
     ${gameLink()}
     <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
@@ -814,6 +816,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.37', date: '2026-11-15',
+    fr: ['Messagerie plus visible dans Communauté : écris à n’importe quel membre, quand tu veux, même sans soirée en commun', 'Les badges obtenus s’affichent sur la fiche de chaque membre', 'Le badge Pionnier est réservé aux 100 premiers membres'],
+    en: ['Messages are easier to find in Community: write to any member, any time, even without a party in common', 'Earned badges now show on every member’s profile', 'The Pioneer badge is reserved for the first 100 members'],
+    de: ['Nachrichten sind unter Community besser sichtbar: Schreib jedem Mitglied, wann du willst, auch ohne gemeinsame Party', 'Erhaltene Abzeichen erscheinen jetzt im Profil jedes Mitglieds', 'Das Pionier-Abzeichen gibt es nur für die ersten 100 Mitglieder'] },
   { v: '0.35', date: '2026-11-13',
     fr: ['Nouveau mini-jeu : MemoryKink, dans Communauté. Retrouve les paires le plus vite possible !', 'Défi de la semaine : le meilleur score gagne le badge 🏆 Champion de la semaine, remis en jeu chaque lundi', 'Cartes : le nom des pays s’affiche quand tu dézoomes', 'Fiche soirée : le prix est affiché à côté du titre'],
     en: ['New mini game: MemoryKink, in Community. Find the pairs as fast as you can!', 'Weekly challenge: the best score wins the 🏆 Champion of the week badge, up for grabs every Monday', 'Maps: country names appear when you zoom out', 'Event page: the price is shown next to the title'],
@@ -946,13 +952,17 @@ function newsSheet() {
 }
 
 // Encart « Messages » de l'accueil : bien visible quand il y a du nouveau
-function homeMsgCard() {
+function homeMsgCard(where = 'home') {
   if (!loggedIn()) return '';
-  if (!convs || Date.now() - convsAt > 30000) loadConvs().then(() => { if ((location.hash || '#/') === '#/' || location.hash === '') render(); });
+  if (!convs || Date.now() - convsAt > 30000) loadConvs().then(() => { const h = location.hash || '#/'; if (h === '#/' || h.startsWith('#/communaute')) render(); });
   const fresh = (convs || []).filter((c) => Number(c.unread) > 0 && !c.blocked && c.status !== 'declined');
   if (!fresh.length) {
+    if (where === 'comm') {
+      return `<a class="card msg-card msg-card-comm" href="#/messages"><span class="msg-card-ic">${I.chat}</span>
+        <div class="mr-main"><strong>Messagerie</strong><div class="muted tiny wrap">Écris à n’importe quel membre, quand tu veux, même sans soirée en commun.</div></div>${I.chevron}</a>`;
+    }
     return `<a class="card msg-card" href="#/messages"><span class="msg-card-ic">${I.chat}</span>
-      <div class="mr-main"><strong>Messages</strong><div class="muted tiny">Discute avec les membres qui vont aux mêmes soirées que toi</div></div>${I.chevron}</a>`;
+      <div class="mr-main"><strong>Messages</strong><div class="muted tiny">Écris à n’importe quel membre, quand tu veux</div></div>${I.chevron}</a>`;
   }
   const n = fresh.reduce((k, c) => k + Number(c.unread), 0);
   const c0 = fresh[0];
