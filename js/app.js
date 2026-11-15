@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.42.1';
+const VERSION = '0.42.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -986,6 +986,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.42.2', date: '2026-11-15',
+    fr: ['Tu peux changer ton pseudo dans « Modifier ma fiche »'],
+    en: ['You can change your username in “Edit my profile”'],
+    de: ['Du kannst deinen Benutzernamen unter „Mein Profil bearbeiten“ ändern'] },
   { v: '0.42', date: '2026-11-15',
     fr: ['Gestionnaires : chacun peut quitter une organisation depuis l’équipe'],
     en: ['Managers: anyone can leave an organisation from the team section'],
@@ -1387,6 +1391,7 @@ function viewEditMember() {
   const sel = new Set(profile.interests || []);
   return `<section class="screen"><div class="sub-top"><a class="icon-btn" href="#/membre/${profile.id}" aria-label="Retour">${I.back}</a><h1 class="page-title small">Ma fiche membre</h1></div>
     <form id="memberForm" class="card settings">
+      <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" value="${esc(profile.pseudo)}" autocomplete="off"><span class="hint">3 à 30 caractères, visible par la communauté.</span></label>
       <label class="field">Présentation<textarea name="bio" maxlength="500" rows="5" placeholder="Quelques mots sur toi, tes soirées préférées, ce que tu recherches comme sorties…">${esc(profile.bio || '')}</textarea><span class="hint"><span id="bioCount">${(profile.bio || '').length}</span> / 500 · Pas de contenu explicite ni de coordonnées personnelles.</span></label>
       <div class="field"><span>Centres d’intérêt <span class="muted tiny">(8 maximum)</span></span>
         <div class="chips wrap" id="intChips">${EVENT_TYPES.map((t) => `<button type="button" class="chip ${sel.has(t.slug) ? 'on' : ''}" data-act="interest" data-type="${t.slug}" aria-pressed="${sel.has(t.slug)}">${esc(t.name)}</button>`).join('')}</div></div>
@@ -1399,10 +1404,18 @@ async function saveMemberForm(form) {
   const btn = form.querySelector('button[type=submit]');
   const bio = String(new FormData(form).get('bio') || '').trim().slice(0, 500) || null;
   const interests = [...form.querySelectorAll('[data-act=interest].on')].map((b) => b.dataset.type).slice(0, 8);
+  const pseudo = String(new FormData(form).get('pseudo') || '').trim().replace(/\s+/g, ' ');
+  if (pseudo.length < 3 || pseudo.length > 30) return formError(form, 'Ton pseudo doit faire entre 3 et 30 caractères.');
+  const patch = { bio, interests };
   btn.disabled = true;
   try {
-    const rows = await updateMyProfile({ bio, interests });
-    profile = (rows && rows[0]) || { ...profile, bio, interests };
+    if (pseudo !== profile.pseudo) {
+      if (pseudo.toLowerCase() !== String(profile.pseudo).toLowerCase() && !(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris ou réservé, choisis-en un autre.');
+      patch.pseudo = pseudo;
+    }
+    const rows = await updateMyProfile(patch);
+    profile = (rows && rows[0]) || { ...profile, ...patch };
+    memberCache.delete(profile.id);
     membersAt = 0;
     toast('Fiche enregistrée');
     navigate(`#/membre/${profile.id}`);
@@ -1643,10 +1656,9 @@ function viewSettings() {
     <form id="settingsForm" class="settings-groups">
       ${group(I.user, 'Mon profil')}
       <div class="card settings">
-        <label class="field">Pseudo<input name="pseudo" maxlength="30" minlength="3" value="${esc(profile.pseudo)}" autocomplete="off"></label>
         ${cityField('Ma ville', 'Pour les soirées proches de chez toi et la carte des membres. Seule la ville est utilisée, jamais ton adresse.')}
         <label class="field">Rayon de recherche par défaut<select name="defaultRadius">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']], state.defaultRadius)}</select></label>
-        <a class="line-btn inset" href="#/membre/${profile.id}">${I.user}<span>Ma fiche membre<span class="muted tiny block">Présentation et centres d’intérêt</span></span>${I.chevron}</a>
+        <a class="line-btn inset" href="#/membre/${profile.id}">${I.user}<span>Ma fiche membre<span class="muted tiny block">Pseudo, présentation et centres d’intérêt</span></span>${I.chevron}</a>
       </div>
 
       ${group(I.bell, 'Notifications')}
