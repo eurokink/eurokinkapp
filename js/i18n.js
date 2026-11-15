@@ -206,6 +206,7 @@ const T = {
   'Ex. 12 rue de la Paix, Nantes': ['E.g. 12 High Street, London', 'z. B. Hauptstraße 12, Berlin'],
   'Explorateur': ['Explorer', 'Entdecker'],
   'Explorer': ['Explore', 'Entdecken'],
+  'Events': ['Events', 'Events'],
   'Exporter mes données': ['Export my data', 'Meine Daten exportieren'],
   'Faux profil': ['Fake profile', 'Fake-Profil'],
   'Favori': ['Favourite', 'Favorit'],
@@ -730,6 +731,7 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^(\d+) messages?$/, (m) => [`${m[1]} ${P(m[1], 'message', 'messages')}`, `${m[1]} ${P(m[1], 'Nachricht', 'Nachrichten')}`]],
   [/^(\d+) soirées? trouvées?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} found`, `${m[1]} ${P(m[1], 'Party', 'Partys')} gefunden`]],
   [/^(\d+) soirées? sur la carte(?: · (\d+) filtres? actifs?)?$/, (m) => [`${m[1]} ${P(m[1], 'event', 'events')} on the map${m[2] ? ` · ${m[2]} ${P(m[2], 'filter', 'filters')} on` : ''}`, `${m[1]} ${P(m[1], 'Party', 'Partys')} auf der Karte${m[2] ? ` · ${m[2]} Filter aktiv` : ''}`]],
   [/^(\d+) participants?$/, (m) => [`${m[1]} going`, `${m[1]} ${P(m[1], 'Teilnehmer', 'Teilnehmer')}`]],

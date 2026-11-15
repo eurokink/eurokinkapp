@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.37.1';
+const VERSION = '0.38.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -302,7 +302,7 @@ function viewExplorer() {
   const radii = [[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [0, 'Partout']];
   const periods = [['weekend', 'Ce week-end'], ['week', '7 jours'], ['month', '30 jours'], ['all', 'Toutes les dates']];
   return `<section class="screen">
-    <div class="explore-top"><h1 class="page-title">Explorer</h1>${segmented('list')}</div>
+    <div class="explore-top"><h1 class="page-title">Events</h1>${segmented('list')}</div>
     <label class="search"><span>${I.search}</span><input id="fQ" type="search" placeholder="Ville, soirée, organisateur…" value="${esc(filters.q)}" aria-label="Rechercher"></label>
     <div class="grid2">
       <label class="select-card"><span class="sc-label">${I.pin} Autour de</span><select id="fCity">${cityOpts}</select></label>
@@ -505,6 +505,16 @@ function initGame(key) {
   if (key === 'memory') gamePromoDone();
   gameCleanup = GAMES[key].mount($('#gameRoot'), { loadBoard: () => sb.rpc('game_board', { p_game: key }), submit: (score) => sb.rpc('game_submit', { p_game: key, p_score: score }) });
 }
+// Communauté, vue carte : messagerie et mini-jeu sur une seule ligne pour laisser toute la place à la carte
+function commActions() {
+  if (!convs || Date.now() - convsAt > 30000) loadConvs().then(() => { if ((location.hash || '').startsWith('#/communaute')) render(); });
+  const unread = (convs || []).filter((c) => Number(c.unread) > 0 && !c.blocked && c.status !== 'declined').reduce((k, c) => k + Number(c.unread), 0);
+  const games = playable();
+  return `<div class="comm-actions">
+    <a class="map-summary comm-act${unread ? ' hot' : ''}" href="#/messages">${I.chat}<span>${unread ? `${unread} message${unread > 1 ? 's' : ''}` : 'Messagerie'}</span></a>
+    ${games.length ? `<a class="map-summary comm-act" href="#/jeu${games.length > 1 ? '' : '/memory'}">${gameLogo('xs')}<span data-no-i18n>${GAMES.memory.title}</span></a>` : ''}
+  </div>`;
+}
 function viewCommunity(mode) {
   const top = `<div class="explore-top"><h1 class="page-title">Communauté</h1><div class="top-actions">${commSeg(mode)}</div></div>`;
   if (!membersError && (!members || Date.now() - membersAt > 120000)) {
@@ -518,18 +528,14 @@ function viewCommunity(mode) {
     return `<section class="screen">${top}
       <label class="search"><span>${I.search}</span><input id="mQ" type="search" placeholder="Pseudo, ville, centre d’intérêt…" value="${esc(memberQ)}" aria-label="Rechercher un membre"></label>
       ${homeMsgCard('comm')}
-      <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} · ${me}</span><span class="accent">Réglages</span></a>
       ${gameLink()}
       <div id="memberList" class="member-list big">${memberListHtml()}</div></section>`;
   }
   return `<section class="screen screen-map">
     ${top}
     ${membersError ? `<div class="card center-card"><p class="muted">${esc(membersError)}</p><button class="btn btn-red" data-act="members-retry">Réessayer</button></div>` : `
-    ${homeMsgCard('comm')}
-    <a class="map-summary" href="#/parametres">${I.users}<span>${n} membre${n > 1 ? 's' : ''} sur la carte · ${me}</span><span class="accent">Réglages</span></a>
-    ${gameLink()}
-    <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>
-    <p class="tiny muted center">Chaque membre apparaît sur la ville de son profil, jamais à son adresse.</p>`}
+    ${commActions()}
+    <div class="map-wrap"><div id="map" class="map"></div><div id="mapSheet" class="map-sheet" hidden></div></div>`}
   </section>`;
 }
 
@@ -816,6 +822,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.38', date: '2026-11-15',
+    fr: ['Communauté : la carte est maintenant aussi grande que celle des soirées', 'L’onglet Explorer s’appelle désormais Events'],
+    en: ['Community: the map is now as big as the events map', 'The Explore tab is now called Events'],
+    de: ['Community: Die Karte ist jetzt so groß wie die Party-Karte', 'Der Tab Entdecken heißt jetzt Events'] },
   { v: '0.37', date: '2026-11-15',
     fr: ['Messagerie plus visible dans Communauté : discute en illimité avec les membres d’EuroKink !', 'Les badges obtenus s’affichent sur la fiche de chaque membre', 'Le badge Pionnier est réservé aux 100 premiers membres'],
     en: ['Messages are easier to find in Community: chat without limits with EuroKink members!', 'Earned badges now show on every member’s profile', 'The Pioneer badge is reserved for the first 100 members'],
@@ -2718,7 +2728,7 @@ function viewMap() {
   const n = filtered({ ignoreRadius: true }).length;
   const active = filters.types.length + (filters.budget < 100 ? 1 : 0) + (filters.period !== 'all' ? 1 : 0) + (filters.noBooking ? 1 : 0) + (filters.cloakroom ? 1 : 0) + (filters.q ? 1 : 0);
   return `<section class="screen screen-map">
-    <div class="explore-top"><h1 class="page-title">Explorer</h1>${segmented('map')}</div>
+    <div class="explore-top"><h1 class="page-title">Events</h1>${segmented('map')}</div>
     <a class="map-summary" href="#/explorer">${I.sliders}<span>${n} soirée${n > 1 ? 's' : ''} sur la carte${active ? ` · ${active} filtre${active > 1 ? 's' : ''} actif${active > 1 ? 's' : ''}` : ''}</span><span class="accent">Filtres</span></a>
     <div class="map-wrap"><div id="map" class="map"></div>
       <div id="mapSheet" class="map-sheet" hidden></div></div>
@@ -2756,7 +2766,7 @@ function initMap() {
 // ---------------------------------------------------------------------------
 // Routeur
 // ---------------------------------------------------------------------------
-const NAV = [['#/', 'Accueil', I.home], ['#/explorer', 'Explorer', I.compass], ['#/favoris', 'Mes soirées', I.heart], ['#/communaute', 'Communauté', I.users], ['#/profil', 'Profil', I.user]];
+const NAV = [['#/', 'Accueil', I.home], ['#/explorer', 'Events', I.compass], ['#/favoris', 'Mes soirées', I.heart], ['#/communaute', 'Communauté', I.users], ['#/profil', 'Profil', I.user]];
 
 function render() {
   const view = $('#view');
