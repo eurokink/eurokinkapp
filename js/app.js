@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.42.0';
+const VERSION = '0.42.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -764,6 +764,28 @@ function inviteShare(orgId, token) {
   const send = el.querySelector('[data-inv-send]');
   if (send) send.addEventListener('click', () => navigator.share({ text: el.querySelector('#invMsg').value }).catch(() => {}));
 }
+// Signalement de profil en cours : photo du membre et conversation avec l'auteur du signalement
+async function reportContext(reportId) {
+  const el = sheet(`<div class="sheet-head"><h2>Signalement</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div><div id="rcBody"><div class="loading"><div class="spinner" aria-hidden="true"></div></div></div>`);
+  const fill = async () => {
+    let c;
+    try { c = await sb.rpc('admin_report_context', { p_report: reportId }); } catch (err) { el.querySelector('#rcBody').innerHTML = `<p class="form-error">${esc(err.message)}</p>`; return; }
+    const av = c.target.avatar_path ? sb.publicUrl('avatars', c.target.avatar_path) : '';
+    el.querySelector('#rcBody').innerHTML = `<div class="mod-sec"><strong>${I.image} Photo de ${esc(c.target.pseudo)}</strong>
+        ${av ? `<img class="rc-photo" src="${esc(av)}" alt=""><button class="btn btn-ghost btn-block danger-text" data-rc-photo>Retirer la photo</button>` : '<p class="muted tiny">Pas de photo.</p>'}</div>
+      <div class="mod-sec"><strong>${I.chat} Conversation avec ${esc(c.reporter || '?')}</strong>
+        <p class="muted tiny">Visible seulement pendant le traitement de ce signalement.</p>
+        ${c.messages.length ? `<div class="rc-msgs">${c.messages.map((m) => `<div class="msg ${m.mine ? 'them' : 'me'}"><div class="bubble" data-no-i18n>${esc(nbsp(m.body))}</div><span class="msg-time">${esc(m.mine ? c.target.pseudo : c.reporter || '')} · ${fDate.format(new Date(m.at))} ${fTime.format(new Date(m.at))}</span></div>`).join('')}</div>` : '<p class="muted tiny">Aucune conversation entre eux.</p>'}</div>`;
+    const b = el.querySelector('[data-rc-photo]');
+    if (b) b.addEventListener('click', async () => {
+      if (!confirm(t(`Retirer la photo de ${c.target.pseudo} ?`))) return;
+      b.disabled = true;
+      try { await sb.rpc('admin_report_remove_avatar', { p_report: reportId }); memberCache.delete(c.target.id); toast('Photo retirée'); fill(); } catch (err) { toast(err.message); b.disabled = false; }
+    });
+  };
+  fill();
+}
+
 async function teamRemove(btn) {
   const me = !!btn.dataset.me, org = btn.dataset.org;
   const name = (orgDash[org] && orgDash[org].organizer.name) || 'cette organisation';
@@ -1394,8 +1416,7 @@ function admAccountHtml(a, mine) {
       <p class="tiny"><span class="muted">E-mail :</span> <span data-no-i18n>${esc(a.email || '?')}</span> ${a.email ? `<button class="link" data-adm="copy-email">Copier</button>` : ''}</p>
       <p class="tiny muted">${a.email_confirmed ? 'Adresse e-mail confirmée' : 'Adresse e-mail pas encore confirmée'} · <span>Connexion par ${prov || 'e-mail'}</span>${a.last_sign_in_at ? ` · <span>dernière connexion le ${fDate.format(new Date(a.last_sign_in_at))}</span>` : ''}</p>
       ${a.email_confirmed ? '' : `<div class="adm-actions"><button class="btn btn-red" data-adm="confirm">Confirmer l’adresse</button><button class="btn btn-ghost" data-adm="resend">Renvoyer l’e-mail</button></div>`}
-      <label class="field">Pseudo<input id="admPseudo" maxlength="30" value="${esc(a.pseudo)}"></label>
-      <button class="btn btn-ghost btn-block" data-adm="pseudo">Changer le pseudo</button></div>
+</div>
     <div class="mod-sec"><strong>${I.shield || I.lock} Rôle : ${a.role === 'admin' ? 'administrateur' : 'membre'}</strong>
       <p class="muted tiny">Un administrateur a accès à l’espace admin et peut tout faire dans l’appli.</p>
       <button class="btn btn-ghost btn-block${a.role === 'admin' ? ' danger-text' : ''}" data-adm="role" data-on="${a.role === 'admin' ? '' : '1'}">${a.role === 'admin' ? (mine ? 'Retirer mon rôle d’administrateur' : 'Retirer le rôle d’administrateur') : 'Rendre administrateur'}</button></div>
@@ -1441,7 +1462,6 @@ function moderateMember(id) {
         a.disabled = true;
         if (what === 'confirm') { await sb.rpc('admin_confirm_email', { p_user: id }); toast('Adresse confirmée : le membre peut se connecter'); }
         else if (what === 'resend') { await sb.resendSignup(acc.email); toast('E-mail de validation renvoyé'); }
-        else if (what === 'pseudo') { await sb.rpc('admin_set_pseudo', { p_user: id, p_pseudo: el.querySelector('#admPseudo').value }); changed(); toast('Pseudo modifié'); if (mine) await loadProfile(); render(); }
         else if (what === 'role') {
           const on = !!a.dataset.on;
           if (!confirm(t(on ? `Rendre ${acc.pseudo} administrateur ? Il pourra tout faire dans l’appli.` : `Retirer le rôle d’administrateur à ${acc.pseudo} ?`))) { a.disabled = false; return; }
@@ -1499,7 +1519,7 @@ async function checkWarnings() {
 
 function reportMember(id) {
   const el = sheet(`<h2>Signaler ce profil</h2>
-    <p class="muted">Ton signalement est anonyme pour le membre concerné et sera examiné par l’équipe EuroKink.</p>
+    <p class="muted">Ton signalement est anonyme pour le membre concerné et sera examiné par l’équipe EuroKink. Pour le traiter, l’équipe pourra voir sa photo et lire ta conversation avec lui.</p>
     <div class="chips wrap" id="repReasons">${['Photo inappropriée', 'Propos choquants', 'Sollicitation sexuelle', 'Faux profil', 'Mineur', 'Autre'].map((r) => `<button type="button" class="chip" data-r="${r}">${r}</button>`).join('')}</div>
     <label class="field">Précisions (facultatif)<textarea id="repDetails" maxlength="1000" rows="3"></textarea></label>
     <div class="adm-actions"><button class="btn btn-red" data-rep-send disabled>Envoyer</button><button class="btn btn-ghost" data-sheet-close>Annuler</button></div>`);
@@ -2216,7 +2236,8 @@ function adminReportCard(r) {
     <div class="sub-head"><strong>${esc(r.reason)}</strong><span class="pill-grey">${r.target_type === 'event' ? 'Soirée' : r.target_type === 'profile' ? 'Profil' : 'Organisateur'}</span></div>
     <div class="muted tiny">par ${esc(r.reporter || 'membre supprimé')} · le ${fDate.format(new Date(r.created_at))}</div>
     ${r.details && r.details !== r.reason ? `<p class="adm-desc">${esc(r.details)}</p>` : ''}
-    ${r.target_type === 'profile' ? `<div class="adm-facts"><div>${I.user}<span>Profil signalé</span><a class="link" href="#/membre/${r.target_id}">Voir</a></div></div>` : ''}
+    ${r.target_type === 'profile' ? `<div class="adm-facts"><div>${I.user}<span>Profil signalé</span><a class="link" href="#/membre/${r.target_id}">Voir</a></div></div>
+      <button class="btn btn-ghost btn-block" data-act="adm-rep-ctx" data-id="${r.id}">Voir la photo et la conversation</button>` : ''}
     ${r.event_title ? `<div class="adm-facts"><div>${I.calendar}<span>${esc(r.event_title)}</span>${eventById(r.target_id) ? `<a class="link" href="#/soiree/${r.target_id}">Voir</a>` : ''}</div></div>` : ''}
     <div class="adm-actions"><button class="btn btn-red" data-act="adm-report" data-id="${r.id}">Traité</button><button class="btn btn-ghost" data-act="adm-report" data-id="${r.id}" data-dismiss="1">Ignorer</button></div>
   </article>`;
@@ -3221,6 +3242,7 @@ document.addEventListener('click', (ev) => {
     case 'moderate-member': moderateMember(act.dataset.id); break;
     case 'org-invite-member': orgInviteMember(act.dataset.id, act.dataset.pseudo); break;
     case 'team-remove': teamRemove(act); break;
+    case 'adm-rep-ctx': reportContext(act.dataset.id); break;
     case 'org-admin-save': orgAdminSave(act); break;
     case 'org-admin-delete': orgAdminDelete(act); break;
     case 'follow-member': toggleMemberFollow(act.dataset.id); break;
