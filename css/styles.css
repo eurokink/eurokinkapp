@@ -728,3 +728,12 @@ body.kb .sys-note { padding-bottom: 12px; }
 .org-pick.on { border-color: var(--red); }
 .org-pick.on .op-check { background: var(--red); border-color: var(--red); color: #fff; }
 .org-pick.on .op-check svg { opacity: 1; }
+/* Beaucoup de types : les étiquettes passent sous l'image pour ne cacher ni le logo ni la photo */
+.event-hero:has(.hero-tags.many) { height: auto; min-height: calc(240px + var(--safe-top)); flex-direction: column; justify-content: flex-start; padding-bottom: 14px; }
+.hero-tags.many { position: relative; left: auto; bottom: auto; margin: 0 18px; align-self: stretch; }
+.event-hero:has(.hero-tags.many) > .hero-logo { margin: 64px 0 16px; flex: none; }
+.event-hero:has(.hero-tags.many) > .hero-studs { position: absolute; top: calc(var(--safe-top) - 30px); left: 50%; transform: translateX(-50%); }
+.event-hero:has(.hero-tags.many):not(:has(> .hero-logo)) { padding-top: calc(var(--safe-top) + 190px); }
+.event-hero.has-img:has(.hero-tags.many) .hero-zoom { bottom: auto; top: calc(var(--safe-top) + 186px) !important; }
+.event-hero.has-img:has(.hero-tags.many) { padding-top: calc(254px + var(--safe-top)); }
+.event-hero.has-img:has(.hero-tags.many) .hero-img { height: calc(240px + var(--safe-top)); bottom: auto; }

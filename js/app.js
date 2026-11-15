@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.40.1';
+const VERSION = '0.40.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -377,7 +377,7 @@ function viewEvent(id) {
   const multiDay = new Date(e.endsAt).toDateString() !== new Date(e.startsAt).toDateString() && new Date(e.endsAt) - new Date(e.startsAt) > 24 * 3600000;
   const when = multiDay ? `Du ${fDate.format(new Date(e.startsAt))} au ${fDate.format(new Date(e.endsAt))}` : dayLabel(e.startsAt);
   const infos = [
-    ['Type', e.types.map(typeName).join(', ')], ['Dress code', DRESS[e.dressCode]],
+    ['Dress code', DRESS[e.dressCode]],
     ['Réservation', soon ? `${BOOKING[e.booking]} · billetterie pas encore ouverte` : salesClosed ? 'Billetterie fermée' : e.salesCloseAt ? `${BOOKING[e.booking]}, jusqu’au ${fDate.format(new Date(e.salesCloseAt))}` : BOOKING[e.booking]], ['Vestiaire', e.hasCloakroom == null ? 'Non précisé' : e.hasCloakroom ? (e.cloakroomPaid ? (e.cloakroomPrice ? `Oui, payant · ${priceLabel(e.cloakroomPrice, e.currency)}` : 'Oui, payant') : 'Oui, gratuit') : 'Non'],
     ['Fréquence', FREQ[e.frequency]], ['Langues', e.languages.join(', ')]
   ];
@@ -393,7 +393,7 @@ function viewEvent(id) {
     <div class="event-hero${e.image ? ' has-img' : ''}">${heroImg(e, true)}${e.image ? `<button class="icon-btn hero-btn hero-zoom" data-act="img-view" data-src="${esc(imgSrc(e.image))}" aria-label="Voir la photo en entier">${I.expand}</button>` : ''}${!e.image && e.organizer.logo ? `<img class="hero-logo" src="${esc(imgSrc(e.organizer.logo))}" alt="" referrerpolicy="no-referrer" data-err="remove">` : ''}<svg class="hero-studs${!e.image && e.organizer.logo ? ' hidden' : ''}" viewBox="0 0 120 120" aria-hidden="true"><g fill="currentColor">${studs(50, 3)}</g></svg>
       <button class="icon-btn hero-btn hero-left" data-act="back" aria-label="Retour">${I.back}</button>
       <button class="icon-btn hero-btn hero-right" data-act="share" aria-label="Partager">${I.share}</button>
-      <div class="hero-tags">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
+      <div class="hero-tags${e.types.length > 3 ? ' many' : ''}">${e.types.map((t) => `<span class="tag tag-red">${esc(typeName(t).toUpperCase())}</span>`).join('')}<span class="tag tag-dark">${FREQ[e.frequency]}</span>${e.soldOut ? '<span class="tag tag-light">Complet</span>' : ''}</div>
     </div>
     <div class="event-body">
       <div class="title-row"><h1 class="event-title">${esc(e.title)}</h1><span class="price-badge">${e.soldOut ? 'Complet' : evPrice(e)}</span></div>
