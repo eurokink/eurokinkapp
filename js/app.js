@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.41.0';
+const VERSION = '0.42.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -719,7 +719,7 @@ function teamBlock(o) {
   const open = t.invites.filter((i) => !i.used_at);
   return `<h2 class="group-title">Équipe</h2>
     <div class="card team">
-      <div class="team-list">${t.managers.map((m) => `<a class="member-row" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${profile && m.id === profile.id ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">Gestionnaire</div></div></a>`).join('') || '<p class="muted tiny">Aucun gestionnaire pour le moment.</p>'}</div>
+      <div class="team-list">${t.managers.map((m) => { const me = profile && m.id === profile.id; return `<div class="team-row"><a class="member-row" href="#/membre/${m.id}">${memberAv(m)}<div class="mr-main"><strong>${esc(m.pseudo)}</strong>${me ? ' <span class="muted tiny">(toi)</span>' : ''}<div class="muted tiny">Gestionnaire</div></div></a>${isAdmin() || me ? `<button class="btn btn-ghost btn-sm" data-act="team-remove" data-org="${o.id}" data-id="${m.id}" data-pseudo="${esc(m.pseudo)}" data-me="${me ? '1' : ''}">${me ? 'Quitter' : 'Retirer'}</button>` : ''}</div>`; }).join('') || '<p class="muted tiny">Aucun gestionnaire pour le moment.</p>'}</div>
       ${open.map((i) => `<div class="invite-row"><span class="mini-av inv">${I.mail}</span><div class="mr-main"><strong>${esc(i.note || 'Invitation')}</strong><div class="muted tiny">En attente · expire le ${fDate.format(new Date(i.expires_at))}</div></div>
         <button class="icon-btn small" data-act="invite-share" data-token="${i.token}" data-org="${o.id}" aria-label="Partager le lien">${I.share}</button>
         <button class="icon-btn small" data-act="invite-revoke" data-id="${i.id}" data-org="${o.id}" aria-label="Supprimer l’invitation">${I.trash}</button></div>`).join('')}
@@ -764,6 +764,60 @@ function inviteShare(orgId, token) {
   const send = el.querySelector('[data-inv-send]');
   if (send) send.addEventListener('click', () => navigator.share({ text: el.querySelector('#invMsg').value }).catch(() => {}));
 }
+async function teamRemove(btn) {
+  const me = !!btn.dataset.me, org = btn.dataset.org;
+  const name = (orgDash[org] && orgDash[org].organizer.name) || 'cette organisation';
+  if (!confirm(t(me ? `Quitter la gestion de ${name} ?` : `Retirer ${btn.dataset.pseudo} de la gestion de ${name} ?`))) return;
+  btn.disabled = true;
+  try {
+    await sb.rpc('org_remove_member', { p_org: org, p_user: btn.dataset.id });
+    toast(me ? 'Tu ne gères plus cette organisation' : 'Gestionnaire retiré');
+    delete orgTeam[org]; memberCache.delete(btn.dataset.id); adminMembers = null;
+    if (me) { orgStatus = null; Object.keys(orgDash).forEach((k) => delete orgDash[k]); await loadOrgStatus(); }
+    render();
+  } catch (err) { toast(err.message); btn.disabled = false; }
+}
+
+// Administration d'une organisation : nom, type, vérification, fusion, suppression
+function orgAdminBlock(o) {
+  if (!isAdmin()) return '';
+  const others = myOrgs().filter((x) => x.id !== o.id);
+  return `<h2 class="group-title">Administration</h2>
+    <div class="card settings org-admin">
+      <label class="field">Nom de l’organisation<input id="oaName" maxlength="80" value="${esc(o.name)}"></label>
+      <label class="field">Type${selectField('oaKind', Object.entries(ORG_KIND), o.kind || 'other')}</label>
+      <label class="checkline"><input type="checkbox" id="oaVerified" ${o.is_verified ? 'checked' : ''}><span>Organisateur vérifié (ses soirées sont publiées sans validation)</span></label>
+      <button class="btn btn-red btn-block" data-act="org-admin-save" data-id="${o.id}">Enregistrer</button>
+      <div class="mod-sec"><strong>${I.trash} Fusionner ou supprimer</strong>
+        <p class="muted tiny">La fusion déplace soirées, abonnés, gestionnaires et sources vers l’organisation choisie, puis supprime celle-ci. Sans fusion, la suppression n’est possible que si l’organisation n’a aucune soirée.</p>
+        <label class="field">Fusionner dans<select id="oaInto"><option value="">Ne pas fusionner, supprimer seulement</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
+        <button class="btn btn-ghost btn-block danger-text" data-act="org-admin-delete" data-id="${o.id}" data-name="${esc(o.name)}">Fusionner / supprimer l’organisation</button></div>
+    </div>`;
+}
+async function orgAdminSave(btn) {
+  const id = btn.dataset.id;
+  const name = $('#oaName').value.trim();
+  if (name.length < 2) { toast('Nom : 2 caractères minimum'); return; }
+  btn.disabled = true;
+  try {
+    await sb.update('organizers', `id=eq.${id}`, { name, kind: $('[name=oaKind]').value, is_verified: $('#oaVerified').checked });
+    toast('Organisation mise à jour');
+    orgStatus = null; delete orgDash[id]; delete orgPublic[id]; await loadOrgStatus(); refreshEvents(); render();
+  } catch (err) { toast(err.message); btn.disabled = false; }
+}
+async function orgAdminDelete(btn) {
+  const into = $('#oaInto').value, intoName = into ? $('#oaInto').selectedOptions[0].textContent : '';
+  const msg = into ? `Fusionner « ${btn.dataset.name} » dans « ${intoName} » ? « ${btn.dataset.name} » sera supprimée.` : `Supprimer définitivement « ${btn.dataset.name} » ?`;
+  if (!confirm(t(msg))) return;
+  btn.disabled = true;
+  try {
+    const r = await sb.rpc('admin_delete_organizer', { p_org: btn.dataset.id, p_into: into || null });
+    toast(into ? `Fusionnée : ${r.events} soirée(s) déplacée(s)` : 'Organisation supprimée');
+    orgStatus = null; Object.keys(orgDash).forEach((k) => delete orgDash[k]); delete orgPublic[btn.dataset.id]; currentOrgId = into || null;
+    await loadOrgStatus(); refreshEvents(); navigate(into ? `#/orga/${into}` : '#/orga');
+  } catch (err) { toast(err.message); btn.disabled = false; }
+}
+
 // Liens internes à l'appli dans les messages (ex. invitation) : ouverts dans l'appli
 const linkApp = (html) => html.replace(/https:\/\/eurokink\.eu\/#\/([\w\-/]+)/g, (u, path) => `<a class="msg-link" href="#/${path}">${u}</a>`);
 
@@ -781,7 +835,8 @@ async function orgInviteMember(userId, pseudo) {
   };
   el.querySelector('#oiBody').innerHTML = list.length ? `${list.length > 8 ? '<input class="input" id="oiFind" type="search" placeholder="Rechercher une organisation…">' : ''}
     <div class="org-pick-list">${list.map(row).join('')}</div>
-    <div class="adm-actions"><button class="btn btn-red" data-oi-send disabled>Envoyer l’invitation</button><button class="btn btn-ghost" data-sheet-close>Annuler</button></div>`
+    <div class="adm-actions"><button class="btn btn-red" data-oi-send disabled>Envoyer l’invitation</button>${isAdmin() ? '<button class="btn btn-ghost" data-oi-add disabled>Ajouter directement</button>' : '<button class="btn btn-ghost" data-sheet-close>Annuler</button>'}</div>
+    ${isAdmin() ? '<p class="tiny muted">« Ajouter directement » le rend gestionnaire tout de suite, sans lui demander son accord.</p>' : ''}`
     : '<p class="muted">Tu ne gères encore aucune organisation.</p>';
   const send = el.querySelector('[data-oi-send]');
   const find = el.querySelector('#oiFind');
@@ -791,7 +846,15 @@ async function orgInviteMember(userId, pseudo) {
     if (b && !b.disabled) {
       pick = pick === b.dataset.oi ? null : b.dataset.oi;
       el.querySelectorAll('[data-oi]').forEach((x) => x.classList.toggle('on', x.dataset.oi === pick));
-      send.disabled = !pick; return;
+      send.disabled = !pick; if (el.querySelector('[data-oi-add]')) el.querySelector('[data-oi-add]').disabled = !pick; return;
+    }
+    if (ev.target.closest('[data-oi-add]') && pick) {
+      try {
+        await sb.rpc('admin_add_org_member', { p_org: pick, p_user: userId });
+        closeOverlay(); Object.keys(orgTeam).forEach((k) => delete orgTeam[k]); memberCache.delete(userId); adminMembers = null; orgStatus = null;
+        toast(`${pseudo} gère maintenant ${list.find((o) => o.id === pick).name}`); render();
+      } catch (err) { toast(err.message); }
+      return;
     }
     if (ev.target.closest('[data-oi-send]') && pick) {
       send.disabled = true;
@@ -901,6 +964,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.42', date: '2026-11-15',
+    fr: ['Gestionnaires : chacun peut quitter une organisation depuis l’équipe'],
+    en: ['Managers: anyone can leave an organisation from the team section'],
+    de: ['Verwalter: jeder kann eine Organisation im Team-Bereich verlassen'] },
   { v: '0.41', date: '2026-11-15',
     fr: ['Gestionnaires d’organisation : invite un membre depuis son profil, il reçoit un message avec le lien'],
     en: ['Organisation managers: invite a member from their profile, they get a message with the link'],
@@ -1281,13 +1348,14 @@ function viewMember(id) {
       const evs = outingsCache.get(m.id).map(eventById).filter((x) => x && new Date(x.endsAt) > new Date()).sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
       return `<h2 class="section-title">${mine ? 'Mes prochaines sorties' : 'Ses prochaines sorties'}</h2>${evs.length ? `<div class="list">${evs.map(eventRow).join('')}</div>` : `<p class="muted">${mine ? 'Touche « J’y vais » sur une soirée pour l’afficher ici.' : 'Aucune sortie visible pour le moment.'}</p>`}`;
     })()}
+    ${mine && isAdmin() ? `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Administration</span></button>` : ''}
     ${mine ? `<a class="btn btn-red btn-block" href="#/ma-fiche">Modifier ma fiche</a>
       <p class="tiny muted center">${state.invisible ? 'Ton profil est invisible : personne d’autre ne voit cette fiche.' : 'Cette fiche est visible des membres connectés.'}</p>`
       : `<a class="btn btn-red btn-block" href="#/messages/u-${m.id}">${I.chat}<span>Écrire un message</span></a>
         <button class="btn btn-ghost btn-block" data-act="follow-member" data-id="${m.id}">${following.has(m.id) ? `${I.check}<span>Suivi</span>` : `${I.plus}<span>Suivre</span>`}</button>
         <p class="tiny muted center">${following.has(m.id) ? 'Si tu réserves tes sorties « aux membres que je suis », il pourra les voir.' : 'Les membres que tu suis peuvent voir tes sorties si tu les leur réserves (Paramètres).'}</p>
         ${(isAdmin() || isOrganizer()) && m.id !== SYSTEM_ID ? `<button class="btn btn-ghost btn-block" data-act="org-invite-member" data-id="${m.id}" data-pseudo="${esc(m.pseudo)}">${I.users}<span>Inviter à rejoindre une organisation</span></button>` : ''}
-        ${isAdmin() ? (m.role === 'admin' ? '' : `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Modération</span></button>`)
+        ${isAdmin() ? `<button class="btn btn-ghost btn-block mod-btn" data-act="moderate-member" data-id="${m.id}">${I.shield || I.lock}<span>Administration</span></button>`
           : `<button class="btn btn-ghost btn-block" data-act="report-member" data-id="${m.id}">${I.flag}<span>Signaler ce profil</span></button>`}`}
   </section>`;
 }
@@ -1320,12 +1388,31 @@ async function saveMemberForm(form) {
 }
 
 // Modération (admins) : avertissement, suspension, suppression définitive
+function admAccountHtml(a, mine) {
+  const prov = (a.providers || []).map((x) => (x === 'google' ? 'Google' : x === 'email' ? 'e-mail' : x)).join(', ');
+  return `<div class="mod-sec"><strong>${I.user} Compte</strong>
+      <p class="tiny"><span class="muted">E-mail :</span> <span data-no-i18n>${esc(a.email || '?')}</span> ${a.email ? `<button class="link" data-adm="copy-email">Copier</button>` : ''}</p>
+      <p class="tiny muted">${a.email_confirmed ? 'Adresse e-mail confirmée' : 'Adresse e-mail pas encore confirmée'} · <span>Connexion par ${prov || 'e-mail'}</span>${a.last_sign_in_at ? ` · <span>dernière connexion le ${fDate.format(new Date(a.last_sign_in_at))}</span>` : ''}</p>
+      ${a.email_confirmed ? '' : `<div class="adm-actions"><button class="btn btn-red" data-adm="confirm">Confirmer l’adresse</button><button class="btn btn-ghost" data-adm="resend">Renvoyer l’e-mail</button></div>`}
+      <label class="field">Pseudo<input id="admPseudo" maxlength="30" value="${esc(a.pseudo)}"></label>
+      <button class="btn btn-ghost btn-block" data-adm="pseudo">Changer le pseudo</button></div>
+    <div class="mod-sec"><strong>${I.shield || I.lock} Rôle : ${a.role === 'admin' ? 'administrateur' : 'membre'}</strong>
+      <p class="muted tiny">Un administrateur a accès à l’espace admin et peut tout faire dans l’appli.</p>
+      <button class="btn btn-ghost btn-block${a.role === 'admin' ? ' danger-text' : ''}" data-adm="role" data-on="${a.role === 'admin' ? '' : '1'}">${a.role === 'admin' ? (mine ? 'Retirer mon rôle d’administrateur' : 'Retirer le rôle d’administrateur') : 'Rendre administrateur'}</button></div>
+    <div class="mod-sec"><strong>${I.users} Organisations gérées</strong>
+      ${a.orgs.length ? a.orgs.map((o) => `<div class="adm-org-row">${orgLogo({ name: o.name, logo: o.logo_path }, 'sm')}<a href="#/orga/${o.id}" class="aor-name">${esc(o.name)}</a><button class="btn btn-ghost btn-sm" data-adm="org-remove" data-org="${o.id}" data-name="${esc(o.name)}">Retirer</button></div>`).join('') : '<p class="muted tiny">Aucune.</p>'}
+      <button class="btn btn-ghost btn-block" data-adm="org-add">${I.plus}<span>Ajouter à une organisation</span></button></div>`;
+}
+
 function moderateMember(id) {
-  const m = memberCache.get(id);
+  const m = memberCache.get(id) || (profile && profile.id === id ? profile : null);
   if (!m) return;
+  const mine = profile && id === profile.id;
   const susp = m.suspended_until && new Date(m.suspended_until) > new Date();
-  const el = sheet(`<h2>Modérer ${esc(m.pseudo)}</h2>
-    <div class="mod-sec"><strong>${I.bell} Envoyer un avertissement</strong>
+  let acc = null;
+  const el = sheet(`<h2>Administration · ${esc(m.pseudo)}</h2>
+    <div id="admAcc"><div class="loading"><div class="spinner" aria-hidden="true"></div></div></div>
+    ${mine ? '<button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>' : `<div class="mod-sec"><strong>${I.bell} Envoyer un avertissement</strong>
       <p class="muted tiny">Le membre le reçoit en notification et doit le lire à sa prochaine ouverture de l’appli.</p>
       <label class="field">Message<textarea id="modWarn" rows="3" maxlength="1000" placeholder="Ex. : merci de respecter la charte, les propos à caractère sexuel ne sont pas autorisés dans les messages."></textarea></label>
       <button class="btn btn-ghost btn-block" data-mod="warn">Envoyer l’avertissement</button></div>
@@ -1339,8 +1426,35 @@ function moderateMember(id) {
     <div class="mod-sec"><strong>${I.trash} Supprimer définitivement</strong>
       <p class="muted tiny">Le compte, le profil, les messages et l’historique du membre sont effacés. Action irréversible.</p>
       <button class="btn btn-red btn-block" data-mod="delete">Supprimer le compte de ${esc(m.pseudo)}</button></div>
-    <button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>`);
+    <button class="btn btn-ghost btn-block" data-sheet-close>Fermer</button>`}`);
+  const loadAcc = () => sb.rpc('admin_member_info', { p_user: id })
+    .then((a) => { acc = a; const box = el.querySelector('#admAcc'); if (box) box.innerHTML = a ? admAccountHtml(a, mine) : ''; })
+    .catch((err) => { const box = el.querySelector('#admAcc'); if (box) box.innerHTML = `<p class="form-error">${esc(err.message)}</p>`; });
+  loadAcc();
+  const changed = () => { memberCache.delete(id); adminMembers = null; orgStatus = null; Object.keys(orgTeam).forEach((k) => delete orgTeam[k]); };
   el.addEventListener('click', async (ev) => {
+    const a = ev.target.closest('[data-adm]');
+    if (a && acc) {
+      const what = a.dataset.adm;
+      try {
+        if (what === 'copy-email') { await navigator.clipboard.writeText(acc.email).catch(() => {}); toast('Adresse copiée'); return; }
+        a.disabled = true;
+        if (what === 'confirm') { await sb.rpc('admin_confirm_email', { p_user: id }); toast('Adresse confirmée : le membre peut se connecter'); }
+        else if (what === 'resend') { await sb.resendSignup(acc.email); toast('E-mail de validation renvoyé'); }
+        else if (what === 'pseudo') { await sb.rpc('admin_set_pseudo', { p_user: id, p_pseudo: el.querySelector('#admPseudo').value }); changed(); toast('Pseudo modifié'); if (mine) await loadProfile(); render(); }
+        else if (what === 'role') {
+          const on = !!a.dataset.on;
+          if (!confirm(t(on ? `Rendre ${acc.pseudo} administrateur ? Il pourra tout faire dans l’appli.` : `Retirer le rôle d’administrateur à ${acc.pseudo} ?`))) { a.disabled = false; return; }
+          await sb.rpc('admin_set_role', { p_user: id, p_admin: on }); changed(); toast(on ? 'Rôle administrateur donné' : 'Rôle administrateur retiré');
+          if (mine) { closeOverlay(); await loadProfile(); navigate('#/profil'); return; }
+        } else if (what === 'org-remove') {
+          if (!confirm(t(`Retirer ${acc.pseudo} de la gestion de ${a.dataset.name} ?`))) { a.disabled = false; return; }
+          await sb.rpc('org_remove_member', { p_org: a.dataset.org, p_user: id }); changed(); toast('Retiré de l’organisation');
+        } else if (what === 'org-add') { closeOverlay(); setTimeout(() => orgInviteMember(id, acc.pseudo), 150); return; }
+        await loadAcc();
+      } catch (err) { toast(err.message); a.disabled = false; }
+      return;
+    }
     const b = ev.target.closest('[data-mod]'); if (!b) return;
     const what = b.dataset.mod;
     try {
@@ -2713,7 +2827,7 @@ function viewOrga(param) {
       <label class="field">Ville<input name="city" maxlength="80" value="${esc(o.city || '')}"></label>
       <p class="form-error" id="formError" role="alert" hidden></p>
       <div class="adm-actions"><button class="btn btn-red" type="submit">Enregistrer</button><button class="btn btn-ghost" type="button" data-act="org-page-cancel">Annuler</button></div>
-      <p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p></form>` : '';
+      ${isAdmin() ? '' : '<p class="tiny muted">Pour changer le nom de l’organisation, écris-nous.</p>'}</form>` : '';
   const top = isAdmin() ? `<div class="sub-top"><a class="icon-btn" href="#/profil" aria-label="Retour">${I.back}</a><h1 class="page-title small">Espace organisateur</h1><button class="icon-btn top-plus" data-act="org-create" aria-label="Ajouter une organisation">${I.plus}</button></div>` : accountTopRaw('Espace organisateur', '#/profil');
   return `<section class="screen">${top}
     ${switcher}
@@ -2728,6 +2842,7 @@ function viewOrga(param) {
     ${past.length ? `<h2 class="group-title">Passées</h2>${past.map((e) => orgEventCard(e, true)).join('')}` : ''}
     <p class="tiny muted center">Vues : membres différents ayant ouvert la fiche. Les chiffres sont anonymes.</p>
     ${teamBlock(o)}
+    ${orgAdminBlock(o)}
   </section>`;
 }
 
@@ -3105,6 +3220,9 @@ document.addEventListener('click', (ev) => {
     case 'report-member': reportMember(act.dataset.id); break;
     case 'moderate-member': moderateMember(act.dataset.id); break;
     case 'org-invite-member': orgInviteMember(act.dataset.id, act.dataset.pseudo); break;
+    case 'team-remove': teamRemove(act); break;
+    case 'org-admin-save': orgAdminSave(act); break;
+    case 'org-admin-delete': orgAdminDelete(act); break;
     case 'follow-member': toggleMemberFollow(act.dataset.id); break;
     case 'invite-accept': acceptInvite(act); break;
     case 'invite-new': inviteNew(act.dataset.org); break;
@@ -3422,6 +3540,7 @@ function cropCircle(file, { size = 512, type = 'image/jpeg', title = 'Cadrer la 
 }
 // Mon profil complet (réglages compris) n'est lisible que par moi : lecture via une fonction dédiée
 const myProfile = () => sb.rpc('my_profile', {});
+const loadProfile = async () => { const p = await myProfile().catch(() => null); if (p) profile = p; };
 const updateMyProfile = async (patch) => { await sb.update('profiles', `id=eq.${profile.id}&select=id`, patch); const p = await myProfile(); return p ? [p] : []; };
 async function setAvatar(path) {
   const old = profile.avatar_path;

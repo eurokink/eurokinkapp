@@ -742,3 +742,10 @@ body.kb .sys-note { padding-bottom: 12px; }
 .org-pick[hidden] { display: none; }
 #oiFind { width: 100%; margin: 4px 0 8px; }
 .msg-link { color: inherit; text-decoration: underline; word-break: break-all; }
+
+.team-row { display: flex; align-items: center; gap: 10px; }
+.team-row .member-row { flex: 1; min-width: 0; }
+.btn-sm { min-height: 36px; padding: 6px 12px; font-size: 14px; width: auto; flex: none; }
+.adm-org-row { display: flex; align-items: center; gap: 10px; }
+.adm-org-row .aor-name { flex: 1; min-width: 0; font-weight: 600; color: inherit; overflow-wrap: anywhere; }
+.org-admin .mod-sec { margin-top: 6px; }
