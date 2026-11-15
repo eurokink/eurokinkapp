@@ -110,6 +110,22 @@ export const sendPasswordReset = (email) => request(`/auth/v1/recover?${redirect
 export const updatePassword = (password) => request('/auth/v1/user', { method: 'PUT', body: { password } });
 export const forgetSession = () => setSession(null);
 
+// Connexion avec un compte Google (ou autre fournisseur activé dans Supabase)
+let providersCache = null;
+export async function oauthProviders() {
+  if (providersCache) return providersCache;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } });
+    const d = r.ok ? await r.json() : {};
+    providersCache = d.external || {};
+  } catch (e) { providersCache = {}; }
+  return providersCache;
+}
+export function startOAuth(provider) {
+  try { sessionStorage.setItem('ek.oauth', provider); } catch (e) { /* stockage indisponible */ }
+  location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&${redirect}`;
+}
+
 // Retour depuis un lien reçu par e-mail (confirmation d'inscription, mot de passe oublié)
 export async function handleAuthRedirect() {
   const h = location.hash;
@@ -121,7 +137,9 @@ export async function handleAuthRedirect() {
   }
   setSession(sessionFrom({ access_token: p.get('access_token'), refresh_token: p.get('refresh_token'), expires_at: Number(p.get('expires_at')) || undefined, expires_in: p.get('expires_in') }));
   try { session.user = await request('/auth/v1/user'); setSession(session); } catch (e) { /* le profil sera chargé plus tard */ }
-  return { type: p.get('type') || 'signup' };
+  let oauth = null;
+  try { oauth = sessionStorage.getItem('ek.oauth'); sessionStorage.removeItem('ek.oauth'); } catch (e) { /* stockage indisponible */ }
+  return { type: oauth ? 'oauth' : (p.get('type') || 'signup') };
 }
 
 // --- Base de données (API REST de Supabase) ---------------------------------

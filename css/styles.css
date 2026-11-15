@@ -705,3 +705,8 @@ body.kb .sys-note { padding-bottom: 12px; }
 @media (prefers-reduced-motion: reduce) { .mem-in { transition: none; } }
 
 .game-promo { border-color: #5A1620; background: linear-gradient(145deg, #2A0B10, var(--surface)); }
+
+.btn-google { background: #fff; color: #1f1f1f; border-color: #dadce0; }
+.btn-google .g-logo { width: 20px; height: 20px; }
+.or-sep { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; margin: 2px 0; }
+.or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: var(--border); }

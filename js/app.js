@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.38.0';
+const VERSION = '0.39.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1655,6 +1655,19 @@ const pwField = (name, label, auto) => `<label class="field">${label}<span class
 const accountTop = (title, back = '#/profil') => (!loggedIn() && back === '#/profil' ? accountTopRaw(title, '#/') : accountTopRaw(title, back));
 const accountTopRaw = (title, back) => `<div class="sub-top"><a class="icon-btn" href="${back}" aria-label="Retour">${I.back}</a><h1 class="page-title small">${title}</h1></div>`;
 let lastSignupEmail = '';
+// Bouton « Continuer avec Google » : affiché seulement si le fournisseur est activé dans Supabase
+let googleOn = null;
+const GOOGLE_G = '<svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+function oauthBlock() {
+  if (googleOn === null) {
+    googleOn = false;
+    sb.oauthProviders().then((p) => { googleOn = !!p.google; if (googleOn && location.hash.startsWith('#/compte')) render(); });
+    return '';
+  }
+  if (!googleOn) return '';
+  return `<button class="btn btn-ghost btn-block btn-google" type="button" data-act="oauth-google">${GOOGLE_G}<span>Continuer avec Google</span></button>
+    <div class="or-sep"><span>ou</span></div>`;
+}
 
 function viewAccount(mode) {
   if (loggedIn() && ['connexion', 'inscription'].includes(mode)) return viewProfile();
@@ -1663,6 +1676,7 @@ function viewAccount(mode) {
       return `<section class="screen">${accountTop('Créer mon compte')}
         ${installCard(true)}
         <form id="signupForm" class="card settings" novalidate data-t0="${Date.now()}">
+          ${oauthBlock()}
           <label class="hp" aria-hidden="true">Site web<input name="ek_hp" tabindex="-1" autocomplete="off"></label>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"><span class="hint">Jamais affichée, sert uniquement à te connecter.</span></label>
@@ -1704,17 +1718,19 @@ function viewAccount(mode) {
     case 'profil':
       return `<section class="screen">${accountTop('Finaliser mon profil')}
         <form id="completeForm" class="card settings">
-          <p class="muted">Choisis ton pseudo pour terminer la création de ton compte.</p>
+          <p class="muted">Choisis ton pseudo et ta ville pour terminer la création de ton compte.</p>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off"></label>
           ${cityField('Ma ville', 'Tape le nom de ta ville ou ton code postal. Seule la ville est utilisée, jamais ton adresse.', true)}
           <label class="checkline"><input type="checkbox" name="adult" required><span>J’ai 18 ans ou plus.</span></label>
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
+          <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
           <button class="btn btn-red btn-block" type="submit">Terminer</button></form></section>`;
     default:
       return `<section class="screen">${accountTop('Connexion')}
         ${installCard(true)}
         <form id="loginForm" class="card settings">
+          ${oauthBlock()}
           <label class="field">Adresse e-mail<input name="email" type="email" required autocomplete="email" inputmode="email"></label>
           ${pwField('password', 'Mot de passe', 'current-password')}
           <p class="form-error" id="formError" role="alert" hidden></p>
@@ -3003,6 +3019,7 @@ document.addEventListener('click', (ev) => {
     case 'invite-revoke': inviteRevoke(act); break;
     case 'who-all': whoSheet(act.dataset.id); break;
     case 'news-open': newsSheet(); break;
+    case 'oauth-google': sb.startOAuth('google'); break;
     case 'resend-confirm':
       act.disabled = true;
       sb.resendSignup(lastSignupEmail).then(() => { toast('E-mail renvoyé. Pense à regarder dans les indésirables.'); act.textContent = 'E-mail renvoyé ✓'; })
@@ -3624,7 +3641,7 @@ async function submitAccountForm(form) {
       if (pseudo.length < 3) throw new Error('Choisis un pseudo de 3 caractères minimum.');
       if (!cityPicked(form) && !(await resolveTypedCity(form.querySelector('.city-field')))) throw new Error('Ville introuvable : vérifie l’orthographe ou tape ton code postal.');
       const city = readCity(form);
-      if (!f.get('adult') || !f.get('sensitive') || (form.id === 'signupForm' && !f.get('terms'))) throw new Error('Coche les cases de confirmation pour continuer.');
+      if (!f.get('adult') || !f.get('sensitive') || !f.get('terms')) throw new Error('Coche les cases de confirmation pour continuer.');
       if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris ou réservé, choisis-en un autre.');
       const now = new Date().toISOString();
       const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, country: city.country || 'FR', adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
@@ -3696,6 +3713,7 @@ startI18n();
   if (redirect) {
     if (redirect.error) toast(redirect.error);
     else if (redirect.type === 'recovery') navigate('#/compte/nouveau-mdp');
+    else if (redirect.type === 'oauth') { if (profile) { toast(`Content de te revoir, ${profile.pseudo} !`); navigate(afterLogin()); } else navigate('#/compte/profil'); }
     else navigate(profile ? '#/compte/confirme' : '#/compte/profil');
   }
 })();

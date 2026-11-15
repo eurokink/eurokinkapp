@@ -42,6 +42,7 @@ const FR = {
         <li>ton <strong>consentement explicite</strong> est demandé à l’inscription ;</li>
         <li>les données sont hébergées par Supabase à <strong>Paris</strong> (Union européenne), ce qui vaut aussi pour les membres des autres pays d’Europe : le Royaume-Uni et la Suisse, notamment, reconnaissent le niveau de protection de l’Union européenne ;</li>
         <li>seules sont collectées ton adresse e-mail (jamais affichée), ton pseudo, ta photo de profil si tu en ajoutes une, ta ville (commune et code postal, avec les coordonnées du centre de la commune), tes réglages, tes favoris, rappels, alertes, sorties et présences validées ; aucun nom réel n’est demandé ;</li>
+        <li>si tu te connectes avec Google, Google nous transmet ton adresse e-mail ainsi que le nom et la photo de ton compte Google : seule l’adresse e-mail est utilisée, pour te connecter ; le nom et la photo ne sont jamais affichés dans l’appli ;</li>
         <li>ton pseudo, ta photo et ta ville sont visibles des membres connectés, notamment sur la carte de la communauté ; l’option « Profil invisible » des paramètres te retire de la carte à tout moment ;</li>
         <li>tes données ne sont jamais vendues ni partagées à des fins publicitaires ;</li>
         <li>tu choisis qui voit tes sorties : tout le monde, les membres que tu suis, ou personne ;</li>
@@ -125,6 +126,7 @@ const EN = {
         <li>your <strong>explicit consent</strong> is requested when you sign up;</li>
         <li>data is hosted by Supabase in <strong>Paris</strong> (European Union), which also applies to members from other European countries: the United Kingdom and Switzerland, in particular, recognise the European Union’s level of protection;</li>
         <li>we only collect your email address (never displayed), your username, your profile photo if you add one, your city (town and postcode, with the coordinates of the town centre), your settings, favourites, reminders, alerts, outings and validated check-ins; no real name is asked for;</li>
+        <li>if you sign in with Google, Google sends us your email address and the name and photo of your Google account: only the email address is used, to sign you in; the name and photo are never shown in the app;</li>
         <li>your username, photo and city are visible to logged-in members, in particular on the community map; the “Invisible profile” option in the settings removes you from the map at any time;</li>
         <li>your data is never sold or shared for advertising purposes;</li>
         <li>you choose who sees your outings: everyone, the members you follow, or nobody;</li>
@@ -208,6 +210,7 @@ const DE = {
         <li>wird bei der Registrierung deine <strong>ausdrückliche Einwilligung</strong> eingeholt;</li>
         <li>werden die Daten von Supabase in <strong>Paris</strong> (Europäische Union) gespeichert, auch für Mitglieder aus anderen europäischen Ländern: Insbesondere das Vereinigte Königreich und die Schweiz erkennen das Schutzniveau der Europäischen Union an;</li>
         <li>erheben wir nur deine E-Mail-Adresse (nie angezeigt), deinen Nutzernamen, dein Profilfoto, falls du eines hinzufügst, deine Stadt (Gemeinde und Postleitzahl, mit den Koordinaten des Ortszentrums), deine Einstellungen, Favoriten, Erinnerungen, Hinweise, Ausgehpläne und bestätigten Check-ins; ein echter Name wird nicht verlangt;</li>
+        <li>wenn du dich mit Google anmeldest, übermittelt uns Google deine E-Mail-Adresse sowie Namen und Foto deines Google-Kontos: Nur die E-Mail-Adresse wird verwendet, um dich anzumelden; Name und Foto werden in der App nie angezeigt;</li>
         <li>sind dein Nutzername, dein Foto und deine Stadt für angemeldete Mitglieder sichtbar, insbesondere auf der Community-Karte; mit der Option „Unsichtbares Profil“ in den Einstellungen verschwindest du jederzeit von der Karte;</li>
         <li>werden deine Daten nie verkauft oder zu Werbezwecken weitergegeben;</li>
         <li>entscheidest du, wer deine Ausgehpläne sieht: alle, die Mitglieder, denen du folgst, oder niemand;</li>
