@@ -823,3 +823,9 @@ body.kb .sys-note { padding-bottom: 12px; }
 .claim-box p { margin: 8px 0 0; }
 .org-sug .org-logo { width: 32px; height: 32px; min-width: 32px; flex: none; border-radius: 50%; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; object-fit: cover; }
 .org-suggest { margin-top: 6px; }
+.org-socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.social-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; text-decoration: none; }
+.social-btn .ic { width: 18px; height: 18px; color: var(--red-text); }
+.org-public .org-socials { flex-direction: row; width: 100%; }
+.org-about { border-left: 3px solid var(--red); }
+.org-about p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text); white-space: pre-line; }

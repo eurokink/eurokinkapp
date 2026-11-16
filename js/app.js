@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.48.1';
+const VERSION = '0.49.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -169,6 +169,7 @@ const I = {
   flag: ic('<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>'),
   plus: ic('<path d="M12 5v14M5 12h14"/>'),
   star: ic('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
+  insta: ic('<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/>'),
   globe: ic('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>'),
   chat: ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'),
   send: ic('<path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/>'),
@@ -1004,7 +1005,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
-  { v: '0.48.1', date: '2026-11-16',
+  { v: '0.49', date: '2026-11-16',
+    fr: ['Pages des organisateurs : lien Instagram et présentation mise en valeur'],
+    en: ['Organiser pages: Instagram link and a highlighted introduction'],
+    de: ['Veranstalterseiten: Instagram-Link und hervorgehobene Vorstellung'] },
+  { v: '0.49.0', date: '2026-11-16',
     fr: ['Organisateurs : une soirée annulée peut maintenant être supprimée'],
     en: ['Organisers: a cancelled event can now be deleted'],
     de: ['Veranstalter: Eine abgesagte Party kann jetzt gelöscht werden'] },
@@ -1012,11 +1017,11 @@ const NEWS = [
     fr: ['À l’inscription, choisis si tu viens faire la fête ou organiser des soirées', 'Organisateurs : ton organisation est déjà dans l’agenda ? Reprends sa page existante et ses soirées'],
     en: ['When signing up, choose whether you’re here to party or to organise events', 'Organisers: already in the calendar? Take over your existing page and events'],
     de: ['Bei der Anmeldung wählst du, ob du feiern oder Partys veranstalten willst', 'Veranstalter: Schon im Kalender? Übernimm deine bestehende Seite mit deinen Partys'] },
-  { v: '0.48.1', date: '2026-11-16',
+  { v: '0.49.0', date: '2026-11-16',
     fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
     en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
     de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
-  { v: '0.48.1', date: '2026-11-16',
+  { v: '0.49.0', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -3156,6 +3161,7 @@ function viewOrga(param) {
       <label class="field">Ou lien vers le logo<input name="logo_path" type="url" inputmode="url" value="${o.logo && /^https:/i.test(o.logo) ? esc(o.logo) : ''}" placeholder="https://…"></label>
       <label class="field">Présentation<textarea name="description" rows="5" maxlength="2000" placeholder="Qui vous êtes, l’esprit de vos soirées…">${esc(o.description || '')}</textarea></label>
       <label class="field">Site internet<input name="website" type="url" inputmode="url" value="${esc(o.website || '')}" placeholder="https://"></label>
+      <label class="field">Instagram<input name="instagram" maxlength="120" autocomplete="off" autocapitalize="none" value="${o.instagram ? `@${esc(o.instagram)}` : ''}" placeholder="@ton_organisation"><span class="hint">Ton nom de compte ou le lien vers ton profil.</span></label>
       <label class="field">Ville<input name="city" maxlength="80" value="${esc(o.city || '')}"></label>
       <label class="field">Pays<select name="country"><option value="">Non précisé</option>${Object.entries(COUNTRY_NAMES).sort((a, b) => a[1].localeCompare(b[1], LOCALE)).map(([c, n]) => `<option value="${c}"${c === o.country ? ' selected' : ''}>${esc(n)}</option>`).join('')}${o.country && !COUNTRY_NAMES[o.country] ? `<option value="${esc(o.country)}" selected>${esc(o.country)}</option>` : ''}</select></label>
       <p class="form-error" id="formError" role="alert" hidden></p>
@@ -3222,6 +3228,10 @@ async function saveOrgPage(form) {
     patch.logo_path = logoLink;
   }
   if (patch.website && !/^https?:\/\/\S+$/i.test(patch.website)) return formError(form, 'Le site doit commencer par https://');
+  // Instagram : « @compte », « compte » ou lien vers le profil
+  const ig = String(f.get('instagram') || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/[/?#].*$/, '');
+  if (ig && !/^[A-Za-z0-9._]{1,30}$/.test(ig)) return formError(form, 'Compte Instagram invalide : indique par exemple @ton_organisation');
+  patch.instagram = ig || null;
   try {
     await sb.update('organizers', `id=eq.${currentOrgId}`, patch);
     orgEditing = false; delete orgDash[currentOrgId]; delete orgPublic[currentOrgId];
@@ -3248,10 +3258,10 @@ function viewOrganizerPage(id) {
       <div class="org-name">${esc(o.name)} ${o.is_verified ? I.verified : ''}</div>
       <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''}${o.country ? ` · ${esc(COUNTRY_NAMES[o.country] || o.country)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
       <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
-      ${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site officiel</a>` : ''}
+      ${o.website || o.instagram ? `<div class="org-socials">${o.website ? `<a class="social-btn" href="${esc(o.website)}" target="_blank" rel="noopener">${I.globe}<span>Site web</span></a>` : ''}${o.instagram ? `<a class="social-btn" href="https://www.instagram.com/${esc(o.instagram)}/" target="_blank" rel="noopener">${I.insta}<span data-no-i18n>@${esc(o.instagram)}</span></a>` : ''}</div>` : ''}
       ${o.official_user && loggedIn() && o.official_user !== profile.id ? `<a class="btn btn-ghost" href="#/messages/u-${o.official_user}">${I.chat}<span>Écrire à l’organisateur</span></a>` : ''}
     </div>
-    ${o.description ? `<p class="about">${ut(o.description)}</p>` : ''}
+    ${o.description ? `<h2 class="group-title">Présentation</h2><div class="card org-about"><p>${ut(o.description)}</p></div>` : ''}
     ${o.manager ? `<a class="line-btn rounded" href="#/orga/${o.id}">${I.gear}<span>Gérer dans mon espace organisateur</span>${I.chevron}</a>` : ''}
     <h2 class="group-title">Prochaines soirées</h2>
     <div class="list">${list.map(eventRow).join('') || empty('Aucune soirée annoncée pour le moment.')}</div>
