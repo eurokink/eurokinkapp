@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.47.3';
+const VERSION = '0.48.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -260,6 +260,7 @@ function viewHome() {
       <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length ? `${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}` : `${list.length} soirée${list.length > 1 ? 's' : ''} à venir en Europe`}</p></div>
+    ${orgTodo() ? `<a class="card propose-cta org-todo" href="#/devenir-organisateur"><div><strong>Il te reste à créer la page de ton organisation</strong><div class="muted tiny">Une minute suffit : ensuite, tu publies tes soirées toi-même.</div></div>${I.chevron}</a>` : ''}
     ${gamePromoCard()}
     ${cityCard()}
     ${installCard()}
@@ -273,7 +274,7 @@ function viewHome() {
       : nearest.length ? `<h2 class="section-title">Les plus proches de toi</h2><div class="list">${nearest.map(eventRow).join('')}</div>` : ''}
     <h2 class="section-title">Prochainement</h2>
     <div class="list">${later.map(eventRow).join('')}</div>
-    <a class="card propose-cta" href="#/${isOrganizer() ? 'orga' : 'devenir-organisateur'}"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Deviens organisateur : publie tes soirées et suis tes statistiques.</div></div>${I.chevron}</a>
+    ${orgTodo() ? '' : `<a class="card propose-cta" href="#/${isOrganizer() ? 'orga' : 'devenir-organisateur'}"><div><strong>Tu organises une soirée ?</strong><div class="muted tiny">Deviens organisateur : publie tes soirées et suis tes statistiques.</div></div>${I.chevron}</a>`}
   </section>`;
 }
 
@@ -1002,11 +1003,15 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
-  { v: '0.47.3', date: '2026-11-16',
+  { v: '0.48', date: '2026-11-16',
+    fr: ['À l’inscription, choisis si tu viens faire la fête ou organiser des soirées', 'Organisateurs : ton organisation est déjà dans l’agenda ? Reprends sa page existante et ses soirées'],
+    en: ['When signing up, choose whether you’re here to party or to organise events', 'Organisers: already in the calendar? Take over your existing page and events'],
+    de: ['Bei der Anmeldung wählst du, ob du feiern oder Partys veranstalten willst', 'Veranstalter: Schon im Kalender? Übernimm deine bestehende Seite mit deinen Partys'] },
+  { v: '0.48.0', date: '2026-11-16',
     fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
     en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
     de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
-  { v: '0.47.3', date: '2026-11-16',
+  { v: '0.48.0', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -2145,6 +2150,11 @@ function viewAccount(mode) {
       return `<section class="screen">${accountTop('Créer mon compte')}
         ${installCard(true)}
         <form id="signupForm" class="card settings" novalidate data-t0="${Date.now()}">
+          <fieldset class="role-pick"><legend>Tu viens sur EuroKink pour…</legend>
+            <label class="role-opt"><input type="radio" name="role" value="member" checked><span><strong>Sortir et faire des rencontres</strong><small>Trouver des soirées, suivre des organisateurs, échanger avec la communauté</small></span></label>
+            <label class="role-opt"><input type="radio" name="role" value="org"><span><strong>Organiser des soirées</strong><small>Association, bar, club ou collectif : publie tes soirées sur EuroKink</small></span></label>
+          </fieldset>
+          <p class="role-note" id="roleNote" hidden>${I.check}<span>Crée d’abord ton compte : la page de ton organisation se crée juste après, en une minute. Tu peux prendre ton pseudo perso ou le nom exact de ton organisation (il sera alors affiché « Compte officiel »).</span></p>
           ${oauthBlock()}
           <label class="hp" aria-hidden="true">Site web<input name="ek_hp" tabindex="-1" autocomplete="off"></label>
           <label class="field">Pseudo<input name="pseudo" required minlength="3" maxlength="30" autocomplete="off" placeholder="Ex. BlackRider"><span class="hint" id="pseudoHint">3 à 30 caractères, visible par la communauté.</span></label>
@@ -2155,7 +2165,7 @@ function viewAccount(mode) {
           <label class="checkline"><input type="checkbox" name="sensitive" required><span>J’accepte qu’EuroKink traite mes données, y compris celles pouvant révéler mon orientation sexuelle, pour me proposer des soirées et gérer mon compte (<a href="#/infos/confidentialite">Confidentialité</a>).</span></label>
           <label class="checkline"><input type="checkbox" name="terms" required><span>J’accepte les <a href="#/infos/cgu">CGU</a> et la <a href="#/infos/charte">charte de la communauté</a>.</span></label>
           <p class="form-error" id="formError" role="alert" hidden></p>
-          <button class="btn btn-red btn-block" type="submit">Créer mon compte</button>
+          <button class="btn btn-red btn-block" type="submit" id="signupBtn">Créer mon compte</button>
           <p class="tiny muted center">Déjà un compte ? <a class="accent" href="#/compte/connexion">Me connecter</a></p>
         </form></section>`;
     case 'verifier':
@@ -2859,6 +2869,33 @@ function eventToDraft(ev, orgId, copy) {
   };
 }
 
+// Inscrit comme organisateur, mais sans organisation ni demande en cours
+const orgTodo = () => loggedIn() && wantsOrg() && !isOrganizer() && !(orgStatus && orgStatus.request && orgStatus.request.status === 'pending');
+
+let orgClaim = null, orgSearchTimer = 0;
+function orgNameBox() {
+  if (orgClaim) {
+    return `<div class="claim-box"><div class="claim-head">${orgLogo(orgClaim, 'sm')}<div><span class="muted tiny">Tu demandes à gérer la page existante</span><strong data-no-i18n>${esc(orgClaim.name)}</strong></div>
+      <button type="button" class="link" data-act="org-unclaim">Changer</button></div>
+      <p class="tiny muted">Ses soirées déjà dans l’agenda passeront sous ta gestion, une fois ta demande validée.${orgClaim.managers ? ' Cette page a déjà un gestionnaire : il peut aussi t’inviter directement.' : ''}</p>
+      <input type="hidden" name="name" value="${esc(orgClaim.name)}"><input type="hidden" name="organizer_id" value="${orgClaim.id}"></div>`;
+  }
+  return `<label class="field">Nom de l’organisation *<input name="name" maxlength="80" required placeholder="Ex. Rubber Ouest" autocomplete="off" id="orgNameInput"></label>
+    <div id="orgSuggest"></div>`;
+}
+async function orgSuggest(q) {
+  const box = $('#orgSuggest');
+  if (!box) return;
+  if (fold(q).length < 2) { box.innerHTML = ''; return; }
+  let list = [];
+  try { list = ((await sb.rpc('search_organizers', { p_q: q })) || []).map((o) => ({ ...o, logo: o.logo_path })); } catch (e) { list = []; }
+  if (!$('#orgSuggest') || ($('#orgNameInput') && $('#orgNameInput').value !== q)) return;
+  box.innerHTML = list && list.length ? `<div class="org-suggest"><p class="tiny"><strong>Déjà sur EuroKink ?</strong> Touche ta page pour la reprendre :</p>
+    ${list.map((o) => `<button type="button" class="org-sug" data-act="org-claim" data-id="${o.id}">${orgLogo(o, 'xs')}<span data-no-i18n>${esc(o.name)}${o.country ? ` <span class="muted tiny">${esc(o.country)}</span>` : ''}</span>${I.chevron}</button>`).join('')}
+    <p class="tiny muted">Pas dans la liste ? Continue : une nouvelle page sera créée.</p></div>` : '';
+  box._list = list || [];
+}
+
 function viewBecomeOrganizer() {
   if (orgStatus === null) { loadOrgStatus(); return loadingScreen('Devenir organisateur', '#/profil'); }
   if (isOrganizer()) return viewOrga();
@@ -2872,10 +2909,11 @@ function viewBecomeOrganizer() {
       <ul><li>Publier et modifier tes soirées en quelques minutes</li><li>Des statistiques : vues, favoris, « J’y vais », alertes billetterie</li>
       <li>Ta page publique, que les membres peuvent suivre</li><li>Une fois vérifié, tes soirées sont publiées sans attente</li></ul>
       <p class="tiny muted">C’est gratuit. Sur l’appli, seul le nom de ton organisation apparaît, jamais ton pseudo.</p>
+      <p class="tiny muted">Ton organisation est peut-être déjà dans l’agenda : tape son nom, et tu pourras reprendre sa page existante avec ses soirées.</p>
       <p class="tiny muted">Ton organisation aura sa propre page : tu peux garder ton compte personnel pour la gérer. Si tu préfères un compte au nom de l’organisation (partagé avec ton équipe, par exemple), donne-lui exactement le même nom : il sera affiché comme son « compte officiel ».</p></div>
     ${req && req.status === 'rejected' ? `<div class="card"><strong>Ta demande précédente a été refusée</strong>${req.rejection_reason ? `<p class="tiny muted">Motif : ${esc(req.rejection_reason)}</p>` : ''}</div>` : ''}
     <form id="orgRequestForm" class="card settings" novalidate>
-      <label class="field">Nom de l’organisation *<input name="name" maxlength="80" required placeholder="Ex. Rubber Ouest" autocomplete="off"></label>
+      <div id="orgNameBox">${orgNameBox()}</div>
       <label class="field">C’est…${selectField('kind', Object.entries(ORG_KIND).map(([k, v]) => [k, k === 'other' ? 'Autre' : v]), 'association')}</label>
       <label class="field">Ville<input name="city" maxlength="80" autocomplete="off"></label>
       <label class="field">Site ou page officielle *<input name="website" type="url" inputmode="url" placeholder="https://" autocomplete="off"><span class="hint">Permet de vérifier que tu représentes bien l’organisation.</span></label>
@@ -3013,14 +3051,15 @@ async function handleLogoFile(input) {
 async function submitOrgRequest(form) {
   const f = new FormData(form);
   const btn = form.querySelector('button[type=submit]');
-  const p = Object.fromEntries(['name', 'kind', 'city', 'website', 'contact_email', 'message'].map((k) => [k, String(f.get(k) || '').trim()]));
+  const p = Object.fromEntries(['name', 'kind', 'city', 'website', 'contact_email', 'message', 'organizer_id'].map((k) => [k, String(f.get(k) || '').trim()]));
+  if (!p.organizer_id) delete p.organizer_id;
   if (p.name.length < 2) return formError(form, 'Indique le nom de ton organisation.');
   if (!/^https?:\/\/\S+$/i.test(p.website)) return formError(form, 'Indique le site ou la page officielle (lien commençant par https://).');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.contact_email)) return formError(form, 'Adresse e-mail de contact invalide.');
   btn.disabled = true; btn.textContent = 'Envoi…';
   try {
     await sb.rpc('request_organizer', { p });
-    orgStatus = null; adminData = null;
+    orgStatus = null; adminData = null; orgClaim = null;
     toast('Demande envoyée ! Tu seras prévenu dès qu’elle sera validée.');
     render();
   } catch (err) { formError(form, err.message); btn.disabled = false; btn.textContent = 'Envoyer ma demande'; }
@@ -3522,6 +3561,12 @@ document.addEventListener('click', (ev) => {
     case 'news-open': newsSheet(); break;
     case 'oauth-google': sb.startOAuth('google'); break;
     case 'orgs-open': orgsSheet(); break;
+    case 'org-claim': {
+      const o = (($('#orgSuggest') || {})._list || []).find((x) => x.id === act.dataset.id);
+      if (o) { orgClaim = o; $('#orgNameBox').innerHTML = orgNameBox(); }
+      break;
+    }
+    case 'org-unclaim': orgClaim = null; $('#orgNameBox').innerHTML = orgNameBox(); break;
     case 'types-toggle': typesOpen = !typesOpen; $('#fTypes').innerHTML = typeChips(); break;
     case 'resend-confirm':
       act.disabled = true;
@@ -3583,6 +3628,7 @@ document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.id === 'fBudget') { filters.budget = Number(t.value); $('#budgetLabel').textContent = budgetLabel(); renderResults(); }
   if (t.id === 'fQ') { filters.q = t.value; renderResults(); }
+  if (t.id === 'orgNameInput') { clearTimeout(orgSearchTimer); const q = t.value; orgSearchTimer = setTimeout(() => orgSuggest(q), 300); }
   if (t.id === 'admMQ') { admMemberQ = t.value; const box = $('#admMList'); if (box) box.innerHTML = admMemberRows(); }
   if (t.id === 'mQ') { memberQ = t.value; const box = $('#memberList'); if (box) box.innerHTML = memberListHtml(); }
   if (t.name === 'bio' && t.form && t.form.id === 'memberForm') { const c = $('#bioCount'); if (c) c.textContent = t.value.length; }
@@ -3604,6 +3650,12 @@ document.addEventListener('change', (ev) => {
   if (ev.target.matches && ev.target.matches('[data-city-input]')) { const w = ev.target.closest('.city-field'); setTimeout(() => resolveTypedCity(w), 250); return; }
   const t = ev.target;
   if (t.id === 'langSel') { setLang(t.value); location.reload(); return; }
+  if (t.name === 'role' && t.form && t.form.id === 'signupForm') {
+    const org = t.value === 'org';
+    $('#roleNote').hidden = !org;
+    $('#signupBtn').textContent = org ? 'Créer mon compte organisateur' : 'Créer mon compte';
+    return;
+  }
   if (t.id === 'fCity') { filters.around = t.value; renderResults(); }
   if (t.id === 'fRadius') { filters.radius = Number(t.value); renderResults(); }
   if (t.id === 'fPeriod') { filters.period = t.value; renderResults(); }
@@ -4117,9 +4169,23 @@ function formError(form, msg) {
 }
 
 // Après connexion : retour sur la soirée partagée qu'on voulait voir, puis bienvenue si première fois
+// Inscrit en tant qu'organisateur : à la première connexion, on ouvre directement le formulaire
+function wantsOrg() {
+  const u = sb.currentUser();
+  let local = false;
+  try { local = localStorage.getItem('ek.wantOrg') === '1'; } catch (e) { /* stockage indisponible */ }
+  return !!(local || (u && u.user_metadata && u.user_metadata.wants_org));
+}
 function afterLogin() {
-  const h = pendingInvite() ? `#/invitation/${pendingInvite()}` : sessionStorage.getItem('ek.after');
+  let h = pendingInvite() ? `#/invitation/${pendingInvite()}` : sessionStorage.getItem('ek.after');
   sessionStorage.removeItem('ek.after');
+  const u = sb.currentUser();
+  try {
+    if (!h && u && wantsOrg() && !localStorage.getItem(`ek.wantOrgDone.${u.id}`)) {
+      localStorage.setItem(`ek.wantOrgDone.${u.id}`, '1'); localStorage.removeItem('ek.wantOrg');
+      return '#/devenir-organisateur';
+    }
+  } catch (e) { /* stockage indisponible */ }
   setTimeout(maybeOnboard, 400);
   return h || '#/';
 }
@@ -4175,6 +4241,7 @@ async function submitAccountForm(form) {
       if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Adresse e-mail invalide.');
       await checkPassword(password);
       setCity(city); state.adult = true; save();
+      if (f.get('role') === 'org') { meta.wants_org = true; try { localStorage.setItem('ek.wantOrg', '1'); } catch (e) { /* stockage indisponible */ } }
       const res = await sb.signUp(email, password, meta);
       lastSignupEmail = email;
       if (res.confirmed) { await loadUser(); await refreshEvents(); toast(`Bienvenue ${pseudo} !`); navigate(afterLogin()); } else navigate('#/compte/verifier');
