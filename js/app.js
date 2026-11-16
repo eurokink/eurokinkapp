@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.45.0';
+const VERSION = '0.45.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -970,7 +970,7 @@ async function refreshUnread() {
   if (unreadMsgs !== before && ((location.hash || '#/') === '#/' || location.hash === '#/messages')) { convsAt = 0; loadConvs().then(render); }
 }
 function updateMsgBadges() {
-  setIconBadge(unreadMsgs);
+  syncIconBadge();
   document.querySelectorAll('[data-msg-badge]').forEach((b) => { b.textContent = unreadMsgs > 9 ? '9+' : String(unreadMsgs); b.hidden = !unreadMsgs; });
 }
 const msgBadge = (cls = '') => `<span class="msg-badge ${cls}" data-msg-badge ${unreadMsgs ? '' : 'hidden'}>${unreadMsgs > 9 ? '9+' : unreadMsgs}</span>`;
@@ -994,7 +994,7 @@ function onLivePush(tag) {
     if (h === '#/messages' || h === '#/') { convsAt = 0; refreshConvsLive(); }
   }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if ((location.hash || '').startsWith('#/admin')) admSilentRefresh(); const h = location.hash || ''; const mt = h.match(/^#\/messages\/([0-9a-f-]{36})$/); if (mt) loadThread(mt[1]); else if (h.startsWith('#/messages')) { convsAt = 0; render(); } } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshUnread(); if (isAdmin()) admSilentRefresh(); const h = location.hash || ''; const mt = h.match(/^#\/messages\/([0-9a-f-]{36})$/); if (mt) loadThread(mt[1]); else if (h.startsWith('#/messages')) { convsAt = 0; render(); } } });
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
@@ -1392,7 +1392,6 @@ function viewMember(id) {
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
     ${memberBadges(m.id, mine)}
-    ${isOwner() ? ownerDeviceLine(m.id) : ''}
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
     ${(() => {
       if (!outingsCache.has(m.id)) { loadOutings(m.id); return ''; }
@@ -1622,46 +1621,9 @@ async function donateSave(btn) {
   } catch (err) { toast(err.message); btn.disabled = false; }
 }
 
-// --- Appareil utilisé (iPhone / Android / ordinateur) ---
-const deviceOs = () => {
-  const ua = navigator.userAgent || '';
-  if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
-  if (/Android/i.test(ua)) return 'android';
-  return /Windows|Macintosh|Linux|CrOS/i.test(ua) ? 'desktop' : 'other';
-};
-function reportDevice() {
-  if (!loggedIn()) return;
-  const os = deviceOs(), inst = isStandalone();
-  const key = `${profile.id}|${os}|${inst}|${new Date().toDateString()}`;
-  try { if (localStorage.getItem('ek.dev') === key) return; } catch (e) { /* stockage indisponible */ }
-  sb.rpc('set_device', { p_os: os, p_installed: inst }).then(() => { try { localStorage.setItem('ek.dev', key); } catch (e) { /* rien */ } }).catch(() => {});
-}
-const DEVICE_TAG = { ios: 'IPHONE', android: 'ANDROID', desktop: 'ORDI', other: 'AUTRE' };
-const DEVICE_NAME = { ios: 'iPhone', android: 'Android', desktop: 'Ordinateur', other: 'Autre appareil' };
-let admDevFilter = '';
-let devStats = null, ownerDev = null;
-function loadOwnerDevices() {
-  if (ownerDev) return ownerDev;
-  ownerDev = { loading: true };
-  sb.rpc('owner_devices', {}).then((r) => { ownerDev = r || {}; }).catch(() => { ownerDev = {}; }).then(() => render());
-  return ownerDev;
-}
-function ownerDeviceLine(id) {
-  const d = loadOwnerDevices();
-  if (d.loading) return '';
-  const x = d[id];
-  return `<p class="muted tiny owner-dev">${I.lock} <span>${x ? `${DEVICE_NAME[x.os] || x.os}${x.os === 'desktop' ? '' : x.installed ? ' · appli installée' : ' · dans le navigateur'}` : 'Appareil inconnu'}</span> <span class="muted">(visible par toi seul)</span></p>`;
-}
-function deviceStatsHtml() {
-  if (!devStats) { devStats = { loading: true }; sb.rpc('device_stats', {}).then((r) => { devStats = r || { error: true }; }).catch(() => { devStats = { error: true }; }).then(() => { if ((location.hash || '').startsWith('#/admin')) render(); }); }
-  const d = devStats;
-  if (d.loading || d.error) return '';
-  return `<h2 class="group-title">Appareils</h2>
-    <div class="stats four">${[[d.ios, 'iPhone'], [d.android, 'Android'], [d.desktop, 'ordinateur'], [d.installed, 'appli installée']].map(([n, l]) => `<div class="stat"><strong>${Number(n || 0).toLocaleString(LOCALE)}</strong><span>${l}</span></div>`).join('')}</div>
-    ${d.unknown ? `<p class="tiny muted">${d.unknown} membre${d.unknown > 1 ? 's' : ''} pas encore revenu${d.unknown > 1 ? 's' : ''} depuis le suivi des appareils.</p>` : ''}`;
-}
-
 // --- Pastille sur l'icône de l'appli (nombre de messages non lus) ---
+// Messages non lus + éléments à traiter dans l'espace admin (pour les admins)
+const syncIconBadge = () => setIconBadge(unreadMsgs + (isAdmin() ? adminCount() : 0));
 function setIconBadge(n) {
   try {
     if (n > 0 && navigator.setAppBadge) navigator.setAppBadge(n).catch(() => {});
@@ -2390,6 +2352,7 @@ async function loadAdmin() {
   loadingAdmin = true;
   try { adminData = await sb.rpc('admin_dashboard'); } catch (err) { adminData = { pending: [], reports: [] }; toast(err.message); }
   loadingAdmin = false;
+  syncIconBadge();
   if (/^#\/(admin|profil)/.test(location.hash)) render();
 }
 
@@ -2587,7 +2550,7 @@ function viewAdmin() {
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : adminTab === 'robot' ? viewRobot()
-    : adminTab === 'stats' ? viewStats() + deviceStatsHtml() + donateAdmin()
+    : adminTab === 'stats' ? viewStats() + donateAdmin()
     : adminTab === 'members' ? viewAdmMembers()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
@@ -2606,6 +2569,7 @@ function admSilentRefresh() {
     adminMembers && !adminMembers.loading ? sb.rpc('admin_members').then((r) => { adminMembers = r || []; }) : null
   ]).catch(() => {}).then(() => {
     admRefreshing = false;
+    syncIconBadge();
     const a = document.activeElement;
     if ((location.hash || '').startsWith('#/admin') && !(a && /INPUT|TEXTAREA/.test(a.tagName))) render();
   });
@@ -2622,9 +2586,7 @@ function loadAdmMembers() {
 }
 function admMemberRows() {
   const q = admMemberQ.trim().toLowerCase();
-  const dev = isOwner() ? loadOwnerDevices() : null;
-  const list = adminMembers.filter((m) => (!q || [m.pseudo, m.city, m.manages].some((x) => String(x || '').toLowerCase().includes(q)))
-    && (!admDevFilter || !dev || dev.loading || (admDevFilter === 'none' ? !dev[m.id] : dev[m.id] && dev[m.id].os === admDevFilter)));
+  const list = adminMembers.filter((m) => !q || [m.pseudo, m.city, m.manages].some((x) => String(x || '').toLowerCase().includes(q)));
   if (!list.length) return empty('Aucun membre ne correspond.');
   const df = fmt({ day: 'numeric', month: 'short', year: 'numeric' });
   const seen = (m) => {
@@ -2634,8 +2596,7 @@ function admMemberRows() {
   };
   return list.map((m) => {
     const av = memberAv({ pseudo: m.pseudo, avatar_path: m.avatar, last_seen_at: m.last_seen_at });
-    const dv0 = dev && !dev.loading && dev[m.id];
-    const tags = [dv0 ? `<span class="tag tag-dark">${DEVICE_TAG[dv0.os] || '?'}</span>` : '', m.role === 'admin' ? '<span class="tag tag-red">ADMIN</span>' : '', m.invisible ? '<span class="tag tag-dark">INVISIBLE</span>' : '', m.manages ? `<span class="tag tag-dark">ORGA</span>` : '', m.suspended_until ? '<span class="tag tag-red">SUSPENDU</span>' : '', m.warnings ? `<span class="tag tag-dark">${m.warnings} AVERT.</span>` : ''].join('');
+    const tags = [m.role === 'admin' ? '<span class="tag tag-red">ADMIN</span>' : '', m.invisible ? '<span class="tag tag-dark">INVISIBLE</span>' : '', m.manages ? `<span class="tag tag-dark">ORGA</span>` : '', m.suspended_until ? '<span class="tag tag-red">SUSPENDU</span>' : '', m.warnings ? `<span class="tag tag-dark">${m.warnings} AVERT.</span>` : ''].join('');
     const inner = `${av}<div class="mr-main"><strong>${esc(m.pseudo)}</strong> <span class="muted tiny">n° ${m.number}</span> ${tags}
       <div class="muted tiny">${esc(m.city || 'Ville non renseignée')}${m.country ? ` · ${esc(COUNTRY_NAMES[String(m.country).trim()] || String(m.country).trim())}` : ''} · appli en ${(m.lang || 'fr').toUpperCase()}</div>
       <div class="muted tiny">Inscrit le ${df.format(new Date(m.created_at))} · ${seen(m)}${m.push ? ' · notifs ✓' : ''}${m.going ? ` · ${m.going} sortie${m.going > 1 ? 's' : ''}` : ''}</div>
@@ -2650,7 +2611,6 @@ function viewAdmMembers() {
   if (s.error) return empty(esc(s.error));
   const inv = s.filter((m) => m.invisible).length;
   return `<label class="search"><span>${I.search}</span><input id="admMQ" type="search" placeholder="Pseudo, ville, organisation…" value="${esc(admMemberQ)}" aria-label="Rechercher un inscrit" autocomplete="off"></label>
-    ${isOwner() ? `<div class="chips" id="admDev">${[['', 'Tous'], ['ios', 'iPhone'], ['android', 'Android'], ['desktop', 'Ordinateur'], ['none', 'Inconnu']].map(([k, l]) => `<button class="chip ${admDevFilter === k ? 'on' : ''}" data-act="adm-dev" data-k="${k}">${l}</button>`).join('')}</div>` : ''}
     <p class="muted tiny">${s.length} inscrit${s.length > 1 ? 's' : ''} dont ${inv} invisible${inv > 1 ? 's' : ''} · du plus récent au plus ancien</p>
     <div id="admMList" class="list">${admMemberRows()}</div>
     <p class="tiny muted center">Les profils invisibles et suspendus restent cachés des autres membres. Touche un profil pour le modérer.</p>`;
@@ -3435,7 +3395,6 @@ document.addEventListener('click', (ev) => {
     case 'moderate-member': moderateMember(act.dataset.id); break;
     case 'org-invite-member': orgInviteMember(act.dataset.id, act.dataset.pseudo); break;
     case 'team-remove': teamRemove(act); break;
-    case 'adm-dev': admDevFilter = act.dataset.k; render(); break;
     case 'adm-rep-ctx': reportContext(act.dataset.id); break;
     case 'org-admin-save': orgAdminSave(act); break;
     case 'org-admin-delete': orgAdminDelete(act); break;
@@ -3961,7 +3920,6 @@ async function loadUser() {
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
   presenceTick();
-  reportDevice();
   setTimeout(checkWarnings, 800);
   refreshUnread();
   following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
