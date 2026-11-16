@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.47.0';
+const VERSION = '0.47.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1392,18 +1392,20 @@ function viewMember(id) {
   }
   if (!m) return `<section class="screen">${back}${empty('Ce profil est introuvable ou masqué.')}</section>`;
   const av = m.avatar_path ? sb.publicUrl('avatars', m.avatar_path) : '';
+  const offOrg = m.official_org ? ((memberOrgsCache.get(m.id) || []).find((o) => o.id === m.official_org) || null) : null;
   const susp = isAdmin() && m.suspended_until && new Date(m.suspended_until) > new Date();
   return `<section class="screen">${back}
     ${susp ? `<div class="card mod-banner">${I.lock}<div><strong>Profil suspendu ${new Date(m.suspended_until).getFullYear() > 2100 ? 'jusqu’à nouvel ordre' : `jusqu’au ${fDate.format(new Date(m.suspended_until))}`}</strong>${m.suspension_reason ? `<div class="muted tiny">Motif : ${esc(m.suspension_reason)}</div>` : ''}</div></div>` : ''}
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
-      ${av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'supporter' && b.earned_at) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : ''}
+      ${offOrg && offOrg.logo_path ? `<div class="member-av official-av">${orgLogo({ name: offOrg.name, logo: offOrg.logo_path })}</div>` : av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${m.official_org ? `<span class="team-badge org-badge">${I.check}Compte officiel</span>` : orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'supporter' && b.earned_at) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : ''}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
+    ${m.official_org && offOrg ? `<a class="line-btn rounded" href="#/organisateur/${offOrg.id}">${I.calendar}<span>Voir la page et les soirées${offOrg.upcoming ? ` (${offOrg.upcoming})` : ''}</span>${I.chevron}</a>` : ''}
     ${m.org_names && m.org_names.length ? memberOrgsCard(m.id, m.official_org) : ''}
     ${memberBadges(m.id, mine)}
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
@@ -1648,14 +1650,9 @@ function memberOrgsCard(id, official) {
     return '';
   }
   if (!c || !c.length) return '';
-  const off = official && c.find((o) => o.id === official);
-  const others = off ? c.filter((o) => o.id !== official) : c;
-  const offCard = off ? `<div class="card official-card">${orgLogo({ name: off.name, logo: off.logo_path })}
-      <div class="oc-main"><span class="oc-label">${I.check} Compte officiel</span><strong>${esc(off.name)}</strong>
-      <span class="muted tiny">Ce compte représente l’organisation. Ses soirées sont sur sa page.</span></div>
-      <a class="btn btn-red btn-block" href="#/organisateur/${off.id}">Voir la page et les soirées${off.upcoming ? ` (${off.upcoming})` : ''}</a></div>` : '';
-  if (!others.length) return offCard;
-  return offCard + `<div class="card member-orgs"><strong class="mo-title">${others.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
+  const others = official ? c.filter((o) => o.id !== official) : c;
+  if (!others.length) return '';
+  return `<div class="card member-orgs"><strong class="mo-title">${others.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
     ${others.map((o) => `<a class="mo-row" href="#/organisateur/${o.id}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="mo-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.upcoming ? `${o.upcoming} soirée${o.upcoming > 1 ? 's' : ''} à venir` : 'Voir la page'}</span></span>${I.chevron}</a>`).join('')}</div>`;
 }
 
