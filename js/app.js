@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.48.0';
+const VERSION = '0.48.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -828,7 +828,7 @@ function orgAdminBlock(o) {
       <button class="btn btn-red btn-block" data-act="org-admin-save" data-id="${o.id}">Enregistrer</button>
       <div class="mod-sec"><strong>${I.trash} Fusionner ou supprimer</strong>
         <p class="muted tiny">La fusion déplace soirées, abonnés, gestionnaires et sources vers l’organisation choisie, puis supprime celle-ci. Sans fusion, la suppression n’est possible que si l’organisation n’a aucune soirée.</p>
-        <label class="field">Fusionner dans<select id="oaInto"><option value="">Ne pas fusionner, supprimer seulement</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
+        <label class="field">Fusionner dans<select id="oaInto"><option value="">Ne pas fusionner : supprimer avec ses soirées</option>${others.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label>
         <button class="btn btn-ghost btn-block danger-text" data-act="org-admin-delete" data-id="${o.id}" data-name="${esc(o.name)}">Fusionner / supprimer l’organisation</button></div>
     </div>`;
 }
@@ -845,12 +845,13 @@ async function orgAdminSave(btn) {
 }
 async function orgAdminDelete(btn) {
   const into = $('#oaInto').value, intoName = into ? $('#oaInto').selectedOptions[0].textContent : '';
-  const msg = into ? `Fusionner « ${btn.dataset.name} » dans « ${intoName} » ? « ${btn.dataset.name} » sera supprimée.` : `Supprimer définitivement « ${btn.dataset.name} » ?`;
+  const msg = into ? `Fusionner « ${btn.dataset.name} » dans « ${intoName} » ? « ${btn.dataset.name} » sera supprimée.` : `Supprimer définitivement « ${btn.dataset.name} » et toutes ses soirées ?`;
   if (!confirm(t(msg))) return;
   btn.disabled = true;
   try {
-    const r = await sb.rpc('admin_delete_organizer', { p_org: btn.dataset.id, p_into: into || null });
+    const r = await sb.rpc('admin_delete_organizer', { p_org: btn.dataset.id, p_into: into || null, p_with_events: !into });
     toast(into ? `Fusionnée : ${r.events} soirée(s) déplacée(s)` : 'Organisation supprimée');
+    adminData = null;
     orgStatus = null; Object.keys(orgDash).forEach((k) => delete orgDash[k]); delete orgPublic[btn.dataset.id]; currentOrgId = into || null;
     await loadOrgStatus(); refreshEvents(); navigate(into ? `#/orga/${into}` : '#/orga');
   } catch (err) { toast(err.message); btn.disabled = false; }
@@ -1003,15 +1004,19 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.48.1', date: '2026-11-16',
+    fr: ['Organisateurs : une soirée annulée peut maintenant être supprimée'],
+    en: ['Organisers: a cancelled event can now be deleted'],
+    de: ['Veranstalter: Eine abgesagte Party kann jetzt gelöscht werden'] },
   { v: '0.48', date: '2026-11-16',
     fr: ['À l’inscription, choisis si tu viens faire la fête ou organiser des soirées', 'Organisateurs : ton organisation est déjà dans l’agenda ? Reprends sa page existante et ses soirées'],
     en: ['When signing up, choose whether you’re here to party or to organise events', 'Organisers: already in the calendar? Take over your existing page and events'],
     de: ['Bei der Anmeldung wählst du, ob du feiern oder Partys veranstalten willst', 'Veranstalter: Schon im Kalender? Übernimm deine bestehende Seite mit deinen Partys'] },
-  { v: '0.48.0', date: '2026-11-16',
+  { v: '0.48.1', date: '2026-11-16',
     fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
     en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
     de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
-  { v: '0.48.0', date: '2026-11-16',
+  { v: '0.48.1', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -3093,6 +3098,7 @@ function orgEventCard(ev, past) {
       ${live && ev.status === 'published' ? `<button class="mini-btn" data-act="org-soldout" data-id="${ev.id}" data-on="${ev.is_sold_out ? '' : '1'}">${ev.is_sold_out ? 'Remettre en vente' : 'Complet'}</button>` : ''}
       ${live ? `<button class="mini-btn danger" data-act="org-cancel" data-id="${ev.id}">Annuler</button>` : ''}
       ${ev.status === 'published' && eventById(ev.id) ? `<a class="mini-btn" href="#/soiree/${ev.id}">Voir</a>` : ''}
+      ${isAdmin() || ['cancelled', 'rejected', 'pending'].includes(ev.status) ? `<button class="mini-btn danger" data-act="org-delete" data-id="${ev.id}" data-title="${esc(ev.title)}">Supprimer</button>` : ''}
     </div></article>`;
 }
 
@@ -3182,6 +3188,16 @@ async function orgAct(act) {
     case 'org-copy': openEditor(act.dataset.id, { copy: true, returnTo: '#/orga' }); break;
     case 'org-page-edit': orgEditing = true; render(); break;
     case 'org-page-cancel': orgEditing = false; render(); break;
+    case 'org-delete': {
+      if (!confirm(t(`Supprimer définitivement « ${act.dataset.title} » ? Cette action est irréversible.`))) return;
+      act.disabled = true;
+      try {
+        await sb.rpc('delete_event', { p_event: act.dataset.id });
+        toast('Soirée supprimée');
+        delete orgDash[currentOrgId]; adminData = null; render(); refreshEvents();
+      } catch (err) { toast(err.message); act.disabled = false; }
+      break;
+    }
     case 'org-soldout': case 'org-cancel': {
       const action = act.dataset.act === 'org-cancel' ? 'cancel' : act.dataset.on ? 'soldout' : 'available';
       if (action === 'cancel' && !confirm(`Annuler « ${ev ? ev.title : 'cette soirée'} » ? Elle sera retirée de l’appli.`)) return;
@@ -3511,7 +3527,7 @@ document.addEventListener('click', (ev) => {
     case 'adm-req-ok': case 'adm-req-no': case 'adm-req-trust': adminAct(act); break;
     case 'org-create': orgCreating = true; render(); window.scrollTo(0, 0); break;
     case 'org-create-cancel': orgCreating = false; render(); break;
-    case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': orgAct(act); break;
+    case 'org-new': case 'org-edit': case 'org-copy': case 'org-page-edit': case 'org-page-cancel': case 'org-soldout': case 'org-cancel': case 'org-delete': orgAct(act); break;
     case 'follow': toggleFollow(act); break;
     case 'push-on': case 'push-off': case 'push-test': pushAct(act); break;
     case 'src-form': case 'src-type': case 'src-run': case 'src-toggle': case 'src-del': robotAct(act); break;

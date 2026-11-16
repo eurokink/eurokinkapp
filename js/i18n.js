@@ -360,6 +360,8 @@ const T = {
   'Modération': ['Moderation', 'Moderation'],
   'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Soirée supprimée': ['Event deleted', 'Party gelöscht'],
+  'Ne pas fusionner : supprimer avec ses soirées': ['Don’t merge: delete with its events', 'Nicht zusammenführen: mit allen Partys löschen'],
   'C’est…': ['It’s…', 'Das ist…'],
   'Tu viens sur EuroKink pour…': ['You’re joining EuroKink to…', 'Du bist bei EuroKink, um…'],
   'Sortir et faire des rencontres': ['Go out and meet people', 'Auszugehen und Leute kennenzulernen'],
@@ -879,6 +881,8 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^Supprimer définitivement « (.+) » \? Cette action est irréversible\.$/, (m) => [`Permanently delete “${m[1]}”? This can’t be undone.`, `„${m[1]}“ endgültig löschen? Das lässt sich nicht rückgängig machen.`]],
+  [/^Supprimer définitivement « (.+) » et toutes ses soirées \?$/, (m) => [`Permanently delete “${m[1]}” and all its events?`, `„${m[1]}“ mit allen Partys endgültig löschen?`]],
   [/^Voir la page et les soirées \((\d+)\)$/, (m) => [`See the page and events (${m[1]})`, `Seite und Partys ansehen (${m[1]})`]],
   [/^Signé avec mon pseudo \((.+)\)$/, (m) => [`Signed with my username (${m[1]})`, `Mit meinem Benutzernamen unterzeichnet (${m[1]})`]],
   [/^Du (.+) au (.+?)( · horaires non communiqués)?$/, (m) => [`From ${m[1]} to ${m[2]}${m[3] ? ' · times not announced' : ''}`, `Vom ${m[1]} bis ${m[2]}${m[3] ? ' · Uhrzeiten nicht bekannt' : ''}`]],
