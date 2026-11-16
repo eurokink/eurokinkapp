@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.49.0';
+const VERSION = '0.49.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1009,7 +1009,7 @@ const NEWS = [
     fr: ['Pages des organisateurs : lien Instagram et présentation mise en valeur'],
     en: ['Organiser pages: Instagram link and a highlighted introduction'],
     de: ['Veranstalterseiten: Instagram-Link und hervorgehobene Vorstellung'] },
-  { v: '0.49.0', date: '2026-11-16',
+  { v: '0.49.1', date: '2026-11-16',
     fr: ['Organisateurs : une soirée annulée peut maintenant être supprimée'],
     en: ['Organisers: a cancelled event can now be deleted'],
     de: ['Veranstalter: Eine abgesagte Party kann jetzt gelöscht werden'] },
@@ -1017,11 +1017,11 @@ const NEWS = [
     fr: ['À l’inscription, choisis si tu viens faire la fête ou organiser des soirées', 'Organisateurs : ton organisation est déjà dans l’agenda ? Reprends sa page existante et ses soirées'],
     en: ['When signing up, choose whether you’re here to party or to organise events', 'Organisers: already in the calendar? Take over your existing page and events'],
     de: ['Bei der Anmeldung wählst du, ob du feiern oder Partys veranstalten willst', 'Veranstalter: Schon im Kalender? Übernimm deine bestehende Seite mit deinen Partys'] },
-  { v: '0.49.0', date: '2026-11-16',
+  { v: '0.49.1', date: '2026-11-16',
     fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
     en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
     de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
-  { v: '0.49.0', date: '2026-11-16',
+  { v: '0.49.1', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -3224,7 +3224,8 @@ async function saveOrgPage(form) {
   const patch = { description: String(f.get('description') || '').trim() || null, website: String(f.get('website') || '').trim() || null, city: String(f.get('city') || '').trim() || null, country: String(f.get('country') || '') || null };
   const logoLink = String(f.get('logo_path') || '').trim();
   if (logoLink) {
-    if (!/^https:\/\/\S+$/i.test(logoLink)) return formError(form, 'Le lien du logo doit commencer par https://');
+    if (/(fbcdn\.net|cdninstagram\.com|scontent[\w.-]*\.(?:xx\.)?fbcdn)/i.test(logoLink)) return formError(form, 'Les liens d’images Instagram ou Facebook expirent au bout de quelques jours : enregistre l’image sur ton téléphone et utilise « Choisir une image ».');
+    if (!/^https:\/\/[^\s"'<>]+$/i.test(logoLink) || logoLink.length > 500) return formError(form, 'Ce lien d’image est trop long ou invalide : enregistre l’image et utilise « Choisir une image ».');
     patch.logo_path = logoLink;
   }
   if (patch.website && !/^https?:\/\/\S+$/i.test(patch.website)) return formError(form, 'Le site doit commencer par https://');

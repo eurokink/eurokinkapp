@@ -360,6 +360,8 @@ const T = {
   'Modération': ['Moderation', 'Moderation'],
   'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Les liens d’images Instagram ou Facebook expirent au bout de quelques jours : enregistre l’image sur ton téléphone et utilise « Choisir une image ».': ['Instagram or Facebook image links expire after a few days: save the image to your phone and use “Choose an image”.', 'Bildlinks von Instagram oder Facebook laufen nach ein paar Tagen ab: Speichere das Bild auf deinem Handy und nutze „Bild auswählen“.'],
+  'Ce lien d’image est trop long ou invalide : enregistre l’image et utilise « Choisir une image ».': ['This image link is too long or invalid: save the image and use “Choose an image”.', 'Dieser Bildlink ist zu lang oder ungültig: Speichere das Bild und nutze „Bild auswählen“.'],
   'Site web': ['Website', 'Website'],
   '@ton_organisation': ['@your_organisation', '@deine_organisation'],
   'Ton nom de compte ou le lien vers ton profil.': ['Your account name or a link to your profile.', 'Dein Kontoname oder der Link zu deinem Profil.'],
