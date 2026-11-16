@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.47.2';
+const VERSION = '0.47.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -295,7 +295,8 @@ function filtered({ ignoreRadius = false } = {}) {
     if (filters.period === 'weekend' && !(s < end && new Date(e.endsAt) > start)) return false;
     if (horizon && s - now > horizon * 86400000) return false;
     if (!ignoreRadius && filters.radius && !qf) { const c = aroundObj(); if (distanceKm(c.lat, c.lon, e.venue.lat, e.venue.lon) > filters.radius) return false; }
-    if (filters.types.length && !e.types.some((t) => filters.types.includes(t))) return false;
+    // Une soirée multi-fetish accueille tous les styles : elle ressort quel que soit le type choisi
+    if (filters.types.length && !e.types.some((t) => t === 'multi' || filters.types.includes(t))) return false;
     if (filters.budget === 0 && e.priceKind !== 'free') return false;
     if (filters.budget < 100 && e.priceKind !== 'unknown' && inEuros(e) > filters.budget) return false;
     if (filters.noBooking && e.booking !== 'door_only') return false;
@@ -341,7 +342,8 @@ function viewExplorer() {
 function typeChips() {
   const shown = typesOpen ? EVENT_TYPES : EVENT_TYPES.filter((t, i) => i < 5 || filters.types.includes(t.slug));
   return shown.map((t) => `<button class="chip ${filters.types.includes(t.slug) ? 'on' : ''}" data-type="${t.slug}" aria-pressed="${filters.types.includes(t.slug)}">${esc(t.name)}</button>`).join('')
-    + (EVENT_TYPES.length > 5 ? `<button class="chip chip-more" data-act="types-toggle">${typesOpen ? 'Réduire' : `+ ${EVENT_TYPES.length - shown.length} autres`}</button>` : '');
+    + (EVENT_TYPES.length > 5 ? `<button class="chip chip-more" data-act="types-toggle">${typesOpen ? 'Réduire' : `+ ${EVENT_TYPES.length - shown.length} autres`}</button>` : '')
+    + (filters.types.some((t) => t !== 'multi') ? `<p class="hint types-hint">${t('Les soirées multi-fetish sont incluses : elles accueillent tous les styles.')}</p>` : '');
 }
 // Organisateurs ayant des soirées à venir (pour le filtre de l'onglet Events)
 function eventOrgs() {
@@ -1000,7 +1002,11 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
-  { v: '0.47.2', date: '2026-11-16',
+  { v: '0.47.3', date: '2026-11-16',
+    fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
+    en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
+    de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
+  { v: '0.47.3', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -3429,8 +3435,7 @@ document.addEventListener('click', (ev) => {
   if (typeChip) {
     const t = typeChip.dataset.type;
     filters.types = filters.types.includes(t) ? filters.types.filter((x) => x !== t) : [...filters.types, t];
-    typeChip.classList.toggle('on');
-    typeChip.setAttribute('aria-pressed', filters.types.includes(t));
+    $('#fTypes').innerHTML = typeChips();
     renderResults();
     return;
   }

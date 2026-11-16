@@ -360,6 +360,7 @@ const T = {
   'Modération': ['Moderation', 'Moderation'],
   'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Les soirées multi-fetish sont incluses : elles accueillent tous les styles.': ['Multi-fetish events are included: they welcome every style.', 'Multi-Fetish-Partys sind inbegriffen: Dort sind alle Styles willkommen.'],
   'Compte officiel': ['Official account', 'Offizielles Konto'],
   'Ce compte représente l’organisation. Ses soirées sont sur sa page.': ['This account represents the organisation. Its events are on its page.', 'Dieses Konto vertritt die Organisation. Ihre Partys stehen auf ihrer Seite.'],
   'Voir la page et les soirées': ['See the page and events', 'Seite und Partys ansehen'],
