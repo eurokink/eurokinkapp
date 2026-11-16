@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.47.1';
+const VERSION = '0.47.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -473,6 +473,7 @@ function viewFavorites() {
 // Communauté : carte des membres, placés sur la ville indiquée dans leur profil
 let members = null; let membersAt = 0; let membersError = '';
 const teamBadge = (on) => (on ? `<span class="team-badge" data-no-i18n>${I.check}${{ fr: 'Équipe EuroKink', en: 'EuroKink team', de: 'EuroKink-Team' }[LANG]}</span>` : '');
+const officialBadge = () => `<span class="team-badge org-badge">${I.check}${t('Compte officiel')}</span>`;
 const orgBadge = (names, long) => (names && names.length ? `<span class="team-badge org-badge" data-no-i18n${long ? '' : ` title="${esc(names.join(', '))}"`}>${I.check}${{ fr: 'Organisateur', en: 'Organiser', de: 'Veranstalter' }[LANG]}${long ? ` · ${esc(names.join(', '))}` : ''}</span>` : '');
 // Défi de la semaine : champions en titre (badge 🏆 sur leur profil)
 let champIds = new Set();
@@ -999,6 +1000,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.47.2', date: '2026-11-16',
+    fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
+    en: ['In messages, official accounts are marked “Official account”'],
+    de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
   { v: '0.47', date: '2026-11-16',
     fr: ['Les comptes au nom d’une organisation sont signalés « Compte officiel » et mènent à sa page', 'Sur la page d’un organisateur, tu peux lui écrire directement'],
     en: ['Accounts named after an organisation are marked “Official account” and link to its page', 'On an organiser’s page, you can message them directly'],
@@ -1211,7 +1216,7 @@ function viewMessages() {
   const chats = convs.filter((c) => !requests.includes(c));
   const list = msgTab === 'requests' ? requests : chats;
   const row = (c) => `<a class="conv-row card" href="#/messages/${c.id}">${memberAv(c.other)}
-    <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}${teamBadge(c.other.team)}${c.other.org && !c.other.team ? orgBadge(['']) : ''}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
+    <div class="mr-main"><div class="conv-top"><strong>${esc(c.other.pseudo)}${teamBadge(c.other.team)}${c.other.official ? officialBadge() : c.other.org && !c.other.team ? orgBadge(['']) : ''}</strong><span class="muted tiny">${c.last_message_at ? msgWhen(c.last_message_at) : ''}</span></div>
       <div class="conv-prev ${c.unread ? 'unread' : ''}">${c.last_from_me ? '<span class="muted">Toi : </span>' : ''}<span data-no-i18n>${esc(c.last_preview || '')}</span></div>
       ${c.status === 'request' && c.mine && !isAdmin() ? '<div class="muted tiny">En attente d’acceptation</div>' : ''}${c.blocked ? '<div class="muted tiny">Bloqué</div>' : ''}</div>
     ${c.unread ? `<span class="count-pill">${c.unread}</span>` : ''}</a>`;
@@ -1267,7 +1272,7 @@ function viewThread(param) {
       <button class="link center" data-act="msg-block" data-user="${other.id}">Bloquer ce membre</button></div>`
     : `<form id="msgForm" class="msg-compose" data-to="${other.id}"><textarea name="body" rows="1" maxlength="2000" placeholder="Écris ton message…" aria-label="Message"></textarea><button class="icon-btn send" type="submit" aria-label="Envoyer">${I.send}</button></form>`;
   return `<section class="screen thread">
-    <div class="thread-top">${back}<a class="thread-who" ${sys ? '' : `href="#/membre/${other.id}"`}>${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${teamBadge(other.team)}${other.org && !other.team ? orgBadge(['']) : ''}${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
+    <div class="thread-top">${back}<a class="thread-who" ${sys ? '' : `href="#/membre/${other.id}"`}>${memberAv(other)}<span class="tw-txt"><strong>${esc(other.pseudo)}</strong>${teamBadge(other.team)}${other.official || other.official_org ? officialBadge() : other.org && !other.team ? orgBadge(['']) : ''}${lastSeenLabel(other) ? `<span class="seen ${isOnline(other) ? 'on' : ''}">${lastSeenLabel(other)}</span>` : ''}</span></a>
       ${sys ? '' : `<button class="icon-btn" data-act="msg-menu" data-user="${other.id}" data-conv="${c ? c.id : ''}" aria-label="Options">${I.dots}</button>`}</div>
     <div class="msg-list" id="msgList">${bubbles || `<p class="muted center tiny">${c ? '' : 'Ton premier message sera envoyé comme une demande.'}</p>`}
       ${pending ? '<p class="muted center tiny">En attente d’acceptation : tu peux envoyer jusqu’à 3 messages.</p>' : ''}
@@ -1399,7 +1404,7 @@ function viewMember(id) {
     ${isAdmin() && m.is_invisible ? '<p class="tiny muted center">Profil invisible : seuls les admins voient cette fiche.</p>' : ''}
     <div class="member-head">
       ${offOrg && offOrg.logo_path ? `<div class="member-av official-av">${orgLogo({ name: offOrg.name, logo: offOrg.logo_path })}</div>` : av ? `<button class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}" data-act="img-view" data-src="${esc(av)}" aria-label="Agrandir la photo"><img src="${esc(av)}" alt=""></button>` : `<div class="avatar member-av${!mine && isOnline(m) ? ' is-online' : ''}">${esc(m.pseudo.charAt(0).toUpperCase())}</div>`}
-      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${m.official_org ? `<span class="team-badge org-badge">${I.check}Compte officiel</span>` : orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'supporter' && b.earned_at) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : ''}
+      <div class="pseudo">${esc(m.pseudo)}</div>${teamBadge(m.role === 'admin')}${champBadge(m.id)}${m.official_org ? officialBadge() : orgBadge(m.org_names, true)}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'pioneer' && b.earned_at) ? '<span class="pill-red">PIONNIER</span>' : ''}${Array.isArray(passportCache.get(m.id)) && passportCache.get(m.id).some((b) => b.code === 'supporter' && b.earned_at) ? `<span class="pill-red">${I.heart}SOUTIEN</span>` : ''}
       ${!mine && lastSeenLabel(m) ? `<div class="seen ${isOnline(m) ? 'on' : ''}">${lastSeenLabel(m)}</div>` : ''}
       <div class="muted">${esc(cityLabel({ name: m.city, postal: m.postal_code }))}${!mine && m.latitude != null ? ` · à ${memberKm(m)} km` : ''}</div>
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
