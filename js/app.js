@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.46.1';
+const VERSION = '0.46.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1676,26 +1676,22 @@ function reviewSheet() {
     <p class="muted">Ta note pour EuroKink :</p>
     <div class="rv-stars" role="radiogroup" aria-label="Note">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rv-star${n <= rating ? ' on' : ''}" data-n="${n}" aria-label="${n} / 5">${I.star}</button>`).join('')}</div>
     <label class="field">Ton avis en quelques mots<textarea id="rvText" maxlength="150" rows="3" placeholder="Ce que tu aimes, ce qui manque…">${esc(r.comment || '')}</textarea><span class="hint"><span id="rvCount">${(r.comment || '').length}</span> / 150</span></label>
-    <label class="checkline"><input type="checkbox" id="rvShare" ${r.rating && !r.can_share ? '' : 'checked'}><span>J’accepte que mon avis soit partagé sur les réseaux d’EuroKink</span></label>
-    <div id="rvSign" class="rv-sign" ${r.rating && !r.can_share ? 'hidden' : ''}>
-      <label class="checkline"><input type="radio" name="rvSign" value="anon" ${r.sign_pseudo ? '' : 'checked'}><span>Signé « Un membre d’EuroKink »</span></label>
-      <label class="checkline"><input type="radio" name="rvSign" value="pseudo" ${r.sign_pseudo ? 'checked' : ''}><span>Signé avec mon pseudo (${esc(profile.pseudo)})</span></label>
-    </div>
+    <label class="checkline"><input type="checkbox" id="rvAnon" ${r.rating && !r.sign_pseudo ? 'checked' : ''}><span>Rester anonyme (ton avis sera signé « Un membre d’EuroKink » au lieu de ton pseudo)</span></label>
+    <p class="tiny muted">Ton avis pourra être partagé sur les réseaux d’EuroKink.</p>
     <p class="form-error" id="rvErr" role="alert" hidden></p>
     <button class="btn btn-red btn-block" id="rvSend">${r.rating ? 'Modifier mon avis' : 'Envoyer mon avis'}</button>`);
   const paint = () => el.querySelectorAll('.rv-star').forEach((b) => b.classList.toggle('on', Number(b.dataset.n) <= rating));
   el.querySelectorAll('.rv-star').forEach((b) => b.addEventListener('click', () => { rating = Number(b.dataset.n); paint(); }));
   const txt = el.querySelector('#rvText');
   txt.addEventListener('input', () => { el.querySelector('#rvCount').textContent = txt.value.length; });
-  el.querySelector('#rvShare').addEventListener('change', (ev) => { el.querySelector('#rvSign').hidden = !ev.target.checked; });
   el.querySelector('#rvSend').addEventListener('click', async (ev) => {
     const err = el.querySelector('#rvErr');
     if (!rating) { err.textContent = t('Choisis une note de 1 à 5 étoiles.'); err.hidden = false; return; }
     ev.target.disabled = true;
-    const share = el.querySelector('#rvShare').checked;
+    const anon = el.querySelector('#rvAnon').checked;
     try {
-      await sb.rpc('submit_review', { p_rating: rating, p_comment: txt.value.trim(), p_share: share, p_sign: share && el.querySelector('[name=rvSign]:checked').value === 'pseudo' });
-      reviewState = { ...(reviewState || {}), review: { rating, comment: txt.value.trim(), can_share: share } };
+      await sb.rpc('submit_review', { p_rating: rating, p_comment: txt.value.trim(), p_share: true, p_sign: !anon });
+      reviewState = { ...(reviewState || {}), review: { rating, comment: txt.value.trim(), can_share: true, sign_pseudo: !anon } };
       closeOverlay(); toast('Merci pour ton avis ! 🖤'); render();
     } catch (e2) { err.textContent = e2.message; err.hidden = false; ev.target.disabled = false; }
   });

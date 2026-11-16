@@ -359,6 +359,8 @@ const T = {
   'Organisateurs': ['Organisers', 'Veranstalter'],
   'Modération': ['Moderation', 'Moderation'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Rester anonyme (ton avis sera signé « Un membre d’EuroKink » au lieu de ton pseudo)': ['Stay anonymous (your review will be signed “A EuroKink member” instead of your username)', 'Anonym bleiben (deine Bewertung wird mit „Ein EuroKink-Mitglied“ statt mit deinem Benutzernamen unterzeichnet)'],
+  'Ton avis pourra être partagé sur les réseaux d’EuroKink.': ['Your review may be shared on EuroKink’s social media.', 'Deine Bewertung kann in den sozialen Netzwerken von EuroKink geteilt werden.'],
   'Donne ton avis !': ['Give us your feedback!', 'Sag uns deine Meinung!'],
   'Que penses-tu d’EuroKink ? Une note et quelques mots nous aident à améliorer l’appli.': ['What do you think of EuroKink? A rating and a few words help us improve the app.', 'Was hältst du von EuroKink? Eine Bewertung und ein paar Worte helfen uns, die App zu verbessern.'],
   'Noter EuroKink': ['Rate EuroKink', 'EuroKink bewerten'],
