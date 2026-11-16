@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.46.3';
+const VERSION = '0.47.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -490,7 +490,7 @@ async function loadMembers(force) {
   loadChamps();
   if (!force && members && Date.now() - membersAt < 120000) return;
   try {
-    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at,role,org_names&is_invisible=eq.false&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
+    members = await sb.select('profiles', 'select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,interests,last_seen_at,role,org_names&is_invisible=eq.false&official_org=is.null&latitude=not.is.null&longitude=not.is.null&order=created_at.desc&limit=5000');
     membersAt = Date.now(); membersError = '';
   } catch (e) { membersError = e.message || 'Impossible de charger les membres.'; }
 }
@@ -999,6 +999,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.47', date: '2026-11-16',
+    fr: ['Les comptes au nom d’une organisation sont signalés « Compte officiel » et mènent à sa page', 'Sur la page d’un organisateur, tu peux lui écrire directement'],
+    en: ['Accounts named after an organisation are marked “Official account” and link to its page', 'On an organiser’s page, you can message them directly'],
+    de: ['Konten im Namen einer Organisation sind als „Offizielles Konto“ gekennzeichnet und führen zu ihrer Seite', 'Auf der Seite eines Veranstalters kannst du ihm direkt schreiben'] },
   { v: '0.46', date: '2026-11-16',
     fr: ['Donne ton avis sur EuroKink : une note de 1 à 5 et quelques mots'],
     en: ['Give your feedback on EuroKink: a rating from 1 to 5 and a few words'],
@@ -1381,7 +1385,7 @@ function viewMember(id) {
   const mine = profile && id === profile.id;
   const m = mine ? profile : memberCache.get(id);
   if (m === undefined) {
-    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at,last_seen_at,role,is_invisible,suspended_until,suspension_reason,org_names`)
+    sb.select('profiles', `id=eq.${id}&select=id,pseudo,avatar_path,city,postal_code,latitude,longitude,bio,interests,member_number,created_at,last_seen_at,role,is_invisible,suspended_until,suspension_reason,org_names,official_org`)
       .then((r) => { memberCache.set(id, r[0] || null); }).catch(() => memberCache.set(id, null))
       .then(() => { if (location.hash === `#/membre/${id}`) render(); });
     return `<section class="screen">${back}<div class="loading"><div class="spinner" aria-hidden="true"></div></div></section>`;
@@ -1400,7 +1404,7 @@ function viewMember(id) {
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
-    ${m.org_names && m.org_names.length ? memberOrgsCard(m.id) : ''}
+    ${m.org_names && m.org_names.length ? memberOrgsCard(m.id, m.official_org) : ''}
     ${memberBadges(m.id, mine)}
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
     ${(() => {
@@ -1635,7 +1639,7 @@ async function donateSave(btn) {
 
 // Organisations gérées par un membre : liens vers leur page
 const memberOrgsCache = new Map();
-function memberOrgsCard(id) {
+function memberOrgsCard(id, official) {
   const c = memberOrgsCache.get(id);
   if (c === undefined) {
     memberOrgsCache.set(id, null);
@@ -1644,8 +1648,15 @@ function memberOrgsCard(id) {
     return '';
   }
   if (!c || !c.length) return '';
-  return `<div class="card member-orgs"><strong class="mo-title">${c.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
-    ${c.map((o) => `<a class="mo-row" href="#/organisateur/${o.id}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="mo-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.upcoming ? `${o.upcoming} soirée${o.upcoming > 1 ? 's' : ''} à venir` : 'Voir la page'}</span></span>${I.chevron}</a>`).join('')}</div>`;
+  const off = official && c.find((o) => o.id === official);
+  const others = off ? c.filter((o) => o.id !== official) : c;
+  const offCard = off ? `<div class="card official-card">${orgLogo({ name: off.name, logo: off.logo_path })}
+      <div class="oc-main"><span class="oc-label">${I.check} Compte officiel</span><strong>${esc(off.name)}</strong>
+      <span class="muted tiny">Ce compte représente l’organisation. Ses soirées sont sur sa page.</span></div>
+      <a class="btn btn-red btn-block" href="#/organisateur/${off.id}">Voir la page et les soirées${off.upcoming ? ` (${off.upcoming})` : ''}</a></div>` : '';
+  if (!others.length) return offCard;
+  return offCard + `<div class="card member-orgs"><strong class="mo-title">${others.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
+    ${others.map((o) => `<a class="mo-row" href="#/organisateur/${o.id}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="mo-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.upcoming ? `${o.upcoming} soirée${o.upcoming > 1 ? 's' : ''} à venir` : 'Voir la page'}</span></span>${I.chevron}</a>`).join('')}</div>`;
 }
 
 // --- Avis des membres (« Donne ton avis ! ») ---
@@ -2852,7 +2863,8 @@ function viewBecomeOrganizer() {
     <div class="card perks"><strong>Ton espace organisateur, c’est :</strong>
       <ul><li>Publier et modifier tes soirées en quelques minutes</li><li>Des statistiques : vues, favoris, « J’y vais », alertes billetterie</li>
       <li>Ta page publique, que les membres peuvent suivre</li><li>Une fois vérifié, tes soirées sont publiées sans attente</li></ul>
-      <p class="tiny muted">C’est gratuit. Sur l’appli, seul le nom de ton organisation apparaît, jamais ton pseudo.</p></div>
+      <p class="tiny muted">C’est gratuit. Sur l’appli, seul le nom de ton organisation apparaît, jamais ton pseudo.</p>
+      <p class="tiny muted">Ton organisation aura sa propre page : tu peux garder ton compte personnel pour la gérer. Si tu préfères un compte au nom de l’organisation (partagé avec ton équipe, par exemple), donne-lui exactement le même nom : il sera affiché comme son « compte officiel ».</p></div>
     ${req && req.status === 'rejected' ? `<div class="card"><strong>Ta demande précédente a été refusée</strong>${req.rejection_reason ? `<p class="tiny muted">Motif : ${esc(req.rejection_reason)}</p>` : ''}</div>` : ''}
     <form id="orgRequestForm" class="card settings" novalidate>
       <label class="field">Nom de l’organisation *<input name="name" maxlength="80" required placeholder="Ex. Rubber Ouest" autocomplete="off"></label>
@@ -3174,6 +3186,7 @@ function viewOrganizerPage(id) {
       <div class="muted tiny">${ORG_KIND[o.kind] || ''}${o.city ? ` · ${esc(o.city)}` : ''}${o.country ? ` · ${esc(COUNTRY_NAMES[o.country] || o.country)}` : ''} · ${o.followers} abonné${o.followers > 1 ? 's' : ''}</div>
       <button class="btn ${o.following ? 'btn-ghost' : 'btn-red'}" data-act="follow" data-id="${o.id}" data-on="${o.following ? '' : '1'}">${o.following ? 'Abonné ✓' : 'Suivre'}</button>
       ${o.website ? `<a class="link" href="${esc(o.website)}" target="_blank" rel="noopener">Site officiel</a>` : ''}
+      ${o.official_user && loggedIn() && o.official_user !== profile.id ? `<a class="btn btn-ghost" href="#/messages/u-${o.official_user}">${I.chat}<span>Écrire à l’organisateur</span></a>` : ''}
     </div>
     ${o.description ? `<p class="about">${ut(o.description)}</p>` : ''}
     ${o.manager ? `<a class="line-btn rounded" href="#/orga/${o.id}">${I.gear}<span>Gérer dans mon espace organisateur</span>${I.chevron}</a>` : ''}

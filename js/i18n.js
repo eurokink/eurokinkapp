@@ -358,7 +358,14 @@ const T = {
   'Organisateur vérifié : ta soirée est publiée tout de suite.': ['Verified organiser: your event is published straight away.', 'Verifizierter Veranstalter: Deine Party wird sofort veröffentlicht.'],
   'Organisateurs': ['Organisers', 'Veranstalter'],
   'Modération': ['Moderation', 'Moderation'],
+  'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Compte officiel': ['Official account', 'Offizielles Konto'],
+  'Ce compte représente l’organisation. Ses soirées sont sur sa page.': ['This account represents the organisation. Its events are on its page.', 'Dieses Konto vertritt die Organisation. Ihre Partys stehen auf ihrer Seite.'],
+  'Voir la page et les soirées': ['See the page and events', 'Seite und Partys ansehen'],
+  'Écrire à l’organisateur': ['Message the organiser', 'Dem Veranstalter schreiben'],
+  'Ton organisation aura sa propre page : tu peux garder ton compte personnel pour la gérer. Si tu préfères un compte au nom de l’organisation (partagé avec ton équipe, par exemple), donne-lui exactement le même nom : il sera affiché comme son « compte officiel ».': ['Your organisation will have its own page: you can keep your personal account to manage it. If you prefer an account named after the organisation (shared with your team, for example), give it exactly the same name: it will be shown as its “official account”.', 'Deine Organisation bekommt eine eigene Seite: Du kannst sie mit deinem persönlichen Konto verwalten. Wenn du lieber ein Konto im Namen der Organisation möchtest (z. B. mit deinem Team geteilt), gib ihm genau denselben Namen: Es wird als ihr „offizielles Konto“ angezeigt.'],
+  'Ce pseudo correspond à une organisation présente sur EuroKink. Si tu en fais partie, choisis un autre pseudo, puis demande à la rejoindre : tu pourras ensuite prendre son nom.': ['This username matches an organisation on EuroKink. If you’re part of it, choose another username, then ask to join it: you’ll then be able to take its name.', 'Dieser Benutzername entspricht einer Organisation auf EuroKink. Wenn du dazugehörst, wähle einen anderen Benutzernamen und bitte darum, ihr beizutreten: Danach kannst du ihren Namen übernehmen.'],
   'Rester anonyme (ton avis sera signé « Un membre d’EuroKink » au lieu de ton pseudo)': ['Stay anonymous (your review will be signed “A EuroKink member” instead of your username)', 'Anonym bleiben (deine Bewertung wird mit „Ein EuroKink-Mitglied“ statt mit deinem Benutzernamen unterzeichnet)'],
   'Ton avis pourra être partagé sur les réseaux d’EuroKink.': ['Your review may be shared on EuroKink’s social media.', 'Deine Bewertung kann in den sozialen Netzwerken von EuroKink geteilt werden.'],
   'Donne ton avis !': ['Give us your feedback!', 'Sag uns deine Meinung!'],
@@ -854,6 +861,7 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^Voir la page et les soirées \((\d+)\)$/, (m) => [`See the page and events (${m[1]})`, `Seite und Partys ansehen (${m[1]})`]],
   [/^Signé avec mon pseudo \((.+)\)$/, (m) => [`Signed with my username (${m[1]})`, `Mit meinem Benutzernamen unterzeichnet (${m[1]})`]],
   [/^Du (.+) au (.+?)( · horaires non communiqués)?$/, (m) => [`From ${m[1]} to ${m[2]}${m[3] ? ' · times not announced' : ''}`, `Vom ${m[1]} bis ${m[2]}${m[3] ? ' · Uhrzeiten nicht bekannt' : ''}`]],
   [/^(.+) · horaires non communiqués$/, (m) => [`${m[1]} · times not announced`, `${m[1]} · Uhrzeiten nicht bekannt`]],

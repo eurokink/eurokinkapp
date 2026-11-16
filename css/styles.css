@@ -788,3 +788,12 @@ body.kb .sys-note { padding-bottom: 12px; }
 .rv-text { margin: 6px 0; overflow-wrap: anywhere; }
 .rv-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .tag-green { background: rgba(46, 160, 67, .18); color: #5fd27a; }
+
+/* Compte officiel d'une organisation */
+.official-card { display: grid; grid-template-columns: 56px 1fr; gap: 12px; align-items: center; border-color: var(--red); }
+.official-card .org-logo { width: 56px; height: 56px; }
+.official-card .btn { grid-column: 1 / -1; }
+.oc-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.oc-main strong { font-size: 18px; overflow-wrap: anywhere; }
+.oc-label { color: var(--red-text); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; display: inline-flex; align-items: center; gap: 4px; }
+.oc-label svg { width: 14px; height: 14px; }
