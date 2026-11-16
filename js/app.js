@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.46.0';
+const VERSION = '0.46.1';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1676,8 +1676,8 @@ function reviewSheet() {
     <p class="muted">Ta note pour EuroKink :</p>
     <div class="rv-stars" role="radiogroup" aria-label="Note">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rv-star${n <= rating ? ' on' : ''}" data-n="${n}" aria-label="${n} / 5">${I.star}</button>`).join('')}</div>
     <label class="field">Ton avis en quelques mots<textarea id="rvText" maxlength="150" rows="3" placeholder="Ce que tu aimes, ce qui manque…">${esc(r.comment || '')}</textarea><span class="hint"><span id="rvCount">${(r.comment || '').length}</span> / 150</span></label>
-    <label class="checkline"><input type="checkbox" id="rvShare" ${r.can_share ? 'checked' : ''}><span>J’accepte que mon avis soit partagé sur les réseaux d’EuroKink</span></label>
-    <div id="rvSign" class="rv-sign" ${r.can_share ? '' : 'hidden'}>
+    <label class="checkline"><input type="checkbox" id="rvShare" ${r.rating && !r.can_share ? '' : 'checked'}><span>J’accepte que mon avis soit partagé sur les réseaux d’EuroKink</span></label>
+    <div id="rvSign" class="rv-sign" ${r.rating && !r.can_share ? 'hidden' : ''}>
       <label class="checkline"><input type="radio" name="rvSign" value="anon" ${r.sign_pseudo ? '' : 'checked'}><span>Signé « Un membre d’EuroKink »</span></label>
       <label class="checkline"><input type="radio" name="rvSign" value="pseudo" ${r.sign_pseudo ? 'checked' : ''}><span>Signé avec mon pseudo (${esc(profile.pseudo)})</span></label>
     </div>
