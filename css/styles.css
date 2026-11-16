@@ -772,3 +772,19 @@ body.kb .sys-note { padding-bottom: 12px; }
 .mo-name .accent svg { width: 14px; height: 14px; vertical-align: -2px; }
 .mo-name .block { display: block; font-weight: 400; }
 .mo-row > svg:last-child { width: 18px; height: 18px; color: var(--muted); flex: none; }
+
+/* Avis des membres */
+.review-card .msg-card-ic svg { color: #f5b301; }
+.rv-stars { display: flex; justify-content: center; gap: 8px; margin: 6px 0 14px; }
+.rv-star { width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; color: var(--muted); }
+.rv-star svg { width: 26px; height: 26px; }
+.rv-star.on { color: #f5b301; border-color: #f5b301; }
+.rv-star.on svg { fill: #f5b301; }
+.rv-sign { margin: -4px 0 8px 28px; }
+.rv-mini { color: #f5b301; letter-spacing: 1px; white-space: nowrap; }
+.rv-list { display: flex; flex-direction: column; gap: 12px; }
+.rv-item + .rv-item { border-top: 1px solid var(--border); padding-top: 12px; }
+.rv-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rv-text { margin: 6px 0; overflow-wrap: anywhere; }
+.rv-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tag-green { background: rgba(46, 160, 67, .18); color: #5fd27a; }

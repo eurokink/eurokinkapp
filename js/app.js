@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.45.2';
+const VERSION = '0.46.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -267,6 +267,7 @@ function viewHome() {
     ${earlyCard()}
     ${newsCard()}
     ${donateCard()}
+    ${reviewCard()}
     ${featured ? `<div class="section-head"><h2>À la une</h2><a href="#/explorer" class="link">Tout voir</a></div>${featuredCard(featured)}` : ''}
     ${weekend.length ? `<h2 class="section-title">Ce week-end près de toi</h2><div class="list">${weekend.map(eventRow).join('')}</div>`
       : nearest.length ? `<h2 class="section-title">Les plus proches de toi</h2><div class="list">${nearest.map(eventRow).join('')}</div>` : ''}
@@ -998,6 +999,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.46', date: '2026-11-16',
+    fr: ['Donne ton avis sur EuroKink : une note de 1 à 5 et quelques mots'],
+    en: ['Give your feedback on EuroKink: a rating from 1 to 5 and a few words'],
+    de: ['Sag uns deine Meinung zu EuroKink: eine Bewertung von 1 bis 5 und ein paar Worte'] },
   { v: '0.45.2', date: '2026-11-16',
     fr: ['Sur le profil d’un organisateur, touche son organisation pour voir sa page et ses soirées'],
     en: ['On an organiser’s profile, tap their organisation to see its page and events'],
@@ -1639,6 +1644,78 @@ function memberOrgsCard(id) {
   if (!c || !c.length) return '';
   return `<div class="card member-orgs"><strong class="mo-title">${c.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
     ${c.map((o) => `<a class="mo-row" href="#/organisateur/${o.id}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="mo-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.upcoming ? `${o.upcoming} soirée${o.upcoming > 1 ? 's' : ''} à venir` : 'Voir la page'}</span></span>${I.chevron}</a>`).join('')}</div>`;
+}
+
+// --- Avis des membres (« Donne ton avis ! ») ---
+const REVIEW_KEY = 'ek.reviewCard';
+let reviewState = null; // { review, member_since }
+function loadMyReview() {
+  if (!loggedIn()) return;
+  sb.rpc('my_review', {}).then((r) => { reviewState = r || { review: null }; if ((location.hash || '#/') === '#/' || location.hash === '#/accueil') render(); }).catch(() => {});
+}
+const starsTxt = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+function reviewCard() {
+  if (!loggedIn() || !reviewState || reviewState.review) return '';
+  const since = reviewState.member_since ? new Date(reviewState.member_since) : null;
+  if (!since || Date.now() - since < 3 * 864e5) return '';
+  try { const t = Number(localStorage.getItem(REVIEW_KEY) || 0); if (t && Date.now() - t < 30 * 864e5) return ''; } catch (e) { /* stockage indisponible */ }
+  return `<div class="card early-card review-card"><div class="early-top"><span class="msg-card-ic">${I.star}</span><strong>Donne ton avis !</strong>
+    <button class="icon-btn small" data-act="review-close" aria-label="Fermer">${I.close}</button></div>
+    <p class="muted tiny">Que penses-tu d’EuroKink ? Une note et quelques mots nous aident à améliorer l’appli.</p>
+    <button class="btn btn-red btn-block" data-act="review">${I.star}<span>Noter EuroKink</span></button></div>`;
+}
+function askReviewAfterCheckin() {
+  if (!reviewState || reviewState.review) return;
+  try { const t = Number(localStorage.getItem('ek.reviewAsk') || 0); if (t && Date.now() - t < 30 * 864e5) return; localStorage.setItem('ek.reviewAsk', String(Date.now())); } catch (e) { return; }
+  setTimeout(reviewSheet, 1800);
+}
+function reviewSheet() {
+  const r = (reviewState && reviewState.review) || {};
+  let rating = r.rating || 0;
+  const el = sheet(`<div class="sheet-head"><h2>Donne ton avis !</h2><button class="icon-btn small" data-sheet-close aria-label="Fermer">${I.close}</button></div>
+    <p class="muted">Ta note pour EuroKink :</p>
+    <div class="rv-stars" role="radiogroup" aria-label="Note">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rv-star${n <= rating ? ' on' : ''}" data-n="${n}" aria-label="${n} / 5">${I.star}</button>`).join('')}</div>
+    <label class="field">Ton avis en quelques mots<textarea id="rvText" maxlength="150" rows="3" placeholder="Ce que tu aimes, ce qui manque…">${esc(r.comment || '')}</textarea><span class="hint"><span id="rvCount">${(r.comment || '').length}</span> / 150</span></label>
+    <label class="checkline"><input type="checkbox" id="rvShare" ${r.can_share ? 'checked' : ''}><span>J’accepte que mon avis soit partagé sur les réseaux d’EuroKink</span></label>
+    <div id="rvSign" class="rv-sign" ${r.can_share ? '' : 'hidden'}>
+      <label class="checkline"><input type="radio" name="rvSign" value="anon" ${r.sign_pseudo ? '' : 'checked'}><span>Signé « Un membre d’EuroKink »</span></label>
+      <label class="checkline"><input type="radio" name="rvSign" value="pseudo" ${r.sign_pseudo ? 'checked' : ''}><span>Signé avec mon pseudo (${esc(profile.pseudo)})</span></label>
+    </div>
+    <p class="form-error" id="rvErr" role="alert" hidden></p>
+    <button class="btn btn-red btn-block" id="rvSend">${r.rating ? 'Modifier mon avis' : 'Envoyer mon avis'}</button>`);
+  const paint = () => el.querySelectorAll('.rv-star').forEach((b) => b.classList.toggle('on', Number(b.dataset.n) <= rating));
+  el.querySelectorAll('.rv-star').forEach((b) => b.addEventListener('click', () => { rating = Number(b.dataset.n); paint(); }));
+  const txt = el.querySelector('#rvText');
+  txt.addEventListener('input', () => { el.querySelector('#rvCount').textContent = txt.value.length; });
+  el.querySelector('#rvShare').addEventListener('change', (ev) => { el.querySelector('#rvSign').hidden = !ev.target.checked; });
+  el.querySelector('#rvSend').addEventListener('click', async (ev) => {
+    const err = el.querySelector('#rvErr');
+    if (!rating) { err.textContent = t('Choisis une note de 1 à 5 étoiles.'); err.hidden = false; return; }
+    ev.target.disabled = true;
+    const share = el.querySelector('#rvShare').checked;
+    try {
+      await sb.rpc('submit_review', { p_rating: rating, p_comment: txt.value.trim(), p_share: share, p_sign: share && el.querySelector('[name=rvSign]:checked').value === 'pseudo' });
+      reviewState = { ...(reviewState || {}), review: { rating, comment: txt.value.trim(), can_share: share } };
+      closeOverlay(); toast('Merci pour ton avis ! 🖤'); render();
+    } catch (e2) { err.textContent = e2.message; err.hidden = false; ev.target.disabled = false; }
+  });
+}
+// Admin : avis reçus
+let adminReviews = null;
+function reviewsAdmin() {
+  if (!adminReviews) { adminReviews = { loading: true }; sb.rpc('admin_reviews', {}).then((r) => { adminReviews = r || { error: true }; }).catch(() => { adminReviews = { error: true }; }).then(() => { if ((location.hash || '').startsWith('#/admin')) render(); }); }
+  const d = adminReviews;
+  if (d.loading || d.error) return '';
+  const max = Math.max(1, ...[1, 2, 3, 4, 5].map((n) => d.dist[n] || 0));
+  return `<h2 class="group-title">Avis des membres</h2>
+    <div class="stats four">${[[d.average != null ? String(d.average).replace('.', ',') : '–', 'note moyenne'], [d.count, 'avis'], [d.shareable, 'partageables']].map(([n, l]) => `<div class="stat"><strong>${n}</strong><span>${l}</span></div>`).join('')}</div>
+    ${d.count ? `<div class="card st-list"><strong>Répartition</strong>${[5, 4, 3, 2, 1].map((n) => `<div class="st-row"><span class="rv-mini">${starsTxt(n)}</span><div class="st-track"><i style="width:${Math.round(((d.dist[n] || 0) / max) * 100)}%"></i></div><b>${d.dist[n] || 0}</b></div>`).join('')}</div>
+    <div class="card rv-list">${d.list.map((x) => `<div class="rv-item"><div class="rv-head"><span class="rv-mini">${starsTxt(x.rating)}</span><a href="#/membre/${x.id}" class="tiny">${esc(x.pseudo)}</a><span class="muted tiny">${fDate.format(new Date(x.at))}</span></div>
+      ${x.comment ? `<p class="rv-text" data-no-i18n>« ${esc(x.comment)} »</p>` : '<p class="muted tiny">Pas de commentaire.</p>'}
+      ${x.can_share && x.comment ? `<div class="rv-foot"><span class="tag tag-green">Partage OK · ${x.sign_pseudo ? esc(x.pseudo) : 'anonyme'}</span><button class="link" data-act="review-copy" data-text="${esc(`« ${x.comment} »\n${starsTxt(x.rating)}\n— ${x.sign_pseudo ? x.pseudo : 'Un membre d’EuroKink'}`)}">Copier pour Instagram</button></div>` : `<span class="muted tiny">${x.can_share ? '' : 'Ne pas publier'}</span>`}</div>`).join('')}</div>` : '<p class="muted tiny">Aucun avis pour le moment.</p>'}`;
+}
+async function reviewCopy(btn) {
+  try { await navigator.clipboard.writeText(btn.dataset.text); toast('Avis copié'); } catch (e) { toast('Copie impossible'); }
 }
 
 // --- Pastille sur l'icône de l'appli (nombre de messages non lus) ---
@@ -2570,7 +2647,7 @@ function viewAdmin() {
     ? (pending.map(adminPendingCard).join('') || empty('Aucune soirée à valider. Tout est à jour !'))
     : adminTab === 'requests' ? (requests.map(adminRequestCard).join('') || empty('Aucune demande d’organisateur.'))
     : adminTab === 'robot' ? viewRobot()
-    : adminTab === 'stats' ? viewStats() + donateAdmin()
+    : adminTab === 'stats' ? viewStats() + reviewsAdmin() + donateAdmin()
     : adminTab === 'members' ? viewAdmMembers()
     : (reports.map(adminReportCard).join('') || empty('Aucun signalement en cours.'));
   return `<section class="screen">${accountTopRaw('Espace admin', '#/profil')}
@@ -3437,6 +3514,9 @@ document.addEventListener('click', (ev) => {
     case 'install-close': try { localStorage.setItem('ek.installHide', '1'); } catch (e) { /* */ } render(); break;
     case 'game-promo-close': gamePromoDone(); render(); break;
     case 'donate': donateSheet(); break;
+    case 'review': reviewSheet(); break;
+    case 'review-close': try { localStorage.setItem(REVIEW_KEY, String(Date.now())); } catch (e) { /* stockage indisponible */ } render(); break;
+    case 'review-copy': reviewCopy(act); break;
     case 'donate-close': try { localStorage.setItem(DONATE_KEY, String(Date.now())); } catch (e) { /* stockage indisponible */ } render(); break;
     case 'donate-save': donateSave(act); break;
     case 'early-close': try { localStorage.setItem(EARLY_KEY, '1'); } catch (e) { /* stockage indisponible */ } render(); break;
@@ -3940,6 +4020,7 @@ async function loadUser() {
     [ids('favorites'), ids('reminders'), ids('ticket_alerts'), ids('attendances')]);
   await loadPassport();
   presenceTick();
+  loadMyReview();
   setTimeout(checkWarnings, 800);
   refreshUnread();
   following = new Set(await sb.select('member_follows', `follower_id=eq.${uid}&select=followed_id`).then((r) => r.map((x) => x.followed_id)).catch(() => []));
@@ -3968,6 +4049,7 @@ async function serverCheckIn(e, lat, lon) {
       const names = (r.new_badges || []).map((c) => (BADGES.find((b) => b.code === c) || {}).name).filter(Boolean);
       toast(names.length ? `Présence validée ! Nouveau badge : ${names.join(', ')}` : 'Présence validée !');
       render();
+      askReviewAfterCheckin();
     } else if (r.result === 'too_far') toast(tooFar(r.distance_m));
     else if (r.result === 'outside_time_window') toast('La validation ouvre une heure avant le début de la soirée.');
     else if (r.result === 'already_validated') { toast('Ta présence est déjà validée.'); await loadPassport(); render(); }

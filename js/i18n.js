@@ -359,6 +359,18 @@ const T = {
   'Organisateurs': ['Organisers', 'Veranstalter'],
   'Modération': ['Moderation', 'Moderation'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Donne ton avis !': ['Give us your feedback!', 'Sag uns deine Meinung!'],
+  'Que penses-tu d’EuroKink ? Une note et quelques mots nous aident à améliorer l’appli.': ['What do you think of EuroKink? A rating and a few words help us improve the app.', 'Was hältst du von EuroKink? Eine Bewertung und ein paar Worte helfen uns, die App zu verbessern.'],
+  'Noter EuroKink': ['Rate EuroKink', 'EuroKink bewerten'],
+  'Ta note pour EuroKink :': ['Your rating for EuroKink:', 'Deine Bewertung für EuroKink:'],
+  'Ton avis en quelques mots': ['Your feedback in a few words', 'Deine Meinung in wenigen Worten'],
+  'Ce que tu aimes, ce qui manque…': ['What you like, what’s missing…', 'Was dir gefällt, was fehlt…'],
+  'J’accepte que mon avis soit partagé sur les réseaux d’EuroKink': ['I agree that my review may be shared on EuroKink’s social media', 'Ich bin einverstanden, dass meine Bewertung in den sozialen Netzwerken von EuroKink geteilt wird'],
+  'Signé « Un membre d’EuroKink »': ['Signed “A EuroKink member”', 'Unterzeichnet mit „Ein EuroKink-Mitglied“'],
+  'Envoyer mon avis': ['Send my review', 'Bewertung senden'],
+  'Modifier mon avis': ['Update my review', 'Bewertung ändern'],
+  'Choisis une note de 1 à 5 étoiles.': ['Choose a rating from 1 to 5 stars.', 'Wähle eine Bewertung von 1 bis 5 Sternen.'],
+  'Merci pour ton avis ! 🖤': ['Thanks for your feedback! 🖤', 'Danke für deine Meinung! 🖤'],
   'Ses organisations': ['Their organisations', 'Seine Organisationen'],
   'Son organisation': ['Their organisation', 'Seine Organisation'],
   'Voir la page': ['See the page', 'Seite ansehen'],
@@ -840,6 +852,7 @@ const tr = (s) => { const v = T[s]; return v ? v[I] : null; };
 // Motifs avec nombres ou noms : [regex, anglais, allemand] ($1, $2… = valeurs)
 const P = (n, one, many) => (Number(n) === 1 ? one : many);
 const R = [
+  [/^Signé avec mon pseudo \((.+)\)$/, (m) => [`Signed with my username (${m[1]})`, `Mit meinem Benutzernamen unterzeichnet (${m[1]})`]],
   [/^Du (.+) au (.+?)( · horaires non communiqués)?$/, (m) => [`From ${m[1]} to ${m[2]}${m[3] ? ' · times not announced' : ''}`, `Vom ${m[1]} bis ${m[2]}${m[3] ? ' · Uhrzeiten nicht bekannt' : ''}`]],
   [/^(.+) · horaires non communiqués$/, (m) => [`${m[1]} · times not announced`, `${m[1]} · Uhrzeiten nicht bekannt`]],
   [/^Paiement sécurisé par Stripe : EuroKink ne voit jamais tes coordonnées bancaires\. Un don ne donne accès à aucune fonction en plus, juste notre gratitude et le badge « Soutien »(.*)\.$/, (m) => [`Secure payment by Stripe: EuroKink never sees your bank details. A donation gives no extra features, just our gratitude and the “Supporter” badge${m[1] ? ' (log in first to get it)' : ''}.`, `Sichere Zahlung über Stripe: EuroKink sieht nie deine Bankdaten. Eine Spende schaltet keine Funktionen frei, nur unseren Dank und das Abzeichen „Unterstützer“${m[1] ? ' (melde dich zuerst an, um es zu erhalten)' : ''}.`]],
