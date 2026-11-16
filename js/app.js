@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.45.1';
+const VERSION = '0.45.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -998,6 +998,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.45.2', date: '2026-11-16',
+    fr: ['Sur le profil d’un organisateur, touche son organisation pour voir sa page et ses soirées'],
+    en: ['On an organiser’s profile, tap their organisation to see its page and events'],
+    de: ['Tippe im Profil eines Veranstalters auf seine Organisation, um ihre Seite und Partys zu sehen'] },
   { v: '0.45', date: '2026-11-16',
     fr: ['Une pastille rouge sur l’icône de l’appli indique tes messages non lus'],
     en: ['A red badge on the app icon now shows your unread messages'],
@@ -1391,6 +1395,7 @@ function viewMember(id) {
       <div class="pills"><span class="pill-grey">Membre n° ${String(m.member_number || 0).padStart(4, '0')}</span>${m.created_at ? `<span class="pill-grey">Depuis ${fMonth.format(new Date(m.created_at))}</span>` : ''}</div>
     </div>
     <div class="card"><h2 class="card-title">Présentation</h2>${m.bio ? `<p class="bio">${ut(m.bio)}</p>` : `<p class="muted">${mine ? 'Tu n’as pas encore écrit de présentation.' : 'Pas encore de présentation.'}</p>`}</div>
+    ${m.org_names && m.org_names.length ? memberOrgsCard(m.id) : ''}
     ${memberBadges(m.id, mine)}
     <div class="card"><h2 class="card-title">Centres d’intérêt</h2>${(m.interests || []).length ? `<div class="chips wrap">${interestChips(m.interests)}</div>` : `<p class="muted">${mine ? 'Choisis les types de soirée qui te plaisent.' : 'Non renseignés.'}</p>`}</div>
     ${(() => {
@@ -1619,6 +1624,21 @@ async function donateSave(btn) {
     await sb.update('app_settings', 'key=eq.donate_monthly_url', { value: monthly || null });
     donateLinks = null; toast('Liens de don enregistrés'); render();
   } catch (err) { toast(err.message); btn.disabled = false; }
+}
+
+// Organisations gérées par un membre : liens vers leur page
+const memberOrgsCache = new Map();
+function memberOrgsCard(id) {
+  const c = memberOrgsCache.get(id);
+  if (c === undefined) {
+    memberOrgsCache.set(id, null);
+    sb.rpc('member_orgs', { p_user: id }).then((r) => memberOrgsCache.set(id, r || [])).catch(() => memberOrgsCache.set(id, []))
+      .then(() => { if ((location.hash || '') === `#/membre/${id}`) render(); });
+    return '';
+  }
+  if (!c || !c.length) return '';
+  return `<div class="card member-orgs"><strong class="mo-title">${c.length > 1 ? 'Ses organisations' : 'Son organisation'}</strong>
+    ${c.map((o) => `<a class="mo-row" href="#/organisateur/${o.id}">${orgLogo({ name: o.name, logo: o.logo_path })}<span class="mo-name">${esc(o.name)}${o.is_verified ? ` <span class="accent">${I.check}</span>` : ''}<span class="muted tiny block">${o.upcoming ? `${o.upcoming} soirée${o.upcoming > 1 ? 's' : ''} à venir` : 'Voir la page'}</span></span>${I.chevron}</a>`).join('')}</div>`;
 }
 
 // --- Pastille sur l'icône de l'appli (nombre de messages non lus) ---
