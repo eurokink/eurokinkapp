@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.46.2';
+const VERSION = '0.46.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -1608,10 +1608,12 @@ function donateAdmin() {
   if (!adminDon) { adminDon = { loading: true }; sb.rpc('admin_donations', {}).then((r) => { adminDon = r || { error: true }; }).catch((err) => { adminDon = { error: err.message }; }).then(() => { if ((location.hash || '').startsWith('#/admin')) render(); }); }
   const l = loadDonateLinks();
   const d = adminDon;
-  const eur = (n) => priceLabel(Number(n || 0), 'EUR');
+  // Montants des dons : toujours un nombre (priceLabel afficherait « Gratuit » pour 0)
+  const money = (n, cur = 'EUR') => new Intl.NumberFormat(LOCALE, { style: 'currency', currency: cur, maximumFractionDigits: Number(n) % 1 ? 2 : 0 }).format(Number(n || 0));
+  const eur = (n) => money(n);
   return `<h2 class="group-title">Dons</h2>
     ${d && !d.loading && !d.error ? `<div class="stats four">${[[eur(d.month), 'ce mois-ci'], [eur(d.total), 'au total'], [d.donors, 'donateurs'], [d.monthly_active, 'dons mensuels']].map(([n, x]) => `<div class="stat"><strong>${n}</strong><span>${x}</span></div>`).join('')}</div>
-      ${d.recent.length ? `<div class="card st-list"><strong>Derniers dons</strong>${d.recent.map((r) => `<div class="st-row"><span>${esc(r.pseudo || 'Anonyme')}</span><span class="muted tiny">${r.kind === 'monthly' ? 'mensuel' : 'ponctuel'} · ${fDate.format(new Date(r.at))}</span><strong>${priceLabel(Number(r.amount), String(r.currency).toUpperCase())}</strong></div>`).join('')}</div>` : ''}` : ''}
+      ${d.recent.length ? `<div class="card st-list"><strong>Derniers dons</strong>${d.recent.map((r) => `<div class="st-row"><span>${esc(r.pseudo || 'Anonyme')}</span><span class="muted tiny">${r.kind === 'monthly' ? 'mensuel' : 'ponctuel'} · ${fDate.format(new Date(r.at))}</span><strong>${money(r.amount, String(r.currency).toUpperCase())}</strong></div>`).join('')}</div>` : ''}` : ''}
     <div class="card settings">
       <label class="field">Lien Stripe « don ponctuel »<input id="donOnce" type="url" inputmode="url" placeholder="https://buy.stripe.com/…" value="${esc((l && l.once) || '')}"></label>
       <label class="field">Lien Stripe « don mensuel »<input id="donMonthly" type="url" inputmode="url" placeholder="https://buy.stripe.com/…" value="${esc((l && l.monthly) || '')}"></label>
