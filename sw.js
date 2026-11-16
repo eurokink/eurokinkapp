@@ -1,5 +1,5 @@
 // EuroKink — service worker : appli disponible hors ligne, mises à jour récupérées en priorité
-const CACHE = 'eurokink-v0.44.0';
+const CACHE = 'eurokink-v0.45.0';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/styles.css', './js/app.js', './js/data.js', './js/legal.js', './js/map.js', './js/game.js', './js/memory.js', './js/europe.js', './js/i18n.js', './js/supabase.js',
   './fonts/Inter-Regular.woff', './fonts/Inter-SemiBold.woff', './fonts/Inter-Bold.woff', './fonts/InterDisplay-Black.woff',
@@ -28,7 +28,13 @@ self.addEventListener('push', (e) => {
   // en remontant le texte en titre quand le titre est simplement « EuroKink »
   let title = (d.title || '').trim(), body = d.body || '';
   if (!title || title === 'EuroKink') { title = body || 'EuroKink'; body = ''; }
+  // Pastille rouge sur l'icône : on ajoute 1 au dernier nombre connu (remis à jour à l'ouverture de l'appli)
+  const badge = caches.open('ek-meta').then((c) => c.match('/badge').then((r) => (r ? r.text() : '0')).then((t) => {
+    const n = (parseInt(t, 10) || 0) + 1;
+    return c.put('/badge', new Response(String(n))).then(() => (self.navigator && self.navigator.setAppBadge ? self.navigator.setAppBadge(n) : null));
+  })).catch(() => {});
   e.waitUntil(Promise.all([
+    badge,
     self.registration.showNotification(title, {
       body, icon: './icons/icon-192.png', badge: './icons/icon-192.png',
       tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '#/' }
