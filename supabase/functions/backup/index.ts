@@ -1,4 +1,4 @@
-// EuroKink — sauvegarde hebdomadaire vers un dépôt GitHub PRIVÉ.
+// EuroKink — sauvegarde quotidienne vers un dépôt GitHub PRIVÉ.
 // Exporte toutes les tables (sans mots de passe), les comptes (e-mail, dates) et les images (logos, photos).
 // Secrets : GITHUB_BACKUP_TOKEN (jeton GitHub limité au dépôt, saisi par l'administrateur), GITHUB_BACKUP_REPO (facultatif).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -25,7 +25,7 @@ async function gitSha(u8: Uint8Array) {
 
 const README = `# Sauvegardes EuroKink (dépôt privé)
 
-Une sauvegarde complète est ajoutée automatiquement chaque semaine (nuit du dimanche au lundi).
+Une sauvegarde complète est ajoutée automatiquement chaque nuit (vers 3 h, heure de Paris).
 Chaque sauvegarde est un commit : l'historique permet de revenir à n'importe quelle semaine.
 
 ## Contenu
