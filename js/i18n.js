@@ -360,6 +360,8 @@ const T = {
   'Modération': ['Moderation', 'Moderation'],
   'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Son dans l’appli': ['In-app sound', 'Ton in der App'],
+  'Un petit son EuroKink quand une notification arrive pendant que l’appli est ouverte': ['A short EuroKink sound when a notification arrives while the app is open', 'Ein kurzer EuroKink-Ton, wenn eine Benachrichtigung kommt, während die App geöffnet ist'],
   'Les liens d’images Instagram ou Facebook expirent au bout de quelques jours : enregistre l’image sur ton téléphone et utilise « Choisir une image ».': ['Instagram or Facebook image links expire after a few days: save the image to your phone and use “Choose an image”.', 'Bildlinks von Instagram oder Facebook laufen nach ein paar Tagen ab: Speichere das Bild auf deinem Handy und nutze „Bild auswählen“.'],
   'Ce lien d’image est trop long ou invalide : enregistre l’image et utilise « Choisir une image ».': ['This image link is too long or invalid: save the image and use “Choose an image”.', 'Dieser Bildlink ist zu lang oder ungültig: Speichere das Bild und nutze „Bild auswählen“.'],
   'Site web': ['Website', 'Website'],

@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.49.1';
+const VERSION = '0.50.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -973,6 +973,7 @@ async function refreshUnread() {
   if (!loggedIn()) return;
   const before = unreadMsgs;
   try { unreadMsgs = await sb.rpc('unread_messages'); } catch (e) { return; }
+  if (unreadMsgs > before) playNotifSound();
   updateMsgBadges();
   if (unreadMsgs !== before && ((location.hash || '#/') === '#/' || location.hash === '#/messages')) { convsAt = 0; loadConvs().then(render); }
 }
@@ -992,7 +993,32 @@ function refreshConvsLive() {
 }
 setInterval(() => { if (document.visibilityState === 'visible' && location.hash === '#/messages') refreshConvsLive(); }, 8000);
 // Notification reçue pendant que l'appli est ouverte : mise à jour immédiate
+// Son EuroKink quand une notification arrive pendant que l'appli est ouverte.
+// iOS n'autorise le son qu'après un premier toucher : on prépare l'audio au premier geste.
+let notifCtx = null, notifBuf = null, notifLast = 0;
+function unlockNotifSound() {
+  if (notifCtx) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    notifCtx = new AC();
+    fetch('./sounds/notif.mp3').then((r) => r.arrayBuffer()).then((a) => notifCtx.decodeAudioData(a)).then((b) => { notifBuf = b; }).catch(() => {});
+    const src = notifCtx.createBufferSource(); src.buffer = notifCtx.createBuffer(1, 1, 22050); src.connect(notifCtx.destination); src.start(0);
+  } catch (e) { notifCtx = null; }
+}
+['touchend', 'click', 'keydown'].forEach((ev) => document.addEventListener(ev, unlockNotifSound, { once: true, passive: true }));
+function playNotifSound() {
+  if (state.notifSound === false || document.visibilityState !== 'visible' || !notifCtx || !notifBuf) return;
+  if (Date.now() - notifLast < 3000) return;
+  notifLast = Date.now();
+  try {
+    if (notifCtx.state === 'suspended') notifCtx.resume();
+    const src = notifCtx.createBufferSource(); const g = notifCtx.createGain(); g.gain.value = 0.7;
+    src.buffer = notifBuf; src.connect(g); g.connect(notifCtx.destination); src.start(0);
+  } catch (e) { /* son indisponible */ }
+}
 function onLivePush(tag) {
+  playNotifSound();
   refreshUnread();
   const h = location.hash || '#/';
   if (tag && tag.startsWith('msg-')) {
@@ -1005,11 +1031,15 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // Nouveautés de l'appli : encart sur l'accueil après chaque mise à jour (jusqu'à ce qu'on le ferme)
 const NEWS = [
+  { v: '0.50', date: '2026-11-17',
+    fr: ['Un petit son EuroKink quand une notification arrive pendant que l’appli est ouverte (réglable dans Paramètres › Notifications)'],
+    en: ['A short EuroKink sound when a notification arrives while the app is open (change it in Settings › Notifications)'],
+    de: ['Ein kurzer EuroKink-Ton, wenn eine Benachrichtigung kommt, während die App geöffnet ist (einstellbar unter Einstellungen › Benachrichtigungen)'] },
   { v: '0.49', date: '2026-11-16',
     fr: ['Pages des organisateurs : lien Instagram et présentation mise en valeur'],
     en: ['Organiser pages: Instagram link and a highlighted introduction'],
     de: ['Veranstalterseiten: Instagram-Link und hervorgehobene Vorstellung'] },
-  { v: '0.49.1', date: '2026-11-16',
+  { v: '0.48.1', date: '2026-11-16',
     fr: ['Organisateurs : une soirée annulée peut maintenant être supprimée'],
     en: ['Organisers: a cancelled event can now be deleted'],
     de: ['Veranstalter: Eine abgesagte Party kann jetzt gelöscht werden'] },
@@ -1017,11 +1047,11 @@ const NEWS = [
     fr: ['À l’inscription, choisis si tu viens faire la fête ou organiser des soirées', 'Organisateurs : ton organisation est déjà dans l’agenda ? Reprends sa page existante et ses soirées'],
     en: ['When signing up, choose whether you’re here to party or to organise events', 'Organisers: already in the calendar? Take over your existing page and events'],
     de: ['Bei der Anmeldung wählst du, ob du feiern oder Partys veranstalten willst', 'Veranstalter: Schon im Kalender? Übernimm deine bestehende Seite mit deinen Partys'] },
-  { v: '0.49.1', date: '2026-11-16',
+  { v: '0.47.3', date: '2026-11-16',
     fr: ['Quel que soit le type choisi dans les filtres, les soirées multi-fetish apparaissent aussi'],
     en: ['Whatever type you pick in the filters, multi-fetish events are shown too'],
     de: ['Egal welche Partyart du filterst: Multi-Fetish-Partys werden auch angezeigt'] },
-  { v: '0.49.1', date: '2026-11-16',
+  { v: '0.47.2', date: '2026-11-16',
     fr: ['Dans la messagerie, les comptes officiels sont signalés « Compte officiel »'],
     en: ['In messages, official accounts are marked “Official account”'],
     de: ['In den Nachrichten sind offizielle Konten als „Offizielles Konto“ gekennzeichnet'] },
@@ -1923,6 +1953,7 @@ function viewSettings() {
         ${sw('nearbyOn', state.nearbyOn !== false, 'Soirées près de chez moi', 'Quand une nouvelle soirée est publiée autour de ta ville')}
         <label class="field">Distance de l’alerte<select name="nearbyKm">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [500, '500 km']], state.nearbyKm || 100)}</select></label>
         ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
+        ${sw('notifSound', state.notifSound !== false, 'Son dans l’appli', 'Un petit son EuroKink quand une notification arrive pendant que l’appli est ouverte')}
         ${sub('Discrétion')}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
         ${sw('calAsk', state.calAsk !== 'never', 'Proposer l’ajout au calendrier', 'Après « J’y vais », une question te propose d’ajouter la soirée à ton calendrier')}
@@ -3711,6 +3742,7 @@ document.addEventListener('change', (ev) => {
     state.reminderTiming = f.reminderTiming.value;
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
+    if (f.notifSound) { const was = state.notifSound !== false; state.notifSound = f.notifSound.checked; if (state.notifSound && !was) { notifLast = 0; playNotifSound(); } }
     if (f.followsOn) state.followsOn = f.followsOn.checked;
     if (f.nearbyOn) state.nearbyOn = f.nearbyOn.checked;
     if (f.nearbyKm) state.nearbyKm = Number(f.nearbyKm.value);
