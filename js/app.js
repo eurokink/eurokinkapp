@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.50.2';
+const VERSION = '0.50.3';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -4286,7 +4286,13 @@ async function submitAccountForm(form) {
       if (!cityPicked(form) && !(await resolveTypedCity(form.querySelector('.city-field')))) throw new Error('Ville introuvable : vérifie l’orthographe ou tape ton code postal.');
       const city = readCity(form);
       if (!f.get('adult') || !f.get('sensitive') || !f.get('terms')) throw new Error('Coche les cases de confirmation pour continuer.');
-      if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo }))) throw new Error('Ce pseudo est déjà pris ou réservé, choisis-en un autre.');
+      const asOrg = form.id === 'signupForm' && f.get('role') === 'org';
+      if (!(await sb.rpc('pseudo_available', { p_pseudo: pseudo, p_org: asOrg }))) {
+        const isOrg = await sb.rpc('pseudo_is_org', { p_pseudo: pseudo }).catch(() => false);
+        if (isOrg && !asOrg) throw new Error('Ce nom est celui d’une organisation présente sur EuroKink. Si c’est la tienne, choisis « Organiser des soirées » en haut du formulaire.');
+        if (isOrg) throw new Error('Cette organisation a déjà un compte qui la gère : choisis ton pseudo perso, son gestionnaire pourra t’inviter.');
+        throw new Error('Ce pseudo est déjà pris ou réservé, choisis-en un autre.');
+      }
       const now = new Date().toISOString();
       const meta = { pseudo, city: city.name, postal_code: city.postal || null, latitude: city.lat, longitude: city.lon, country: city.country || 'FR', adult_confirmed_at: now, sensitive_consent_at: now, terms_accepted_at: now };
       if (form.id === 'completeForm') {

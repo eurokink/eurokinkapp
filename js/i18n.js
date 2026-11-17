@@ -360,6 +360,8 @@ const T = {
   'Modération': ['Moderation', 'Moderation'],
   'Site officiel': ['Official website', 'Offizielle Website'],
   'Voir les organisateurs': ['See organisers', 'Veranstalter anzeigen'],
+  'Ce nom est celui d’une organisation présente sur EuroKink. Si c’est la tienne, choisis « Organiser des soirées » en haut du formulaire.': ['This is the name of an organisation already on EuroKink. If it’s yours, choose “Organise events” at the top of the form.', 'Das ist der Name einer Organisation, die schon auf EuroKink ist. Wenn es deine ist, wähle oben im Formular „Partys zu veranstalten“.'],
+  'Cette organisation a déjà un compte qui la gère : choisis ton pseudo perso, son gestionnaire pourra t’inviter.': ['This organisation is already managed by an account: pick your personal username, its manager can invite you.', 'Diese Organisation wird bereits von einem Konto verwaltet: Wähle deinen persönlichen Nutzernamen, der Verwalter kann dich einladen.'],
   'Son dans l’appli': ['In-app sound', 'Ton in der App'],
   'Un petit son EuroKink quand une notification arrive pendant que l’appli est ouverte': ['A short EuroKink sound when a notification arrives while the app is open', 'Ein kurzer EuroKink-Ton, wenn eine Benachrichtigung kommt, während die App geöffnet ist'],
   'Les liens d’images Instagram ou Facebook expirent au bout de quelques jours : enregistre l’image sur ton téléphone et utilise « Choisir une image ».': ['Instagram or Facebook image links expire after a few days: save the image to your phone and use “Choose an image”.', 'Bildlinks von Instagram oder Facebook laufen nach ein paar Tagen ab: Speichere das Bild auf deinem Handy und nutze „Bild auswählen“.'],
