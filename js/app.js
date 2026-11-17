@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.50.1';
+const VERSION = '0.50.2';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -237,6 +237,7 @@ const empty = (msg) => `<div class="empty">${msg}</div>`;
 function viewWelcome() {
   return `<section class="gate">
     <div class="gate-logo">${LOGO_MARK}${WORDMARK}</div>
+    <p class="gate-slogan" data-no-i18n>Gear up, <span>go out!</span></p>
     <p class="gate-tag">Toutes les soirées fetish, partout en Europe.</p>
     ${inviteBanner()}
     <div class="card gate-card">

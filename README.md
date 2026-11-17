@@ -1,6 +1,6 @@
 # EuroKink — appli web (PWA)
 
-Toutes les soirées fetish, en France puis en Europe.
+**Gear up, go out!** Toutes les soirées fetish, en France puis en Europe.
 
 **Version 0.4.0, étape 2** : les soirées viennent de la base **Supabase** (hébergée à Paris). Sans compte, on peut tout consulter et garder ses favoris sur l'appareil. Avec un compte (e-mail + mot de passe, confirmation par e-mail), favoris, rappels, alertes, sorties, présences et badges sont enregistrés en ligne. Les soirées actuelles sont **fictives** (phase de test).
 
