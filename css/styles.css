@@ -831,3 +831,23 @@ body.kb .sys-note { padding-bottom: 12px; }
 .org-about p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--text); white-space: pre-line; }
 .gate-slogan { margin: 4px 0 0; text-align: center; font-family: 'Inter Display', Inter, system-ui, sans-serif; font-weight: 900; font-size: 30px; letter-spacing: -0.5px; color: var(--text); }
 .gate-slogan span { color: var(--red-text, #FF2A44); }
+/* Thème de Noël (décembre) */
+#snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
+.garland { display: flex; justify-content: space-between; margin: -6px 4px 6px; height: 18px; position: relative; }
+.garland::before { content: ''; position: absolute; left: 0; right: 0; top: 2px; height: 10px; border-bottom: 1.5px solid rgba(255,255,255,0.25); border-radius: 0 0 50% 50% / 0 0 100% 100%; }
+.garland i { position: relative; top: 9px; width: 7px; height: 10px; border-radius: 50% 50% 45% 45%; animation: bulb 2.4s ease-in-out infinite; animation-delay: var(--d); }
+.garland i:nth-child(4n+1) { background: #ff2a44; color: #ff2a44; }
+.garland i:nth-child(4n+2) { background: #ffd166; color: #ffd166; }
+.garland i:nth-child(4n+3) { background: #3ddc84; color: #3ddc84; }
+.garland i:nth-child(4n) { background: #f4f4f4; color: #f4f4f4; }
+@keyframes bulb { 0%, 100% { opacity: 1; box-shadow: 0 0 8px currentColor; } 50% { opacity: 0.45; box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .garland i { animation: none; } }
+.xmas-card { background: linear-gradient(135deg, rgba(212, 20, 46, 0.22), rgba(26, 120, 70, 0.18)); border: 1px solid rgba(255, 255, 255, 0.08); }
+.xmas-head { display: flex; gap: 12px; align-items: center; }
+.xmas-ico { font-size: 30px; line-height: 1; }
+.xmas-card .list { margin-top: 12px; }
+.topbar.xmas .mark { overflow: visible; }
+.topbar.xmas .wordmark { position: relative; }
+.topbar.xmas .wordmark::before { content: ''; position: absolute; left: -1px; right: -1px; top: 2px; height: 6px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 9' preserveAspectRatio='none'%3E%3Cpath fill='%23fff' d='M0 7 Q2 2 7 3 Q10 0 15 2 Q19 0 23 3 Q27 1 31 3 Q35 0 40 2 Q44 1 47 4 Q51 1 56 2 Q60 0 64 3 Q68 1 72 2 Q76 0 81 3 Q85 1 89 2 Q93 0 97 3 Q101 1 106 2 Q110 0 114 3 Q118 2 120 6 L120 7 Q116 8 112 7 Q108 9 103 7 Q99 8 95 7 Q90 9 86 7 Q81 8 77 7 Q72 9 68 7 Q63 8 59 7 Q54 9 50 7 Q45 8 41 7 Q36 9 32 7 Q27 8 23 7 Q18 9 14 7 Q9 8 5 7 Q2 9 0 7Z'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }

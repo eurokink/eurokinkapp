@@ -7,7 +7,7 @@ import { mountGame } from './game.js';
 import { mountMemory } from './memory.js';
 import { LANG, LOCALE, LANGS, setLang, startI18n, t } from './i18n.js';
 
-const VERSION = '0.50.3';
+const VERSION = '0.51.0';
 const BRAND = 'EuroKink™';   // passer à ® une fois la marque déposée (INPI / EUIPO)
 const COPYRIGHT_YEAR = 2026;
 const STORE_KEY = 'ek.state.v1';
@@ -200,6 +200,8 @@ function studs(r = 50, dotR = 5.5) {
 const LOGO_MARK = `<svg class="mark" viewBox="0 0 120 120" aria-hidden="true"><g fill="#BDBDBD">${studs()}</g><g fill="#D0142C"><rect x="38" y="32" width="15" height="56"/><polygon points="53,54 72,32 89,32 62,65"/><polygon points="58,60 68,50 90,88 73,88"/></g></svg>`;
 const MAP_MARKER = `<svg class="mm" viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="58" fill="#0E0E0E" stroke="#D0142C" stroke-width="5"/><g fill="#BDBDBD">${studs(42, 5.5)}</g><g fill="#D0142C" transform="translate(12 12) scale(0.8)"><rect x="38" y="32" width="15" height="56"/><polygon points="53,54 72,32 89,32 62,65"/><polygon points="58,60 68,50 90,88 73,88"/></g></svg>`;
 const WORDMARK = '<span class="wordmark"><span class="wm-euro">EURO</span>KINK</span>';
+// Logo enneigé (décembre) : neige posée sur le K et sur le mot EUROKINK
+const LOGO_MARK_SNOW = LOGO_MARK.replace('</svg>', '<g fill="#FFFFFF"><path d="M35 33 Q35 25 41 26 Q45 22 50 26 Q56 25 56 33 Z"/><path d="M69 34 Q69 26 75 27 Q80 23 85 27 Q92 26 92 34 Z"/></g></svg>');
 
 // ---------------------------------------------------------------------------
 // Fragments réutilisables
@@ -250,6 +252,48 @@ function viewWelcome() {
   </section>`;
 }
 
+
+// Thème de Noël : du 1er au 31 décembre (heure locale), désactivable dans Paramètres. Aperçu possible avec ?noel=1
+function isXmas() {
+  try { if (/[?&]noel=1/.test(location.search)) localStorage.setItem('ek.xmasPreview', '1'); if (/[?&]noel=0/.test(location.search)) localStorage.removeItem('ek.xmasPreview'); } catch (e) { /* stockage indisponible */ }
+  let preview = false;
+  try { preview = localStorage.getItem('ek.xmasPreview') === '1'; } catch (e) { /* stockage indisponible */ }
+  return state.xmas !== false && (preview || new Date().getMonth() === 11);
+}
+const XMAS_GARLAND = `<div class="garland" aria-hidden="true">${Array.from({ length: 14 }, (_, i) => `<i style="--d:${(i % 5) * 0.35}s"></i>`).join('')}</div>`;
+function xmasCard(list) {
+  if (!isXmas()) return '';
+  const y = new Date().getFullYear();
+  const from = new Date(y, 11, 20), to = new Date(y + 1, 0, 2);
+  const fest = list.filter((e) => new Date(e.startsAt) >= from && new Date(e.startsAt) < to).slice(0, 3);
+  return `<div class="card xmas-card"><div class="xmas-head"><span class="xmas-ico" aria-hidden="true">🎄</span><div><strong>Joyeuses fêtes !</strong><div class="muted tiny">${fest.length ? 'Les soirées de Noël et du Nouvel An' : 'Toute l’équipe EuroKink te souhaite de belles fêtes'}</div></div></div>
+    ${fest.length ? `<div class="list">${fest.map(eventRow).join('')}</div>` : ''}</div>`;
+}
+let snowRaf = 0;
+function updateSnow() {
+  const on = isXmas() && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  let c = document.getElementById('snow');
+  if (!on) { if (c) c.remove(); cancelAnimationFrame(snowRaf); snowRaf = 0; return; }
+  if (c) return;
+  c = document.createElement('canvas'); c.id = 'snow'; c.setAttribute('aria-hidden', 'true'); document.body.appendChild(c);
+  const ctx = c.getContext('2d'); const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let W = 0, H = 0; const flakes = [];
+  const size = () => { W = innerWidth; H = innerHeight; c.width = W * dpr; c.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  size(); addEventListener('resize', size);
+  for (let i = 0; i < 42; i++) flakes.push({ x: Math.random() * W, y: Math.random() * H, r: 0.8 + Math.random() * 2.2, s: 0.25 + Math.random() * 0.6, w: Math.random() * 6.28, a: 0.35 + Math.random() * 0.45 });
+  const tick = () => {
+    snowRaf = requestAnimationFrame(tick);
+    if (document.visibilityState !== 'visible') return;
+    ctx.clearRect(0, 0, W, H);
+    for (const f of flakes) {
+      f.y += f.s; f.w += 0.012; f.x += Math.sin(f.w) * 0.35;
+      if (f.y > H + 4) { f.y = -4; f.x = Math.random() * W; }
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 6.283); ctx.fillStyle = `rgba(255,255,255,${f.a})`; ctx.fill();
+    }
+  };
+  tick();
+}
+
 function viewHome() {
   const { start, end } = weekendWindow();
   const list = upcoming();
@@ -258,11 +302,13 @@ function viewHome() {
   const nearest = weekend.length ? [] : list.filter((e) => e !== featured).sort((x, y) => kmFromMe(x) - kmFromMe(y)).slice(0, 3);
   const later = list.filter((e) => !weekend.includes(e) && !nearest.includes(e) && e !== featured).slice(0, 6);
   return `<section class="screen">
-    <header class="topbar"><div class="brand">${LOGO_MARK}${WORDMARK}</div>
+    <header class="topbar${isXmas() ? ' xmas' : ''}"><div class="brand">${isXmas() ? LOGO_MARK_SNOW : LOGO_MARK}${WORDMARK}</div>
       <div class="top-actions"><a class="icon-btn msg-btn" href="#/messages" aria-label="Messages">${I.chat}${msgBadge()}</a><a class="icon-btn" href="#/carte" aria-label="Carte des soirées">${I.map}</a><a class="icon-btn" href="#/favoris" aria-label="Mes favoris et alertes">${I.bell}${state.alerts.length ? '<span class="dot"></span>' : ''}</a></div></header>
+    ${isXmas() ? XMAS_GARLAND : ''}
     <div class="hello"><h1>${state.pseudo ? `Salut ${esc(state.pseudo)}` : 'Salut'}</h1>
       <p class="muted">${weekend.length ? `${weekend.length} soirée${weekend.length > 1 ? 's' : ''} ce week-end autour de ${esc(state.city)}` : `${list.length} soirée${list.length > 1 ? 's' : ''} à venir en Europe`}</p></div>
     ${orgTodo() ? `<a class="card propose-cta org-todo" href="#/devenir-organisateur"><div><strong>Il te reste à créer la page de ton organisation</strong><div class="muted tiny">Une minute suffit : ensuite, tu publies tes soirées toi-même.</div></div>${I.chevron}</a>` : ''}
+    ${xmasCard(list)}
     ${gamePromoCard()}
     ${cityCard()}
     ${installCard()}
@@ -1954,6 +2000,7 @@ function viewSettings() {
         ${sw('nearbyOn', state.nearbyOn !== false, 'Soirées près de chez moi', 'Quand une nouvelle soirée est publiée autour de ta ville')}
         <label class="field">Distance de l’alerte<select name="nearbyKm">${opt([[25, '25 km'], [50, '50 km'], [100, '100 km'], [200, '200 km'], [500, '500 km']], state.nearbyKm || 100)}</select></label>
         ${isAdmin() ? sw('adminNotifs', state.adminNotifs !== false, 'Espace admin', 'Soirées, demandes et signalements à traiter') : ''}
+        ${new Date().getMonth() === 11 || isXmas() ? sw('xmas', state.xmas !== false, 'Décorations de Noël', 'Neige et guirlande sur l’appli pendant le mois de décembre') : ''}
         ${sw('notifSound', state.notifSound !== false, 'Son dans l’appli', 'Un petit son EuroKink quand une notification arrive pendant que l’appli est ouverte')}
         ${sub('Discrétion')}
         ${sw('neutralNotifs', state.neutralNotifs, 'Notifications discrètes', 'Titre « EuroKink » et texte neutre, sans le nom de la soirée')}
@@ -3386,6 +3433,7 @@ function render() {
   const [, route, param] = hash.split('/');
   // Partie en cours : on ne redessine pas l'écran (une mise à jour en arrière-plan ne doit pas couper le jeu)
   if (route === 'jeu' && gameCleanup && gameKey === param && $('#gameRoot')) return;
+  updateSnow();
   if (gameCleanup) { gameCleanup(); gameCleanup = null; gameKey = null; }
   if (!loggedIn() && route !== 'compte' && route !== 'infos') {
     if (route === 'soiree' && isUuid(param)) sessionStorage.setItem('ek.after', hash);
@@ -3743,6 +3791,7 @@ document.addEventListener('change', (ev) => {
     state.reminderTiming = f.reminderTiming.value;
     state.ticketAlertsOn = f.ticketAlertsOn.checked;
     state.neutralNotifs = f.neutralNotifs.checked;
+    if (f.xmas) { state.xmas = f.xmas.checked; updateSnow(); }
     if (f.notifSound) { const was = state.notifSound !== false; state.notifSound = f.notifSound.checked; if (state.notifSound && !was) { notifLast = 0; playNotifSound(); } }
     if (f.followsOn) state.followsOn = f.followsOn.checked;
     if (f.nearbyOn) state.nearbyOn = f.nearbyOn.checked;
