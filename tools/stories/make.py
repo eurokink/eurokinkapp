@@ -246,30 +246,55 @@ FEATURES = {
                'Match the pairs as fast as you can. Best score wins the Champion badge every Monday.'),
 }
 
+QUIZ_VARIANTS = {
+    0: [
+        lambda: story_quiz('Ton style ?', 'Your style?', [('🐶', 'Puppy'), ('🎯', 'Gear / Tactique'), ('👟', 'Sportswear'), ('💈', 'Skin')]),
+        lambda: story_quiz('Ton essentiel pour sortir ?', 'Your going-out essential?', [('🥾', 'Bottes · Boots'), ('🧢', 'Casquette · Cap'), ('🎒', 'Brassard · Armband'), ('🕶️', 'Lunettes · Shades')]),
+    ],
+    2: [
+        lambda: story_quiz('Ta prochaine destination ?', 'Your next trip?', [('🌴', 'Nice'), ('🗼', 'Paris'), ('🍺', 'Cologne'), ('🐻', 'Berlin')]),
+        lambda: story_quiz('Quel style pour cette soirée ?', 'Which style tonight?', [('🪖', 'Militaire · Military'), ('🦺', 'Workwear'), ('🏍️', 'Biker'), ('🐻', 'Bears')]),
+    ],
+    4: [
+        lambda: story_quiz('Bottes ou baskets ?', 'Boots or sneakers?', [('🥾', 'Bottes · Boots'), ('👟', 'Baskets · Sneakers'), ('🤷', 'Les deux · Both')]),
+        lambda: story_quiz('Jean ou legging ?', 'Jeans or leggings?', [('👖', 'Jean · Jeans'), ('🩳', 'Legging'), ('🤷', 'Les deux · Both')]),
+    ],
+    5: [
+        lambda: story_quiz('Ce soir, tu sors en…', 'Tonight you’re wearing…', [('🐶', 'Puppy'), ('🎯', 'Tactique · Tactical'), ('👮', 'Uniforme · Uniform'), ('🧥', 'Cuir · Leather')]),
+        lambda: story_quiz('Ce soir, tu sors en…', 'Tonight you’re wearing…', [('🦺', 'Workwear'), ('🏍️', 'Biker'), ('🐻', 'Bears'), ('👟', 'Sportswear')]),
+    ],
+}
+FEATURE_ORDER = ['going', 'passport', 'stay', 'privacy', 'messages', 'alerts']  # 'memory' stays pinned on Sunday
+
+
 def plan(day, data):
     """Return the 3 stories of a given day."""
     n = data['members']
     wd = day.weekday()  # 0 = Monday
+    wk = day.isocalendar()[1]  # rotate choices so each week differs from the last
     ev_titles = {
         5: ('Ce week-end et après', 'This weekend and beyond'),
         6: ('Tes prochaines soirées', 'Your next parties'),
     }
     t_fr, t_en = ev_titles.get(wd, ('Tes prochaines soirées', 'Your next parties'))
     s1 = story_events(day, data, t_fr, t_en)
-    feat = ['going', 'passport', 'stay', 'privacy', 'messages', 'alerts', 'memory'][wd]
+    if wd == 6:
+        feat = 'memory'
+    else:
+        feat = FEATURE_ORDER[(wd + wk) % len(FEATURE_ORDER)]
     s2 = story_feature(*FEATURES[feat], kicker=('MINI-JEU · MINI-GAME' if feat == 'memory' else 'DANS L’APPLI · IN THE APP'))
-    third = {
-        0: lambda: story_quiz('Ton style ?', 'Your style?', [('🐶', 'Puppy'), ('🎯', 'Gear / Tactique'), ('👟', 'Sportswear'), ('💈', 'Skin')]),
-        1: lambda: story_stat(str(data['countries']), 'pays couverts', 'countries covered',
+    if wd in QUIZ_VARIANTS:
+        variants = QUIZ_VARIANTS[wd]
+        third = variants[wk % len(variants)]
+    elif wd == 1:
+        third = lambda: story_stat(str(data['countries']), 'pays couverts', 'countries covered',
                               'De Paris à Varsovie, toutes les soirées au même endroit.', 'From Paris to Warsaw, every party in one place.',
-                              kicker='TOUTE L’EUROPE · ALL OF EUROPE'),
-        2: lambda: story_quiz('Ta prochaine destination ?', 'Your next trip?', [('🌴', 'Nice'), ('🗼', 'Paris'), ('🍺', 'Cologne'), ('🐻', 'Berlin')]),
-        3: lambda: story_styles(),
-        4: lambda: story_quiz('Bottes ou baskets ?', 'Boots or sneakers?', [('🥾', 'Bottes · Boots'), ('👟', 'Baskets · Sneakers'), ('🤷', 'Les deux · Both')]),
-        5: lambda: story_quiz('Ce soir, tu sors en…', 'Tonight you’re wearing…', [('🐶', 'Puppy'), ('🎯', 'Tactique · Tactical'), ('👮', 'Uniforme · Uniform'), ('🧥', 'Cuir · Leather')]),
-        6: lambda: story_stat(f'{n}', 'membres dès la 1re semaine', 'members in week one',
-                              'Merci ! Invite tes potes : plus on est, plus l’agenda est complet.', 'Thank you! Invite your mates: the more we are, the fuller the agenda.'),
-    }[wd]
+                              kicker='TOUTE L’EUROPE · ALL OF EUROPE')
+    elif wd == 3:
+        third = lambda: story_styles()
+    else:  # 6
+        third = lambda: story_stat(f'{n}', 'membres dès la 1re semaine', 'members in week one',
+                              'Merci ! Invite tes potes : plus on est, plus l’agenda est complet.', 'Thank you! Invite your mates: the more we are, the fuller the agenda.')
     return [s1, s2, third()]
 
 if __name__ == '__main__':
