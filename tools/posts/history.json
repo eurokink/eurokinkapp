@@ -1,0 +1,25 @@
+{
+  "_comment": "Dernière date de publication (programmée ou réelle) par identifiant, format AAAA-MM-JJ. Mis à jour à chaque publication (manuelle ou par la tâche hebdomadaire). Sert à ne jamais reprogrammer un visuel trop tôt.",
+  "feed": {
+    "alerts": "2026-11-14",
+    "who": "2026-11-15",
+    "privacy": "2026-11-16",
+    "organisers": "2026-11-17",
+    "europe": "2026-11-23",
+    "stay": "2026-11-20",
+    "orgspace": "2026-11-25",
+    "passport": "2026-11-20",
+    "map": "2026-11-27",
+    "eventpage": "2026-11-15",
+    "community": "2026-11-17",
+    "messages": "2026-11-18",
+    "install": "2026-11-19",
+    "playstore": null
+  },
+  "reels": {
+    "teaser": "2026-11-15",
+    "weekend": "2026-11-28",
+    "20sec": "2026-11-16",
+    "memory": "2026-11-17"
+  }
+}
