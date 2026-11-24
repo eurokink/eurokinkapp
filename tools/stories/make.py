@@ -3,7 +3,7 @@
 Usage: python3 make.py data.json OUT_DIR START_DATE DAYS
 Files: OUT_DIR/YYYY-MM-DD-1.jpg (9 h), -2.jpg (13 h), -3.jpg (19 h)
 """
-import json, sys, datetime as dt
+import json, sys, subprocess, datetime as dt
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 W, H = 1080, 1920
@@ -297,6 +297,18 @@ def plan(day, data):
                               'Merci ! Invite tes potes : plus on est, plus l’agenda est complet.', 'Thank you! Invite your mates: the more we are, the fuller the agenda.')
     return [s1, s2, third()]
 
+def animate(png_path, mp4_path, duration=5, zoom_to=1.08):
+    """Slow zoom-in + fade-in on a static 1080x1920 story frame, rendered once as a short MP4 loop."""
+    d = int(duration * 30)
+    vf = (f"scale=1080:1920,zoompan=z='min(zoom+0.0015,{zoom_to})':d={d}:s=1080x1920:fps=30,"
+          f"format=yuv420p,fade=t=in:st=0:d=0.35")
+    tmp = mp4_path + '.tmp.mp4'
+    subprocess.run(['ffmpeg', '-y', '-loop', '1', '-i', png_path, '-vf', vf, '-t', str(duration),
+                    '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast', '-movflags', '+faststart', tmp],
+                   check=True, capture_output=True)
+    import os
+    os.replace(tmp, mp4_path)
+
 if __name__ == '__main__':
     data = json.load(open(sys.argv[1]))
     out = sys.argv[2]
@@ -304,5 +316,14 @@ if __name__ == '__main__':
     for i in range(int(sys.argv[4])):
         day = start + dt.timedelta(i)
         for k, im in enumerate(plan(day, data), 1):
-            im.convert('RGB').save(f'{out}/{day.isoformat()}-{k}.jpg', 'JPEG', quality=90, optimize=True)
-            print(f'{out}/{day.isoformat()}-{k}.jpg')
+            jpg = f'{out}/{day.isoformat()}-{k}.jpg'
+            im.convert('RGB').save(jpg, 'JPEG', quality=90, optimize=True)
+            print(jpg)
+            if k == 2:  # the "feature" story of the day: also render an animated version (slow zoom + fade-in)
+                png = f'{out}/{day.isoformat()}-{k}.png'
+                im.convert('RGB').save(png, 'PNG')
+                mp4 = f'{out}/{day.isoformat()}-{k}.mp4'
+                animate(png, mp4)
+                import os
+                os.remove(png)
+                print(mp4)
